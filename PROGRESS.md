@@ -2,7 +2,9 @@
 
 ## Phase 1 — Identity, Profile, and Manual Onboarding
 
-**Status:** Credential-free implementation complete; real-auth acceptance gate pending
+**Status:** Implementation complete — final authentication acceptance pending.
+
+**Credential-free implementation approval:** Approved by the project owner on 2026-08-30. This approval preserves the implemented code and verified evidence but does not constitute full Phase 1 acceptance.
 
 **Started:** 2026-08-30
 
@@ -62,6 +64,18 @@
 | First authenticated Playwright journey | Pending real OAuth test environment; no mocked browser journey was added |
 
 **Acceptance conclusion:** Phase 1 is not yet accepted. All work that can be safely implemented and verified without real Google OAuth credentials is complete. The credential-free runtime fails closed and no verification claim crosses the missing-auth boundary. Phase 2 has not started.
+
+The following are mandatory before Phase 1 can be marked fully accepted:
+
+- Real Google OAuth callback
+- Auth.js MongoDB-backed database session
+- Real per-user authenticated identity
+- End-to-end server-derived ownership
+- Two authenticated users' data isolation
+- Real sign-out and session invalidation
+- Authenticated Playwright onboarding journey
+
+After credentials are supplied, the complete authentication acceptance gate and all relevant regression tests must pass. Only then may Phase 1 be marked fully accepted and Phase 2 begin.
 
 ### Exact blocker and next action
 
