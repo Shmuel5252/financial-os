@@ -57,6 +57,7 @@
 | Dependency audit | Pass | `npm run security:audit`: 0 vulnerabilities after registry access was permitted. |
 | Production runtime/security smoke | Pass | On port 3001 after the final build: root 200, sign-in 200, signed-out protected profile 307 to `/sign-in`, `Cache-Control: no-store`, CSP present, `X-Powered-By` absent, frame denial and MIME-sniff protection present. Port 3000 remained independently listening and was not modified. |
 | Environment and secret safety | Pass | `.env.local` is ignored and absent from Git's tracked index; required real-auth fields are present without their values being displayed; `AUTH_URL` is exactly port 3001. Tracked secret-pattern review found only the intentional angle-bracket credential URI in `.env.example`, not a credential. |
+| GitHub synchronization | Pass | `origin` is `https://github.com/Shmuel5252/financial-os.git`; local `main`, its upstream, and GitHub's advertised `main` matched with ahead/behind `0/0` after the acceptance commit was pushed. |
 
 ### Phase 1 acceptance review
 
