@@ -1,0 +1,42 @@
+# Dependencies
+/node_modules/
+
+# Next.js build output
+/.next/
+/out/
+
+# Tests and coverage
+/coverage/
+/playwright-report/
+/test-results/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Deployment providers
+/.vercel/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# TypeScript and tooling
+*.tsbuildinfo
+.eslintcache
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Sensitive key material
+*.pem
+*.key
+*.p12
+*.pfx

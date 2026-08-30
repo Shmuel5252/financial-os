@@ -1,0 +1,48 @@
+const foundations = [
+  "Deterministic money and date rules",
+  "Server-side identity and data-isolation boundaries",
+  "MongoDB access through a protected data layer",
+  "Independent test, lint, type, and build gates",
+];
+
+export default function HomePage() {
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-6 py-16 sm:px-10">
+      <section className="grid w-full gap-12 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
+        <div>
+          <p className="mb-6 inline-flex rounded-full border border-[var(--border)] bg-white/80 px-4 py-2 text-sm font-semibold text-[var(--accent)] shadow-sm">
+            Phase 0 · Foundation
+          </p>
+          <h1 className="max-w-3xl text-5xl leading-[1.02] font-semibold tracking-[-0.045em] sm:text-7xl">
+            Financial clarity starts with a foundation you can trust.
+          </h1>
+          <p className="mt-7 max-w-2xl text-lg leading-8 text-[var(--muted)] sm:text-xl">
+            The secure application core is in place. Financial profiles and product
+            features begin only after this foundation passes its acceptance review.
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-7 shadow-[0_24px_70px_rgba(18,35,28,0.08)] sm:p-9">
+          <div className="mb-7 flex items-center gap-3">
+            <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_0_6px_rgba(16,185,129,0.12)]" />
+            <p className="font-semibold">Engineering baseline</p>
+          </div>
+          <ul className="space-y-5">
+            {foundations.map((foundation) => (
+              <li key={foundation} className="flex gap-3 text-[var(--muted)]">
+                <span aria-hidden="true" className="mt-0.5 font-bold text-[var(--accent)]">
+                  ✓
+                </span>
+                <span>{foundation}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-8 border-t border-[var(--border)] pt-6 text-sm leading-6 text-[var(--muted)]">
+            External services remain explicitly unconfigured until real development
+            credentials are supplied. No integrations are simulated.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
