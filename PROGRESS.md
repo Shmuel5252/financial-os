@@ -1,5 +1,61 @@
 # Financial OS Progress
 
+## Phase 1 — Identity, Profile, and Manual Onboarding
+
+**Status:** Infrastructure gate in progress; significant product implementation paused
+
+**Started:** 2026-08-30
+
+**Scope boundary:** Phase 1 only. No Financial Engine, Safe to Spend, Claude, Open Banking, household, forecasting, gamification, or later-phase functionality has started.
+
+### Infrastructure gate
+
+| Dependency/invariant | Result | Verified evidence |
+| --- | --- | --- |
+| Real MongoDB availability | Verified locally | MongoDB 8.3.2 at `mongodb://127.0.0.1:27017` returned `ping: 1`. |
+| Real MongoDB persistence | Verified locally | The isolated integration test inserted records for two distinct owners and read the authorized record back from MongoDB. |
+| Previously skipped MongoDB isolation test | Passed | `npm run test:integration` with an isolated local test URI: 1 file passed, 1 test passed, no skip. |
+| DAL ownership isolation against real MongoDB | Verified at repository-filter boundary | The first actor saw only its record; an ID-plus-owner lookup for the second actor's record returned `null`. |
+| Isolated test cleanup | Verified | Post-test database listing found zero databases with the generated `financial_os_phase1_gate_` prefix. |
+| Real Google OAuth/Auth.js flow | Blocked, not verified | No `GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET` is available. |
+| Real per-user session identity | Blocked, not verified | Requires completed Google OAuth callbacks and persisted Auth.js sessions. |
+| End-to-end server-derived ownership | Blocked, not verified | The server-derived actor pattern is unit-tested, but no real authenticated session exists yet. |
+| End-to-end two-user isolation | Blocked, not verified | Requires two real authenticated test users and Phase 1 owned profile records. |
+
+### Credential inspection
+
+- Only `.env.example` exists. No `.env.local` or process-level Phase 1 credentials were found.
+- Example placeholders were not treated as credentials and no values were printed.
+- A real local MongoDB daemon is available without inventing a remote credential.
+- Google OAuth requires an actual registered OAuth web client. Fake providers, fabricated sessions, and hardcoded users remain prohibited.
+
+### Work performed
+
+- Reconfirmed the clean accepted Phase 0 repository on branch `main`.
+- Re-read the Phase 1 roadmap, current progress record, and decision log.
+- Probed the local MongoDB instance and recorded its real server version.
+- Ran the formerly skipped ownership-isolation integration test against a randomly suffixed database.
+- Verified cleanup of the isolated database.
+- Did not begin significant profile/onboarding implementation because the real OAuth/session gate is incomplete.
+
+### Exact blocker and next action
+
+Configure an ignored `.env.local` with a real Google OAuth web client and an Auth.js secret:
+
+- `AUTH_SECRET`
+- `AUTH_URL=http://localhost:3000`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
+Register `http://localhost:3000/api/auth/callback/google` as an authorized redirect URI. The detected local MongoDB can be used for development with:
+
+- `MONGODB_URI=mongodb://127.0.0.1:27017`
+- `MONGODB_DB_NAME=financial_os_development`
+- `MONGODB_TEST_URI=mongodb://127.0.0.1:27017`
+- `MONGODB_TEST_DB_NAME=financial_os_integration`
+
+After configuration, verify real sign-in, callback, persisted Auth.js records, database session cookie behavior, sign-out, two distinct users, and server-derived actor IDs before implementing the material onboarding flow.
+
 ## Phase 0 — Foundation
 
 **Status:** Complete and accepted for the credential-free Phase 0 scope
