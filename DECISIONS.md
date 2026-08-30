@@ -133,6 +133,26 @@ This log records durable product and architecture decisions. Status is `accepted
 - **Reasoning:** Rejecting loopback HTTP made a safe local production build impossible, while broadly allowing production HTTP would weaken cookie and OAuth transport expectations.
 - **Consequences:** Local production smoke tests can use loopback without TLS. Any preview or deployed hostname must use HTTPS and secure cookies; this exception does not justify non-loopback plaintext deployment.
 
+## ADR-022 — Auth.js cookies require an application-specific namespace
+
+- **Decision:** Name every Auth.js cookie with the `financial-os.authjs` namespace. Preserve Auth.js's secure-cookie behavior by applying `__Secure-` to HTTPS cookies and `__Host-` to the HTTPS CSRF cookie.
+- **Reasoning:** Browser cookies are scoped by hostname/path, not TCP port. A second Auth.js application on `localhost:3000` used the same default PKCE cookie name as Financial OS on port 3001, so the Financial OS callback received the other application's verifier and Auth.js rejected it with `InvalidCheck`.
+- **Alternatives:** Stopping the other application or relying on login order was rejected because neither creates isolation. A different local hostname remains possible but would add OAuth and host configuration without removing the need for safe application cookie names.
+- **Consequences:** PKCE, state, nonce, CSRF, callback, WebAuthn challenge, and session cookies do not collide with other localhost Auth.js apps. Production HTTPS retains secure prefixes. Cookie-name coverage is unit-tested.
+
+## ADR-023 — Auth.js persistence is database- and collection-namespaced
+
+- **Decision:** Pass `MONGODB_DB_NAME` explicitly to the Auth.js MongoDB adapter and use `authUsers`, `authAccounts`, `authSessions`, and `authVerificationTokens` instead of the adapter defaults.
+- **Reasoning:** The application repositories already select `MONGODB_DB_NAME`, while the adapter otherwise selects the URI's default database. The default adapter collection `accounts` also conflicts with Financial OS's manual financial `accounts` collection and caused financial document mapping to encounter an Auth.js account document.
+- **Alternatives:** Embedding the database in the URI alone was rejected because it duplicates configuration and permits drift. Sharing one `accounts` collection between unrelated schemas is invalid. Renaming the financial capability was rejected because the adapter's generic names are the collision source and all auth collections benefit from an explicit namespace.
+- **Consequences:** Auth.js and financial records share the configured database without schema collisions, and session-to-profile ownership can be verified in one authoritative database. The adapter mapping is unit-tested. Existing records were migrated only after the configured database was verified to contain the known Auth.js records and no manual account documents.
+
+## ADR-024 — Local Google sign-in always offers account selection
+
+- **Decision:** Send Google's `prompt=select_account` authorization parameter from the sign-in action.
+- **Reasoning:** Reusing Google's previously selected account made a second login appear distinct while Auth.js correctly linked it to the first identity. Explicit selection makes multi-user isolation acceptance and normal account switching deterministic without introducing another auth path.
+- **Consequences:** Users see Google's account chooser on sign-in. Authentication still uses only the Google provider and the same Auth.js callback/session architecture.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.
@@ -149,6 +169,18 @@ This log records durable product and architecture decisions. Status is `accepted
 - Real MongoDB evidence covers profile/onboarding persistence, manual records and BSON int64 money, audit/soft deletion, rate limiting, and isolation for constructed actors.
 - Strict TypeScript, zero-warning ESLint, production build, runtime fail-closed smoke checks, and the registry-backed dependency audit pass.
 - Google callback, Auth.js database sessions, real session-to-actor identity, authenticated route ownership, two authenticated users' isolation, and authenticated Playwright E2E remain pending. Phase 1 is not accepted and Phase 2 has not started.
+
+## Phase 1 real-authentication verification addendum — 2026-08-30
+
+- Two distinct interactive Google OAuth callbacks completed at `http://localhost:3001/api/auth/callback/google`; no provider, session, or browser state was mocked.
+- The first callback failure was traced to a cross-port localhost PKCE-cookie collision. ADR-022's namespace fix passed a real retry. A separate `accounts` schema collision was then traced to the Auth.js adapter defaults and resolved by ADR-023.
+- The configured database persisted exactly two Google-linked auth users/accounts. Each active session resolved to its linked MongoDB user and was removed by real Auth.js sign-out; protected navigation then redirected to `/sign-in`.
+- The first authenticated Playwright browser journey created, reloaded, reviewed, and completed a profile containing one record in every Phase 1 manual section. MongoDB ownership and audit actors matched the real session user, and money persisted as BSON `Long`.
+- The second real Google user began with empty income/accounts views. An authenticated direct update against the first user's account was rejected with `409 CONFLICT`, the first record was unchanged, and the two profiles retained distinct owners.
+- Final regression evidence: 59 tests passed with five declared infrastructure skips; the real-Mongo suite passed 5/5; strict type-check, zero-warning lint, production build, dependency audit with zero vulnerabilities, and port-3001 runtime/security smoke passed.
+- `.env.local` remained ignored and untracked; secrets were not printed, logged, committed, or pushed. The tracked secret-pattern review found no real credentials.
+- The accepted browser journey used the app's Playwright browser controller with the real interactive session. No reusable authenticated storage state was committed because it would be sensitive. A repository-owned non-interactive E2E suite remains a later operational-hardening task, not a substitute for this completed real-auth gate.
+- Phase 1 is accepted. Phase 2 has not started and requires explicit project-owner approval.
 
 ## Open product/engineering questions
 

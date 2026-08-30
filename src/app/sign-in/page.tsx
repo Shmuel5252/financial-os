@@ -14,6 +14,8 @@ async function signInWithGoogle() {
 
   await signIn("google", {
     redirectTo: "/onboarding/profile",
+  }, {
+    prompt: "select_account",
   });
 }
 

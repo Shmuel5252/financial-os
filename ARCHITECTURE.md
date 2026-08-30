@@ -2,13 +2,13 @@
 
 ## Purpose and status
 
-This document defines the implemented architecture through the credential-free portion of Phase 1 and the constraints that future phases must preserve. It distinguishes verified code from credential-dependent behavior and product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
+This document defines the implemented architecture through the fully verified Phase 1 acceptance gate and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
 
 | Status | Meaning |
 | --- | --- |
 | Implemented in Phase 0 | A working, tested code or configuration foundation exists. |
 | Implemented in Phase 1 | Working profile/manual-onboarding code exists and is verified at its stated boundary. |
-| Pending real-auth verification | Code exists, but no operational claim is made until real Google/Auth.js infrastructure is exercised. |
+| Verified in Phase 1 | Real Google OAuth, Auth.js MongoDB sessions, server-derived identity, sign-out, onboarding, and two-user isolation passed their operational gate. |
 | Boundary prepared | An interface, module boundary, convention, or configuration seam exists; no provider capability is claimed. |
 | Planned | The product behavior belongs to a later roadmap phase and does not exist yet. |
 
@@ -37,7 +37,7 @@ Dependency flow is inward. UI code may call server actions or route handlers, bu
 
 - **Implemented and tested without fake auth:** profile and onboarding schemas/services/repositories; manual income, account, card, recurring-expense, loan, safety-margin, and goal records; resumable ordered onboarding; review/completion UI; exact money input and BSON mappings; optimistic concurrency; entity-local mutation audit; ordinary-record soft deletion; mutation origin/body/rate controls; protected routes; sign-in/sign-out wiring.
 - **Verified against real local MongoDB:** profile/manual persistence, user-prefixed indexes, BSON int64 money, onboarding state transitions, audit events, rate-limit counters, two constructed actors' read/update isolation, one active safety margin, and test-database cleanup.
-- **Pending real-auth verification:** Google callback, Auth.js user/account/session persistence, database-session cookie and sign-out invalidation, real session-to-actor identity, authenticated route-to-repository ownership, two authenticated users' isolation, and the authenticated Playwright journey.
+- **Verified with real authentication:** two distinct Google callbacks; namespaced Auth.js user/account/session persistence in the configured database; real session-to-actor identity; sign-out/session deletion; server-derived profile ownership/audit actors; full authenticated Playwright onboarding; empty second-user reads; and denial of a second user's update against the first user's account.
 - **Not started:** Phase 2 financial data platform/transactions, Financial Engine, Safe to Spend, Claude, Open Banking, households, forecasting, gamification, and later-phase capabilities.
 
 ## Phase 1 profile and onboarding architecture
@@ -92,17 +92,19 @@ Future financial modules should be introduced by capability (`accounts`, `transa
 
 ## Authentication architecture
 
-Phase 0 uses a NextAuth/Auth.js-compatible server configuration with Google OAuth and secure cookie defaults. Provider credentials and the Auth secret are optional in the build-time schema so a credential-free checkout can lint, test, and build; runtime capability reporting marks authentication unavailable until all values are supplied. Missing credentials are not substituted with fake values or a fake login.
+Financial OS uses a NextAuth/Auth.js-compatible server configuration with Google OAuth and database sessions. Provider credentials and the Auth secret remain optional in the build-time schema so a credential-free checkout can lint, test, and build; runtime capability reporting marks authentication unavailable until all values are supplied. Missing credentials are not substituted with fake values or a fake login.
 
 When configured:
 
 1. Google completes OAuth; the server owns the callback.
-2. The MongoDB adapter persists Auth.js user/account/session data.
+2. The MongoDB adapter persists Auth.js data in the configured `MONGODB_DB_NAME` using `authUsers`, `authAccounts`, `authSessions`, and `authVerificationTokens`.
 3. Server code calls the central session helper.
 4. A session user ID is converted into an `Actor`.
 5. Authorization policies and repositories scope every financial operation.
 
-Secure-cookie selection follows the deployment protocol and Auth.js defaults. Production requires HTTPS, `AUTH_SECRET`, and an exact trusted origin. Sign-out is handled by Auth.js. Delete-account, recovery, and email/password auth belong to later phases. OAuth is not operational until Google and MongoDB credentials are supplied and verified.
+All Auth.js cookies use the `financial-os.authjs` namespace because cookies are hostname-scoped and another application may use Auth.js on a different localhost port. HTTP loopback cookies are unprefixed; HTTPS applies `__Secure-`, with `__Host-` for CSRF, while retaining Auth.js's secure behavior. Google authorization uses `prompt=select_account` so account switching and two-user acceptance do not silently reuse a previous identity.
+
+The real local callback at `http://localhost:3001/api/auth/callback/google`, database sessions, actor derivation, two-user isolation, and sign-out invalidation are verified. Non-loopback production still requires HTTPS, a separate registered callback, `AUTH_SECRET`, and an exact trusted origin. Delete-account, recovery, and email/password auth belong to later phases.
 
 ## Authorization and user data isolation
 
@@ -133,7 +135,7 @@ Repositories:
 - attach canonical timestamps and source metadata at persistence boundaries;
 - translate duplicate-key and unavailable-database failures into typed application errors without leaking connection details.
 
-Phase 0 does not create speculative financial collections. Auth.js may create its own collections after real sign-in. Domain collections and indexes arrive with their owning feature phase.
+Phase 1 creates only its profile/manual capability collections and the four explicitly namespaced Auth.js collections. Domain collections and indexes continue to arrive only with their owning feature phase. Auth.js and financial account documents never share a collection.
 
 ## Validation strategy
 
@@ -199,7 +201,7 @@ Future server-only placeholders are documented for Anthropic and Open Banking, b
 
 - Unit tests exercise pure money, dates, validation, authorization policies, and later every financial engine edge case.
 - Integration tests exercise repository ownership filters and real MongoDB/Auth/provider adapters in isolated test infrastructure. Credential-dependent suites must explicitly skip with a documented reason; mocks are permitted only at named adapter boundaries and never reported as real integration success.
-- E2E tests will use Playwright against an isolated application/database and cover sign-in, onboarding, dashboard, transactions, goals, simulations, and bank flows as their phases arrive. The first authenticated journey remains pending until real Google credentials and two test users are available; no mocked-auth browser result substitutes for it.
+- E2E tests use Playwright against isolated application/database boundaries as their phases arrive. The Phase 1 acceptance journey used the in-app Playwright controller with a real interactive Google/Auth.js session to complete, reload, review, and finish onboarding. No mocked auth or reusable authenticated storage state was committed. Later repeatable non-interactive suites require an approved secure test-identity/session strategy.
 - Production builds, strict type-checking, ESLint, and tests are separate required checks. No rules or type errors are suppressed to make gates pass.
 
 ## Deployment architecture

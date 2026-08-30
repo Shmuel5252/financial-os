@@ -8,11 +8,15 @@ import {
   getConfigurationStatus,
   getServerEnv,
 } from "@/lib/config/server-env";
+import { financialOsAuthCookies } from "@/lib/auth/cookies";
+import { financialOsMongoAdapterOptions } from "@/lib/auth/persistence";
 import { getMongoClientPromise } from "@/lib/db/mongodb";
 
 function createAuthConfig(): NextAuthConfig {
   const env = getServerEnv();
   const status = getConfigurationStatus(env);
+  const useSecureCookies =
+    env.AUTH_URL?.startsWith("https://") ?? env.NODE_ENV === "production";
   const config: NextAuthConfig = {
     callbacks: {
       session({ session, token, user }) {
@@ -26,14 +30,14 @@ function createAuthConfig(): NextAuthConfig {
       },
     },
     debug: false,
+    cookies: financialOsAuthCookies(useSecureCookies),
     providers: [],
     session: {
       maxAge: 30 * 24 * 60 * 60,
       strategy: status.authentication.ready ? "database" : "jwt",
       updateAge: 24 * 60 * 60,
     },
-    useSecureCookies:
-      env.AUTH_URL?.startsWith("https://") ?? env.NODE_ENV === "production",
+    useSecureCookies,
   };
 
   if (env.AUTH_SECRET !== undefined) {
@@ -43,9 +47,13 @@ function createAuthConfig(): NextAuthConfig {
   if (
     status.authentication.ready &&
     env.GOOGLE_CLIENT_ID !== undefined &&
-    env.GOOGLE_CLIENT_SECRET !== undefined
+    env.GOOGLE_CLIENT_SECRET !== undefined &&
+    env.MONGODB_DB_NAME !== undefined
   ) {
-    config.adapter = MongoDBAdapter(getMongoClientPromise());
+    config.adapter = MongoDBAdapter(
+      getMongoClientPromise(),
+      financialOsMongoAdapterOptions(env.MONGODB_DB_NAME),
+    );
     config.providers = [
       GoogleProvider({
         clientId: env.GOOGLE_CLIENT_ID,

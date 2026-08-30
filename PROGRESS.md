@@ -2,18 +2,23 @@
 
 ## Phase 1 — Identity, Profile, and Manual Onboarding
 
-**Status:** Implementation complete — final authentication acceptance pending.
+**Status:** Complete — real authentication acceptance gate passed.
 
-**Credential-free implementation approval:** Approved by the project owner on 2026-08-30. This approval preserves the implemented code and verified evidence but does not constitute full Phase 1 acceptance.
+**Credential-free implementation approval:** Approved by the project owner on 2026-08-30. The real-authentication acceptance evidence below supersedes the earlier pending status without changing the preserved credential-free evidence.
 
 **Started:** 2026-08-30
+
+**Verified:** 2026-08-30
 
 **Scope boundary:** Phase 1 only. No Financial Engine, Safe to Spend, Claude, Open Banking, household, forecasting, gamification, or later-phase functionality has started.
 
 ### Implemented
 
-- Created an ignored `.env.local` containing empty auth/provider values and loopback-only MongoDB development/test settings. No real secret or external credential was added.
-- Added a real Auth.js Google sign-in page, protected onboarding pages, Auth.js sign-out action, database-session configuration, and server-derived actor boundary. There is no fallback provider, mock session, hardcoded user, or fake sign-in.
+- Created an ignored `.env.local` configuration boundary. Real development credentials remain local and untracked; no secret value was printed, logged, committed, or pushed. Local Auth.js uses `AUTH_URL=http://localhost:3001` and the registered Google callback `http://localhost:3001/api/auth/callback/google`.
+- Added a real Auth.js Google sign-in page, protected onboarding pages, Auth.js sign-out action, MongoDB database sessions, and a server-derived actor boundary. There is no fallback provider, mock session, hardcoded user, or fake sign-in.
+- Added a Financial OS-specific Auth.js cookie namespace. This prevents PKCE, state, CSRF, callback, and session cookies from colliding with another Auth.js application on the same `localhost` hostname but a different port, while retaining `__Secure-`/`__Host-` prefixes for HTTPS.
+- Bound the Auth.js adapter to the configured Financial OS database and namespaced its collections as `authUsers`, `authAccounts`, `authSessions`, and `authVerificationTokens`. This prevents the adapter's default `accounts` collection from colliding with the financial accounts capability.
+- Google sign-in requests explicitly show the account chooser so two real Google identities can be exercised without relying on a previously selected account.
 - Added a one-profile-per-user model with display name, country, primary currency, IANA timezone, household type, optimistic versioning, resumable onboarding state, completion timestamp, and entity-local audit trail.
 - Added manual onboarding for income, accounts, credit cards, recurring expenses, loans/debts, safety margin, and goals, including create/list/update/delete APIs, create/list/delete UI, reload/resume behavior, review counts, and explicit completion of sections that do not apply.
 - Added capability-separated MongoDB collections: `profiles`, `incomeSources`, `accounts`, `creditCards`, `recurringExpenses`, `loans`, `safetyMargins`, and `goals`.
@@ -30,56 +35,50 @@
 | Real MongoDB availability | Verified locally | MongoDB 8.3.2 at `mongodb://127.0.0.1:27017` returned `ping: 1`. |
 | Real MongoDB persistence | Verified locally | Four integration files used randomly suffixed databases and persisted profiles, onboarding state, BSON `Long` money, manual records, audit events, soft deletion, and rate-limit counters. |
 | Previously skipped MongoDB ownership-isolation test | Passed | Real-local-Mongo `npm run test:integration`: 4 files passed, 5 tests passed, no skip. This includes the original generic ownership test. |
-| Repository ownership isolation | Verified with constructed actors | Real MongoDB negative tests show separate actor reads and cross-owner updates are denied by ID-plus-owner predicates. This proves the DAL boundary, not authenticated-session identity. |
+| Repository ownership isolation | Verified | Real MongoDB tests deny constructed cross-owner access; a second real Auth.js database session also received an empty account list and a forged update against the first user's account was rejected with `409 CONFLICT`, leaving the record unchanged. |
 | Isolated test cleanup | Verified by test teardown | Every integration suite drops its random database in `afterAll`; the infrastructure-gate database-prefix check previously found no leftovers. |
-| Google OAuth callback verification | **Pending — not verified** | `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET` are intentionally empty. |
-| Auth.js database session verification | **Pending — not verified** | No real OAuth callback or Auth.js session record has been produced. |
-| Per-user authenticated identity verification | **Pending — not verified** | Actor derivation is implemented and unit-tested only; it has not received a real Google/Auth.js session. |
-| End-to-end server-derived ownership verification | **Pending — not verified** | Protected routes fail closed without auth, but no authenticated browser request has reached the profile/manual repositories. |
-| Two authenticated users' isolation verification | **Pending — not verified** | Repository isolation uses two constructed actors; two real authenticated Google users have not been exercised. |
+| Google OAuth callback verification | Passed with real Google | Two distinct interactive Google sign-ins completed through the registered port-3001 callback. The initial PKCE collision was reproduced, diagnosed from server logs, fixed with project-specific cookies, and then retested successfully. |
+| Auth.js database session verification | Passed with real MongoDB | The configured database persisted two Google-linked Auth.js users/accounts. Each login created an opaque database session linked by MongoDB `ObjectId`; sign-out removed the session. |
+| Per-user authenticated identity verification | Passed | The two logins resolved to different persisted Auth.js user IDs. Protected pages opened only with a live session and redirected to `/sign-in` after invalidation. |
+| End-to-end server-derived ownership verification | Passed | Profile POSTs contained no client owner ID. For both real sessions, the stored profile owner and create-audit actor exactly matched the Auth.js session user ID. |
+| Two authenticated users' isolation verification | Passed | Before its own writes, the second user saw zero income/accounts and did not receive the first user's labels. Direct cross-owner mutation was denied; MongoDB retained two profiles with two distinct owners. |
+| Real sign-out and invalidation | Passed twice | Auth.js sign-out removed the database session; the signed-out browser was redirected from a protected route. Final configured-database counts were zero sessions, two auth users/accounts, and two separately owned profiles. |
+| Authenticated Playwright onboarding journey | Passed with a real session | The in-app Playwright browser completed the first user's profile plus all seven manual sections, verified reload/resume, reviewed one record per section, completed onboarding, and signed out. No mocked auth or stored test session was used. |
 
 ### Verification results
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Credential-free suite | Pass with explicit external-auth/infrastructure skips | `npm test`: 9 files passed, 4 integration files skipped; 55 tests passed, 5 skipped. `.env.local` is intentionally not auto-promoted into the test process. |
+| Credential-free regression suite | Pass with explicit infrastructure skips | `npm test`: 11 files passed, 4 integration files skipped; 59 tests passed, 5 skipped. The new cookie/database namespace tests are included; `.env.local` is intentionally not auto-promoted into the test process. |
 | Real-local-Mongo integration suite | Pass | Environment-scoped `npm run test:integration`: 4 files passed, 5 tests passed. Tests use randomly suffixed databases and real MongoDB 8.3.2. |
 | Strict type-check | Pass | `npm run typecheck`: exit 0. |
 | Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
 | Production build | Pass | `npm run build`: exit 0; all profile, onboarding, review, auth, and health routes compiled. |
 | Dependency audit | Pass | `npm run security:audit`: 0 vulnerabilities after registry access was permitted. |
-| Production runtime smoke without auth credentials | Pass for fail-closed boundary | On an alternate local port: root 200, sign-in 200 with unconfigured notice, protected profile/review pages 307 to `/sign-in`, profile API 503 `CONFIGURATION_ERROR`, `X-Powered-By` absent, frame denial and MIME-sniff protection present. |
-| Environment safety | Pass | `.env.local` is ignored; auth and future provider credential fields are empty; only loopback origin/Mongo settings and non-secret database names are populated. |
+| Production runtime/security smoke | Pass | On port 3001 after the final build: root 200, sign-in 200, signed-out protected profile 307 to `/sign-in`, `Cache-Control: no-store`, CSP present, `X-Powered-By` absent, frame denial and MIME-sniff protection present. Port 3000 remained independently listening and was not modified. |
+| Environment and secret safety | Pass | `.env.local` is ignored and absent from Git's tracked index; required real-auth fields are present without their values being displayed; `AUTH_URL` is exactly port 3001. Tracked secret-pattern review found only the intentional angle-bracket credential URI in `.env.example`, not a credential. |
 
 ### Phase 1 acceptance review
 
 | Acceptance criterion | Result |
 | --- | --- |
-| Real user can sign in/out with Google | Pending real credentials; implementation exists, no success claimed |
-| Auth.js user/account/session persistence | Pending real callback/session evidence |
-| Persist/resume/finish manual profile | Repository/service/state-machine behavior verified with real MongoDB; authenticated browser journey pending |
-| Two users cannot access each other | Repository boundary verified with constructed actors; two authenticated-user E2E pending |
+| Real user can sign in/out with Google | Accepted: two distinct real callbacks; real sign-out/session invalidation verified |
+| Auth.js user/account/session persistence | Accepted in the configured MongoDB database with namespaced collections |
+| Persist/resume/finish manual profile | Accepted: authenticated Playwright journey completed all Phase 1 sections and reload/resume |
+| Two users cannot access each other | Accepted: authenticated empty reads, cross-owner mutation denial, and distinct database owners verified |
 | No fake auth path | Accepted and code/runtime verified |
 | Financial precision, validation, audit, rate limits, ownership predicates | Implemented; unit and real-Mongo integration gates pass |
-| First authenticated Playwright journey | Pending real OAuth test environment; no mocked browser journey was added |
+| First authenticated Playwright journey | Accepted with a real Google/Auth.js session; no mocked path or committed auth state |
 
-**Acceptance conclusion:** Phase 1 is not yet accepted. All work that can be safely implemented and verified without real Google OAuth credentials is complete. The credential-free runtime fails closed and no verification claim crosses the missing-auth boundary. Phase 2 has not started.
+**Acceptance conclusion:** Phase 1 is fully implemented and its real-authentication acceptance gate passed. The complete regression, real-Mongo, type, lint, production-build, dependency-audit, runtime-security, environment, and Git-secret checks passed. Phase 2 has not started and requires explicit owner approval.
 
-The following are mandatory before Phase 1 can be marked fully accepted:
+### Residual operational note
 
-- Real Google OAuth callback
-- Auth.js MongoDB-backed database session
-- Real per-user authenticated identity
-- End-to-end server-derived ownership
-- Two authenticated users' data isolation
-- Real sign-out and session invalidation
-- Authenticated Playwright onboarding journey
+Before the adapter was bound to `MONGODB_DB_NAME`, the first diagnostic OAuth attempt wrote an orphaned Auth.js record set to the URI's default database. The active Financial OS configuration cannot read that record set, its browser cookie has been replaced/removed, and current sessions use the configured namespaced collections. It was not deleted because the default database may be shared with the separate port-3000 application; targeted cleanup requires explicit ownership confirmation or expiry. No secret or record identifier is documented here.
 
-After credentials are supplied, the complete authentication acceptance gate and all relevant regression tests must pass. Only then may Phase 1 be marked fully accepted and Phase 2 begin.
+### Exact next milestone
 
-### Exact blocker and next action
-
-Populate the existing ignored `.env.local` with real `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:3000/api/auth/callback/google`. Then run the real authentication gate with two test Google users: callback, Auth.js collections/session cookie, actor IDs, full onboarding persistence/resume/completion, cross-user API negatives, sign-out/session invalidation, and the authenticated Playwright journey. Only those results can complete Phase 1 acceptance.
+Wait for explicit approval before Phase 2 — Core financial data foundation. Do not begin it automatically.
 
 ## Phase 0 — Foundation
 
