@@ -96,6 +96,43 @@ This log records durable product and architecture decisions. Status is `accepted
 - **Alternatives:** No headers until production hardening was rejected because several low-risk protections are available now. Claiming a fully strict CSP or HTTPS locally was rejected as misleading.
 - **Consequences:** The current CSP permits inline framework script/style execution and must be strengthened with nonces after authenticated dynamic rendering is introduced. HSTS, rate limiting, origin/proxy review, and deployment-level TLS validation are mandatory before launch.
 
+## ADR-016 — Phase 1 profile root and manual capability collections
+
+- **Decision:** Store one `profiles` document per user as the onboarding state root. Store manual income, accounts, cards, recurring expenses, loans, safety margins, and goals in separate capability collections, while using one closed-section repository implementation for their shared ownership, audit, and concurrency mechanics.
+- **Reasoning:** A single user document would create a growing write hotspot and make later sync/reconciliation difficult. Seven copy-pasted repositories would make security predicates drift. Closed schemas and collection mapping preserve distinct domains without duplicating the invariant-bearing persistence code.
+- **Consequences:** Collections are `profiles`, `incomeSources`, `accounts`, `creditCards`, `recurringExpenses`, `loans`, `safetyMargins`, and `goals`. Every collection has user-prefixed indexes. Phase 2 may add richer capability repositories without changing ownership or stored money conventions.
+
+## ADR-017 — Ordered resumable onboarding with optimistic transitions
+
+- **Decision:** Persist onboarding as an ordered state machine from profile through review. A transition atomically requires owner, current step, `in_progress` status, and expected profile version. Empty sections require an explicit completion action, and completed review cannot be replayed.
+- **Reasoning:** Client-only progress can be skipped, lost, or tampered with. Optimistic versioning prevents two tabs from silently overwriting progress while allowing a user to resume on another device.
+- **Consequences:** Section records may be edited independently, but progress advancement is serialized through the profile. Conflict responses require reload. A zero-record section is meaningful only after the user explicitly completes it.
+
+## ADR-018 — Entity-local atomic audit and recoverable record removal
+
+- **Decision:** Append a redacted audit event to the same profile/manual document in every create/update/delete mutation. Ordinary manual-record deletion is a soft deletion; a future full-account privacy erasure remains hard deletion across owned data.
+- **Reasoning:** The verified local MongoDB is standalone and cannot provide multi-document transactions. A separate audit write could succeed or fail independently of the financial mutation. Keeping the event in the entity update makes the current audit guarantee atomic and retains recovery groundwork for onboarding mistakes.
+- **Alternatives:** Non-transactional dual writes were rejected as an integrity weakness. Requiring a replica set for all local work was rejected because the entity-local model remains valid on both standalone and transactional deployments.
+- **Consequences:** Active queries filter `deletedAt: null`. Audit events store action, actor ID, timestamp, revision, source, and changed field names—not full sensitive snapshots. A later centralized audit view can project entity histories. Before production, legal/privacy review must define retention and full-account erasure behavior.
+
+## ADR-019 — Phase 1 primary-currency input precision
+
+- **Decision:** Accept decimal money as a string and obtain the currency's minor-unit count from runtime ISO-backed `Intl.NumberFormat` metadata. Parse with string/`bigint` arithmetic, persist as BSON int64, and require all Phase 1 manual money to match the profile's primary currency.
+- **Reasoning:** This safely supports zero-, two-, and three-decimal currencies without a hand-maintained table or floating-point conversion. A single onboarding currency avoids premature exchange-rate policy.
+- **Consequences:** Excess precision is rejected, not rounded. Currency conversion and mixed-currency totals remain unimplemented. A curated user-facing currency list is still a product decision, but unknown/non-runtime-supported codes cannot silently acquire guessed precision.
+
+## ADR-020 — Phase 1 mutation boundary controls
+
+- **Decision:** Require exact configured-origin mutation requests, JSON content, an actual UTF-8 body size of at most 16 KB, optimistic versions for mutable records, and a MongoDB fixed-window per-actor/action limiter. Hash actor IDs before writing limiter keys.
+- **Reasoning:** Authenticated cookies require CSRF-conscious origin enforcement; content and size bounds reduce parser abuse; optimistic versions protect integrity; persistent limiter counters work across application processes without exposing raw identity in the limiter collection.
+- **Consequences:** Browser mutations must originate from `AUTH_URL`. Proxies and production origin settings need deployment validation. The current 30-per-minute mutation policy is a safe Phase 1 baseline, not a final capacity model, and auth-provider edge rate limiting remains deployment work.
+
+## ADR-021 — Loopback HTTP is a local-only configuration exception
+
+- **Decision:** Permit `http://localhost` and other loopback hosts for `AUTH_URL` even when `NODE_ENV=production`, because `next build`/`next start` use production mode locally. Continue to require HTTPS for every non-loopback production origin.
+- **Reasoning:** Rejecting loopback HTTP made a safe local production build impossible, while broadly allowing production HTTP would weaken cookie and OAuth transport expectations.
+- **Consequences:** Local production smoke tests can use loopback without TLS. Any preview or deployed hostname must use HTTPS and secure cookies; this exception does not justify non-loopback plaintext deployment.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.
@@ -104,6 +141,14 @@ This log records durable product and architecture decisions. Status is `accepted
 - The final npm audit reports zero vulnerabilities after the Auth.js security migration.
 - Runtime smoke checks returned 200 for the root and health route, 503 for intentionally unconfigured auth, and the expected security headers.
 - Secret-pattern scanning found no committed credentials; local environment files and generated build/dependency artifacts are ignored.
+
+## Phase 1 credential-free verification addendum — 2026-08-30
+
+- The ignored `.env.local` contains empty auth/provider fields and loopback-only MongoDB/origin configuration; no real credentials were added.
+- The credential-free suite passes 55 tests with five explicit integration skips. An environment-scoped real-local-Mongo run passes all four integration files and five tests.
+- Real MongoDB evidence covers profile/onboarding persistence, manual records and BSON int64 money, audit/soft deletion, rate limiting, and isolation for constructed actors.
+- Strict TypeScript, zero-warning ESLint, production build, runtime fail-closed smoke checks, and the registry-backed dependency audit pass.
+- Google callback, Auth.js database sessions, real session-to-actor identity, authenticated route ownership, two authenticated users' isolation, and authenticated Playwright E2E remain pending. Phase 1 is not accepted and Phase 2 has not started.
 
 ## Open product/engineering questions
 

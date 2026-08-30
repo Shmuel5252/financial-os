@@ -2,59 +2,70 @@
 
 ## Phase 1 — Identity, Profile, and Manual Onboarding
 
-**Status:** Infrastructure gate in progress; significant product implementation paused
+**Status:** Credential-free implementation complete; real-auth acceptance gate pending
 
 **Started:** 2026-08-30
 
 **Scope boundary:** Phase 1 only. No Financial Engine, Safe to Spend, Claude, Open Banking, household, forecasting, gamification, or later-phase functionality has started.
 
-### Infrastructure gate
+### Implemented
+
+- Created an ignored `.env.local` containing empty auth/provider values and loopback-only MongoDB development/test settings. No real secret or external credential was added.
+- Added a real Auth.js Google sign-in page, protected onboarding pages, Auth.js sign-out action, database-session configuration, and server-derived actor boundary. There is no fallback provider, mock session, hardcoded user, or fake sign-in.
+- Added a one-profile-per-user model with display name, country, primary currency, IANA timezone, household type, optimistic versioning, resumable onboarding state, completion timestamp, and entity-local audit trail.
+- Added manual onboarding for income, accounts, credit cards, recurring expenses, loans/debts, safety margin, and goals, including create/list/update/delete APIs, create/list/delete UI, reload/resume behavior, review counts, and explicit completion of sections that do not apply.
+- Added capability-separated MongoDB collections: `profiles`, `incomeSources`, `accounts`, `creditCards`, `recurringExpenses`, `loans`, `safetyMargins`, and `goals`.
+- Added repository-owned `userId` predicates for every read/update/delete, immutable server-derived ownership on inserts, optimistic concurrency, active-record filtering, a 100-record onboarding list bound, and user-prefixed indexes.
+- Added exact decimal-major-unit parsing to `bigint` minor units, ISO-style currency tagging, runtime ISO/`Intl` minor-unit precision, BSON `Long` persistence, and profile-primary-currency enforcement. Financial values never pass through binary floating-point parsing.
+- Added strict Zod schemas and invariants for all Phase 1 record types, including loan/currency constraints, certainty/interest basis points, billing days, dates, priorities, and one active safety margin per user.
+- Added exact-origin mutation checks, JSON-only 16 KB body limits enforced on actual bytes, MongoDB-backed per-actor mutation rate limits with hashed actor keys, safe typed errors, correlation IDs, and no-store API responses.
+- Added entity-local atomic audit events for create/update/delete and soft deletion for ordinary onboarding record removal. Future full-account privacy erasure remains a separate hard-deletion operation.
+
+### Infrastructure and acceptance gate
 
 | Dependency/invariant | Result | Verified evidence |
 | --- | --- | --- |
 | Real MongoDB availability | Verified locally | MongoDB 8.3.2 at `mongodb://127.0.0.1:27017` returned `ping: 1`. |
-| Real MongoDB persistence | Verified locally | The isolated integration test inserted records for two distinct owners and read the authorized record back from MongoDB. |
-| Previously skipped MongoDB isolation test | Passed | `npm run test:integration` with an isolated local test URI: 1 file passed, 1 test passed, no skip. |
-| DAL ownership isolation against real MongoDB | Verified at repository-filter boundary | The first actor saw only its record; an ID-plus-owner lookup for the second actor's record returned `null`. |
-| Isolated test cleanup | Verified | Post-test database listing found zero databases with the generated `financial_os_phase1_gate_` prefix. |
-| Real Google OAuth/Auth.js flow | Blocked, not verified | No `GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET` is available. |
-| Real per-user session identity | Blocked, not verified | Requires completed Google OAuth callbacks and persisted Auth.js sessions. |
-| End-to-end server-derived ownership | Blocked, not verified | The server-derived actor pattern is unit-tested, but no real authenticated session exists yet. |
-| End-to-end two-user isolation | Blocked, not verified | Requires two real authenticated test users and Phase 1 owned profile records. |
+| Real MongoDB persistence | Verified locally | Four integration files used randomly suffixed databases and persisted profiles, onboarding state, BSON `Long` money, manual records, audit events, soft deletion, and rate-limit counters. |
+| Previously skipped MongoDB ownership-isolation test | Passed | Real-local-Mongo `npm run test:integration`: 4 files passed, 5 tests passed, no skip. This includes the original generic ownership test. |
+| Repository ownership isolation | Verified with constructed actors | Real MongoDB negative tests show separate actor reads and cross-owner updates are denied by ID-plus-owner predicates. This proves the DAL boundary, not authenticated-session identity. |
+| Isolated test cleanup | Verified by test teardown | Every integration suite drops its random database in `afterAll`; the infrastructure-gate database-prefix check previously found no leftovers. |
+| Google OAuth callback verification | **Pending — not verified** | `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET` are intentionally empty. |
+| Auth.js database session verification | **Pending — not verified** | No real OAuth callback or Auth.js session record has been produced. |
+| Per-user authenticated identity verification | **Pending — not verified** | Actor derivation is implemented and unit-tested only; it has not received a real Google/Auth.js session. |
+| End-to-end server-derived ownership verification | **Pending — not verified** | Protected routes fail closed without auth, but no authenticated browser request has reached the profile/manual repositories. |
+| Two authenticated users' isolation verification | **Pending — not verified** | Repository isolation uses two constructed actors; two real authenticated Google users have not been exercised. |
 
-### Credential inspection
+### Verification results
 
-- Only `.env.example` exists. No `.env.local` or process-level Phase 1 credentials were found.
-- Example placeholders were not treated as credentials and no values were printed.
-- A real local MongoDB daemon is available without inventing a remote credential.
-- Google OAuth requires an actual registered OAuth web client. Fake providers, fabricated sessions, and hardcoded users remain prohibited.
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Credential-free suite | Pass with explicit external-auth/infrastructure skips | `npm test`: 9 files passed, 4 integration files skipped; 55 tests passed, 5 skipped. `.env.local` is intentionally not auto-promoted into the test process. |
+| Real-local-Mongo integration suite | Pass | Environment-scoped `npm run test:integration`: 4 files passed, 5 tests passed. Tests use randomly suffixed databases and real MongoDB 8.3.2. |
+| Strict type-check | Pass | `npm run typecheck`: exit 0. |
+| Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
+| Production build | Pass | `npm run build`: exit 0; all profile, onboarding, review, auth, and health routes compiled. |
+| Dependency audit | Pass | `npm run security:audit`: 0 vulnerabilities after registry access was permitted. |
+| Production runtime smoke without auth credentials | Pass for fail-closed boundary | On an alternate local port: root 200, sign-in 200 with unconfigured notice, protected profile/review pages 307 to `/sign-in`, profile API 503 `CONFIGURATION_ERROR`, `X-Powered-By` absent, frame denial and MIME-sniff protection present. |
+| Environment safety | Pass | `.env.local` is ignored; auth and future provider credential fields are empty; only loopback origin/Mongo settings and non-secret database names are populated. |
 
-### Work performed
+### Phase 1 acceptance review
 
-- Reconfirmed the clean accepted Phase 0 repository on branch `main`.
-- Re-read the Phase 1 roadmap, current progress record, and decision log.
-- Probed the local MongoDB instance and recorded its real server version.
-- Ran the formerly skipped ownership-isolation integration test against a randomly suffixed database.
-- Verified cleanup of the isolated database.
-- Did not begin significant profile/onboarding implementation because the real OAuth/session gate is incomplete.
+| Acceptance criterion | Result |
+| --- | --- |
+| Real user can sign in/out with Google | Pending real credentials; implementation exists, no success claimed |
+| Auth.js user/account/session persistence | Pending real callback/session evidence |
+| Persist/resume/finish manual profile | Repository/service/state-machine behavior verified with real MongoDB; authenticated browser journey pending |
+| Two users cannot access each other | Repository boundary verified with constructed actors; two authenticated-user E2E pending |
+| No fake auth path | Accepted and code/runtime verified |
+| Financial precision, validation, audit, rate limits, ownership predicates | Implemented; unit and real-Mongo integration gates pass |
+| First authenticated Playwright journey | Pending real OAuth test environment; no mocked browser journey was added |
+
+**Acceptance conclusion:** Phase 1 is not yet accepted. All work that can be safely implemented and verified without real Google OAuth credentials is complete. The credential-free runtime fails closed and no verification claim crosses the missing-auth boundary. Phase 2 has not started.
 
 ### Exact blocker and next action
 
-Configure an ignored `.env.local` with a real Google OAuth web client and an Auth.js secret:
-
-- `AUTH_SECRET`
-- `AUTH_URL=http://localhost:3000`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-
-Register `http://localhost:3000/api/auth/callback/google` as an authorized redirect URI. The detected local MongoDB can be used for development with:
-
-- `MONGODB_URI=mongodb://127.0.0.1:27017`
-- `MONGODB_DB_NAME=financial_os_development`
-- `MONGODB_TEST_URI=mongodb://127.0.0.1:27017`
-- `MONGODB_TEST_DB_NAME=financial_os_integration`
-
-After configuration, verify real sign-in, callback, persisted Auth.js records, database session cookie behavior, sign-out, two distinct users, and server-derived actor IDs before implementing the material onboarding flow.
+Populate the existing ignored `.env.local` with real `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`, and register `http://localhost:3000/api/auth/callback/google`. Then run the real authentication gate with two test Google users: callback, Auth.js collections/session cookie, actor IDs, full onboarding persistence/resume/completion, cross-user API negatives, sign-out/session invalidation, and the authenticated Playwright journey. Only those results can complete Phase 1 acceptance.
 
 ## Phase 0 — Foundation
 

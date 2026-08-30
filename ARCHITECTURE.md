@@ -2,11 +2,13 @@
 
 ## Purpose and status
 
-This document defines the Phase 0 architecture and the constraints that future phases must preserve. It distinguishes foundations that exist in code from extension boundaries and product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
+This document defines the implemented architecture through the credential-free portion of Phase 1 and the constraints that future phases must preserve. It distinguishes verified code from credential-dependent behavior and product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
 
 | Status | Meaning |
 | --- | --- |
 | Implemented in Phase 0 | A working, tested code or configuration foundation exists. |
+| Implemented in Phase 1 | Working profile/manual-onboarding code exists and is verified at its stated boundary. |
+| Pending real-auth verification | Code exists, but no operational claim is made until real Google/Auth.js infrastructure is exercised. |
 | Boundary prepared | An interface, module boundary, convention, or configuration seam exists; no provider capability is claimed. |
 | Planned | The product behavior belongs to a later roadmap phase and does not exist yet. |
 
@@ -29,7 +31,35 @@ Dependency flow is inward. UI code may call server actions or route handlers, bu
 
 - **Implemented:** App Router shell, strict TypeScript, Tailwind, server/client separation, validated environment access, MongoDB client factory, user-scoped repository helpers, Auth.js-compatible Google configuration, server-side actor/authorization helpers, Zod validation helpers, integer-minor-unit money value object, UTC/calendar-date validation, typed public errors, unit/integration test layout, and build/lint/type-check scripts.
 - **Boundary prepared:** repository interfaces, authenticated actor context, future household scope shape, financial-engine directory, external adapter directories, MongoDB health check, Google provider configuration boundary.
-- **Planned:** onboarding and financial entities, working sign-in against real Google credentials, household membership resolution, financial calculations, provider integrations, snapshots, audit log persistence, rate limiting, observability, and all Phase 1+ product features.
+- **At Phase 0 acceptance:** onboarding, profile entities, mutation audit, and rate limiting were planned; their current status is recorded in the Phase 1 map below. Working sign-in against real Google credentials, household membership resolution, financial calculations, provider integrations, snapshots, and observability remain pending or later-phase work.
+
+### Phase 1 implementation map
+
+- **Implemented and tested without fake auth:** profile and onboarding schemas/services/repositories; manual income, account, card, recurring-expense, loan, safety-margin, and goal records; resumable ordered onboarding; review/completion UI; exact money input and BSON mappings; optimistic concurrency; entity-local mutation audit; ordinary-record soft deletion; mutation origin/body/rate controls; protected routes; sign-in/sign-out wiring.
+- **Verified against real local MongoDB:** profile/manual persistence, user-prefixed indexes, BSON int64 money, onboarding state transitions, audit events, rate-limit counters, two constructed actors' read/update isolation, one active safety margin, and test-database cleanup.
+- **Pending real-auth verification:** Google callback, Auth.js user/account/session persistence, database-session cookie and sign-out invalidation, real session-to-actor identity, authenticated route-to-repository ownership, two authenticated users' isolation, and the authenticated Playwright journey.
+- **Not started:** Phase 2 financial data platform/transactions, Financial Engine, Safe to Spend, Claude, Open Banking, households, forecasting, gamification, and later-phase capabilities.
+
+## Phase 1 profile and onboarding architecture
+
+The profile is the one-per-user root for manual onboarding. It stores locale context, primary currency, IANA timezone, household type, an optimistic `version`, and an ordered state machine:
+
+```text
+profile -> income -> accounts -> cards -> expenses -> debts
+        -> safety_margin -> goals -> review -> complete
+```
+
+Each transition requires the current step, `in_progress` status, owner, and expected version to match atomically. Empty financial sections are allowed only through an explicit completion action. A completed review cannot be replayed. Reloading a page reads the persisted profile step and capability records, so the flow is resumable without client-owned progress state.
+
+Manual onboarding uses separate collections—`incomeSources`, `accounts`, `creditCards`, `recurringExpenses`, `loans`, `safetyMargins`, and `goals`—plus `profiles`. The generic repository implementation is parameterized by a closed section enum, but each section maps to a distinct capability collection and distinct Zod domain schema. This avoids a monolithic user document while keeping Phase 1's repeated ownership/concurrency policy in one implementation.
+
+Every financial document stores MongoDB `ObjectId` ownership derived from the server `Actor`, `source: "manual"`, `createdAt`, `updatedAt`, `deletedAt`, and `version`. Reads are bounded and filter by `{ userId, deletedAt: null }`; updates and removal additionally filter by `_id` and expected version. Ordinary removal is soft deletion so onboarding mistakes are recoverable and mutation history remains intact. A future full-account privacy erasure must hard-delete the profile, manual records, and applicable audit data under a separately reviewed policy.
+
+The detected local MongoDB is a standalone deployment, so Phase 1 does not claim multi-document transactions. Each profile/manual mutation atomically updates the record and appends its redacted entity-local audit event in the same document. A future centralized audit/read model may project these events, but financial mutation success never depends on a non-atomic second write in the current topology.
+
+Manual monetary input is a decimal string plus the profile's primary currency. Currency minor-unit precision comes from the runtime's ISO-backed `Intl.NumberFormat` metadata, excess fractional digits are rejected, and parsing uses string/`bigint` arithmetic only. Persistence uses explicit BSON `Long` conversion with int64 checks. Phase 1 does not perform currency conversion or allow records whose money differs from the profile currency.
+
+Mutation routes require an exact configured `Origin`, `application/json`, and an actual UTF-8 body no larger than 16 KB. A MongoDB fixed-window limiter keys counters by a SHA-256 hash of actor ID plus action; raw actor IDs are not stored in the limiter collection. Expected public errors are mapped to stable responses with correlation IDs and `Cache-Control: no-store`.
 
 ## Project and domain boundaries
 
@@ -125,7 +155,7 @@ Rules:
 ## Dates, time, and calendar policy
 
 - Persist event timestamps as UTC instants and name fields with `At` (`createdAt`, `updatedAt`, `syncedAt`).
-- Store user timezone as an IANA timezone identifier on the future profile. The default is selected during onboarding, not inferred permanently from the browser.
+- Store user timezone as an IANA timezone identifier on the profile. The browser proposes a default during onboarding, but the persisted value is explicit and editable.
 - Store financial business dates that are date-only (`transactionDate`, billing day outcomes, due dates) as validated `YYYY-MM-DD` calendar dates plus the applicable timezone/context; do not coerce them through UTC midnight.
 - Month boundaries, recurrence expansion, and forecast horizons are calculated in the user's configured timezone, then materialized to UTC instants when scheduling.
 - Provider timestamps retain source metadata and are normalized once at the adapter boundary.
@@ -141,7 +171,7 @@ Safe to Spend will evaluate minimum projected balance across a timeline and the 
 
 Typed application errors separate public status/code/message from private causes. Unknown errors return a generic response and are logged server-side with a correlation ID. Secrets, OAuth tokens, raw financial payloads, and MongoDB URIs must be redacted. Expected validation/auth/not-found/conflict errors are not silently swallowed.
 
-Meaningful financial mutations will later write append-only audit entries in the same logical use case: actor, action, resource type/ID, timestamp, source, correlation ID, and a safe change summary. Audit entries avoid credentials and unnecessary full financial snapshots. Transaction support will be used where MongoDB deployment topology permits; use cases must state atomicity requirements. Phase 0 defines this convention but does not claim persistent audit logs.
+Phase 1 profile/manual mutations append redacted entity-local audit events atomically with the entity mutation: actor, action, timestamp, source, revision, and changed field names. Entries avoid credentials and full before/after financial snapshots. The current standalone MongoDB cannot provide multi-document transactions, so a centralized audit collection is not written as a second non-atomic operation. Future deployments may project a centralized append-only read model from these entity histories, and use cases must continue to state their atomicity requirements.
 
 ## Environment and secrets
 
@@ -169,20 +199,20 @@ Future server-only placeholders are documented for Anthropic and Open Banking, b
 
 - Unit tests exercise pure money, dates, validation, authorization policies, and later every financial engine edge case.
 - Integration tests exercise repository ownership filters and real MongoDB/Auth/provider adapters in isolated test infrastructure. Credential-dependent suites must explicitly skip with a documented reason; mocks are permitted only at named adapter boundaries and never reported as real integration success.
-- E2E tests will use Playwright against an isolated application/database and cover sign-in, onboarding, dashboard, transactions, goals, simulations, and bank flows as their phases arrive.
+- E2E tests will use Playwright against an isolated application/database and cover sign-in, onboarding, dashboard, transactions, goals, simulations, and bank flows as their phases arrive. The first authenticated journey remains pending until real Google credentials and two test users are available; no mocked-auth browser result substitutes for it.
 - Production builds, strict type-checking, ESLint, and tests are separate required checks. No rules or type errors are suppressed to make gates pass.
 
 ## Deployment architecture
 
 The target is Vercel running Next.js over HTTPS, with MongoDB Atlas (or a compatible secured MongoDB deployment). Runtime secrets live in Vercel environment settings. Preview and production use separate OAuth callbacks, databases, and secrets. Database network policy, backups, restore drills, indexes, retention, monitoring, rate limiting, CSP/security headers, privacy controls, and observability are verified before production launch. Phase 0 proves a local production build only; it does not claim a Vercel deployment or live database.
 
-## Collection conventions for later phases
+## Collection conventions
 
 - IDs are MongoDB `ObjectId` internally and opaque lowercase hex strings at service/API boundaries unless a domain requires a different stable provider ID.
 - User-owned documents include `userId`, `createdAt`, and `updatedAt`; household-owned documents additionally include an authorized household scope.
 - Financial amounts use the canonical money representation and currency.
 - Source metadata distinguishes manual, imported, normalized open-banking, and generated projections without making a provider record the domain source of truth.
-- Hard deletion is the default for user-requested privacy erasure; soft deletion is used only where restoration, legal retention, or reconciliation has a documented requirement. Audit retention must be reconciled with deletion/privacy policy before launch.
+- Hard deletion is the default for a future user-requested full privacy erasure. Phase 1 ordinary record removal is an explicitly recoverable soft deletion that preserves the entity-local audit trail; full-account erasure must remove those documents. Audit retention must be reconciled with deletion/privacy policy before launch.
 - Optimistic concurrency/version fields are added where concurrent edits or sync reconciliation can lose data.
 
 ## Non-negotiable invariants
