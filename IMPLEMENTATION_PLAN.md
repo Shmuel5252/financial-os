@@ -2,7 +2,7 @@
 
 ## Roadmap rules
 
-`MASTER_PLAN.md` is authoritative. Work advances only after the active phase passes its acceptance review. Security, user isolation, deterministic money handling, and data integrity are cross-phase gates. A folder, mock, or UI shell is not an implemented capability. Credentials may block live verification, but they do not justify fake integrations.
+`MASTER_PLAN.md` is authoritative. Work advances only after the active phase passes its acceptance review. Security, user isolation, deterministic money handling, data integrity, and Hebrew-first/RTL-first product behavior are cross-phase gates. Every new Financial OS-controlled surface must use the localization boundary, natural Hebrew copy, RTL layout, and explicit LTR isolation for inherently LTR values. A folder, mock, or UI shell is not an implemented capability. Credentials may block live verification, but they do not justify fake integrations.
 
 The original Phase 0 through Phase 20 order is preserved. Internal scope is clarified below; no product dependency is reordered.
 

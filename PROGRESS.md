@@ -1,5 +1,43 @@
 # Financial OS Progress
 
+## Hebrew-first / RTL-first localization baseline
+
+**Status:** Complete — permanent pre-Phase-2 product requirement implemented and verified.
+
+**Started:** 2026-08-30
+
+**Verified:** 2026-08-31
+
+**Scope boundary:** Localization of the existing Financial OS-controlled Phase 0/1 UI only. No visual redesign and no Phase 2 functionality.
+
+### Implemented
+
+- Added Hebrew-first and RTL-first as permanent cross-phase requirements in `MASTER_PLAN.md`, the preserved master prompt, `IMPLEMENTATION_PLAN.md`, `ARCHITECTURE.md`, and ADR-025.
+- Set the root document to `lang="he"` and `dir="rtl"` and localized metadata.
+- Centralized active product copy and safe client-visible error-code mapping under `src/lib/i18n`; future locale selection can replace the active catalog without changing domain components or API contracts.
+- Localized the landing page, navigation, Google sign-in wrapper, profile onboarding, all seven manual sections, options, actions, empty states, record summaries, review/completion, sign-out, not-found page, and application error boundary to natural Hebrew.
+- Preserved English for source identifiers, schemas, API fields/codes, database records, logs, tests, and engineering documentation. Google/provider-controlled screens remain outside the localization boundary.
+- Added explicit LTR isolation for country/currency codes, IANA timezones, money summaries, dates, percentages, numeric inputs, and other inherently LTR values through `dir="ltr"` and `<bdi dir="ltr">`.
+- Kept the existing visual system and page composition; only copy, directionality, and bidirectional-text safety changed.
+
+### Verification results
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Localization/RTL unit and render coverage | Pass | New suite verifies the Hebrew/RTL locale defaults, centralized Hebrew catalog, every Phase 1 manual form, safe public error mapping, and LTR technical-value isolation: 5/5 tests passed. |
+| Full credential-free regression suite | Pass | `npm test`: 12 files passed, 4 integration files skipped; 64 tests passed, 5 explicitly skipped. |
+| Real-local-Mongo integration suite | Pass | Environment-scoped `npm run test:integration`: 4 files and 5 tests passed. Localization did not change persistence or ownership behavior. |
+| Strict type-check | Pass | `npm run typecheck`: exit 0. |
+| Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
+| Production build | Pass | `npm run build`: exit 0; localized static, protected, auth, onboarding, review, error, and API routes compiled. |
+| Dependency audit | Pass | `npm run security:audit`: zero vulnerabilities. |
+| Rendered browser acceptance | Pass | Production port 3001 reported `lang="he"`, `dir="rtl"`; landing, sign-in, navigation, and not-found accessible snapshots were Hebrew. Visual inspection confirmed RTL composition without redesign. |
+| Master Plan preservation | Pass | `MASTER_PLAN.md` and `FINANCIAL_OS_MASTER_PROMPT.md` received the same permanent requirement and remain normalized copies. |
+
+### Acceptance conclusion
+
+The Hebrew-first/RTL-first baseline is implemented and verified for every existing Financial OS-controlled UI surface. The requirement is permanent for later phases: new copy must use the localization boundary, new UI must default to RTL/Hebrew, and inherently LTR values must remain isolated. Phase 2 has not started and still requires explicit approval.
+
 ## Phase 1 — Identity, Profile, and Manual Onboarding
 
 **Status:** Complete — real authentication acceptance gate passed.

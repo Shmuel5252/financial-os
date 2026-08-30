@@ -213,6 +213,15 @@ Before doing anything else:
   Do not blindly choose the newest dependency if it creates unnecessary instability.
   Avoid unnecessary dependencies.
   Security must be built from the beginning rather than added only during Production Hardening.
+  Permanent product language and direction requirement:
+- Financial OS is Hebrew-first and RTL-first.
+- All Financial OS-controlled user-facing UI defaults to natural Hebrew and right-to-left layout.
+- Inherently left-to-right values such as email addresses, URLs, currency codes, technical and account identifiers retain isolated LTR rendering.
+- Source code, identifiers, database schemas, API contracts, logs, tests, and engineering documentation remain in English.
+- External provider-controlled UI is outside the Financial OS localization boundary.
+- User-facing copy must be organized behind a localization boundary so future English or additional locales do not require a major UI rewrite.
+- Each phase must add localization and directionality tests for its new user-facing surfaces.
+- Localization does not authorize an unrelated visual redesign.
   Phase 0 must establish appropriate foundations for:
 - secure environment variable handling
 - .env* protection

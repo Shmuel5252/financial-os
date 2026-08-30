@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { HomeLink } from "@/components/navigation/home-link";
 import { ProfileForm } from "@/components/onboarding/profile-form";
 import { actorFromSession } from "@/lib/auth/actor";
 import { auth } from "@/lib/auth";
 import { getConfigurationStatus } from "@/lib/config/server-env";
+import { messages } from "@/lib/i18n";
 import { toUserProfileView } from "@/lib/profiles/profile";
 import { loadProfile } from "@/lib/profiles/profile-service";
 
@@ -38,19 +39,16 @@ export default async function OnboardingProfilePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-20">
-      <Link className="text-sm font-semibold text-[var(--accent)]" href="/">
-        ← Financial OS
-      </Link>
+      <HomeLink />
       <section className="mt-8 rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[0_24px_70px_rgba(18,35,28,0.08)] sm:p-10">
-        <p className="text-sm font-semibold tracking-wide text-[var(--accent)] uppercase">
-          Onboarding · Profile
+        <p className="text-sm font-semibold text-[var(--accent)]">
+          {messages.onboarding.eyebrow(messages.onboarding.profile.label)}
         </p>
         <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em]">
-          Start with your financial context
+          {messages.onboarding.profile.title}
         </h1>
         <p className="mt-4 max-w-2xl leading-7 text-[var(--muted)]">
-          These settings define how dates and currencies are interpreted. Ownership
-          comes only from your authenticated server session.
+          {messages.onboarding.profile.description}
         </p>
         <ProfileForm
           continuePath={

@@ -18,6 +18,14 @@ html {
   background: var(--background);
 }
 
+[dir="ltr"] {
+  unicode-bidi: isolate;
+}
+
+input[dir="ltr"] {
+  text-align: left;
+}
+
 body {
   min-height: 100vh;
   margin: 0;

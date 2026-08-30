@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { HomeLink } from "@/components/navigation/home-link";
 import { ManualSectionForm } from "@/components/onboarding/manual-section-form";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
+import { messages } from "@/lib/i18n";
 import {
   manualSectionSchema,
   toManualRecordView,
@@ -28,44 +29,44 @@ const sectionDetails: Readonly<
   >
 > = {
   accounts: {
-    description: "Add every account balance that belongs in your manual profile.",
-    label: "Accounts",
+    description: messages.onboarding.sections.accounts.description,
+    label: messages.onboarding.sections.accounts.label,
     nextPath: "/onboarding/cards",
     step: "accounts",
   },
   cards: {
-    description: "Record credit limits, current usage, and billing days.",
-    label: "Credit cards",
+    description: messages.onboarding.sections.cards.description,
+    label: messages.onboarding.sections.cards.label,
     nextPath: "/onboarding/expenses",
     step: "cards",
   },
   expenses: {
-    description: "Add required recurring expenses and their next due dates.",
-    label: "Recurring expenses",
+    description: messages.onboarding.sections.expenses.description,
+    label: messages.onboarding.sections.expenses.label,
     nextPath: "/onboarding/loans",
     step: "expenses",
   },
   goals: {
-    description: "Define the financial changes you want to measure.",
-    label: "Goals",
+    description: messages.onboarding.sections.goals.description,
+    label: messages.onboarding.sections.goals.label,
     nextPath: "/onboarding/review",
     step: "goals",
   },
   income: {
-    description: "Add expected income, timing, frequency, and certainty.",
-    label: "Income",
+    description: messages.onboarding.sections.income.description,
+    label: messages.onboarding.sections.income.label,
     nextPath: "/onboarding/accounts",
     step: "income",
   },
   loans: {
-    description: "Record loan balances, payments, rates, and dates.",
-    label: "Loans and debts",
+    description: messages.onboarding.sections.loans.description,
+    label: messages.onboarding.sections.loans.label,
     nextPath: "/onboarding/safety_margin",
     step: "debts",
   },
   safety_margin: {
-    description: "Choose the amount that should remain protected.",
-    label: "Safety margin",
+    description: messages.onboarding.sections.safety_margin.description,
+    label: messages.onboarding.sections.safety_margin.label,
     nextPath: "/onboarding/goals",
     step: "safety_margin",
   },
@@ -102,11 +103,9 @@ export default async function ManualOnboardingPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <Link className="text-sm font-semibold text-[var(--accent)]" href="/">
-        ← Financial OS
-      </Link>
-      <p className="mt-8 text-sm font-semibold tracking-wide text-[var(--accent)] uppercase">
-        Onboarding · {details.label}
+      <HomeLink />
+      <p className="mt-8 text-sm font-semibold text-[var(--accent)]">
+        {messages.onboarding.eyebrow(details.label)}
       </p>
       <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em]">
         {details.label}

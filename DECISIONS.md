@@ -153,6 +153,13 @@ This log records durable product and architecture decisions. Status is `accepted
 - **Reasoning:** Reusing Google's previously selected account made a second login appear distinct while Auth.js correctly linked it to the first identity. Explicit selection makes multi-user isolation acceptance and normal account switching deterministic without introducing another auth path.
 - **Consequences:** Users see Google's account chooser on sign-in. Authentication still uses only the Google provider and the same Auth.js callback/session architecture.
 
+## ADR-025 — Hebrew-first, RTL-first product localization
+
+- **Decision:** Financial OS-controlled UI uses Hebrew and `dir="rtl"` by default. All user-facing copy is selected through `src/lib/i18n`; inherently LTR values are explicitly isolated with `dir="ltr"` or `<bdi dir="ltr">`. Internal implementation and engineering artifacts remain English. Provider-controlled UI is excluded.
+- **Reasoning:** Hebrew/RTL is a permanent product requirement and must shape every surface as it is built. Treating it as late visual polish would create inconsistent onboarding, unsafe bidirectional rendering of financial identifiers, and expensive rewrites when later phases add dense financial UI.
+- **Alternatives:** Scattered Hebrew literals were rejected because they make future locale support and completeness checks brittle. Globally forcing every value to RTL was rejected because currency codes, URLs, email addresses, technical identifiers, dates, and numbers become ambiguous. Introducing a full third-party localization framework now was rejected as unnecessary for one active locale.
+- **Consequences:** The root document is Hebrew/RTL; Phase 1 navigation, forms, buttons, validation feedback, empty states, labels, review, and error boundaries are localized without a visual redesign. New phases must add their copy to the catalog and extend localization/directionality tests. A future English catalog can reuse the same component boundary. Internal API/error codes remain English, while clients map them to safe Hebrew messages.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.
@@ -181,6 +188,14 @@ This log records durable product and architecture decisions. Status is `accepted
 - `.env.local` remained ignored and untracked; secrets were not printed, logged, committed, or pushed. The tracked secret-pattern review found no real credentials.
 - The accepted browser journey used the app's Playwright browser controller with the real interactive session. No reusable authenticated storage state was committed because it would be sensitive. A repository-owned non-interactive E2E suite remains a later operational-hardening task, not a substitute for this completed real-auth gate.
 - Phase 1 is accepted. Phase 2 has not started and requires explicit project-owner approval.
+
+## Hebrew/RTL localization verification addendum — 2026-08-31
+
+- The root production document reports `lang="he"` and `dir="rtl"`; the landing, sign-in, navigation, onboarding catalog, review, not-found, and error surfaces use Hebrew.
+- Product copy and public error-code localization are centralized under `src/lib/i18n`. Domain/API identifiers and internal errors remain English, and clients no longer display arbitrary server messages.
+- Explicit LTR isolation covers currency/country codes, IANA timezones, financial values, dates, percentages, and numeric inputs. Provider-controlled Google UI remains unchanged.
+- The localization suite passed 5/5 tests; the complete suite passed 64 tests with five explicit infrastructure skips; real MongoDB passed 5/5. Type-check, lint, production build, dependency audit, and rendered browser inspection passed.
+- The existing design was preserved. Phase 2 has not started.
 
 ## Open product/engineering questions
 

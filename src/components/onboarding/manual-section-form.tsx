@@ -12,6 +12,11 @@ import type {
   ManualSection,
   SerializedDomainValue,
 } from "@/lib/onboarding/manual-record";
+import {
+  appLocale,
+  messages,
+  userFacingErrorMessage,
+} from "@/lib/i18n";
 import type { OnboardingStep } from "@/lib/profiles/profile";
 
 type ManualSectionFormProps = Readonly<{
@@ -25,9 +30,6 @@ type ManualSectionFormProps = Readonly<{
 }>;
 
 type RecordResponse = Readonly<{ record: ManualRecordView }>;
-type ErrorResponse = Readonly<{
-  error?: Readonly<{ message?: string }>;
-}>;
 
 function value(form: FormData, name: string): string {
   const entry = form.get(name);
@@ -40,14 +42,14 @@ function integer(form: FormData, name: string): number {
 
 function percentageToBasisPoints(input: string): number {
   if (!/^(0|[1-9]\d{0,2})(\.\d{1,2})?$/.test(input)) {
-    throw new Error("Use a percentage with at most two decimal places.");
+    throw new Error(messages.errors.percentageFormat);
   }
 
   const [whole = "0", fraction = ""] = input.split(".");
   const basisPoints = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
 
   if (basisPoints > 10_000n) {
-    throw new Error("Percentage cannot exceed 100%.");
+    throw new Error(messages.errors.percentageMaximum);
   }
 
   return Number(basisPoints);
@@ -138,7 +140,7 @@ function Field({
   ...props
 }: Readonly<
   {
-    label: string;
+    label: ReactNode;
     name: string;
   } & Omit<InputHTMLAttributes<HTMLInputElement>, "name">
 >) {
@@ -160,7 +162,7 @@ function SelectField({
   name,
 }: Readonly<{
   children: ReactNode;
-  label: string;
+  label: ReactNode;
   name: string;
 }>) {
   return (
@@ -176,66 +178,111 @@ function SelectField({
   );
 }
 
+function CurrencyLabel({
+  currency,
+  label,
+}: Readonly<{ currency: string; label: string }>) {
+  return (
+    <>
+      {label} (<bdi dir="ltr">{currency}</bdi>)
+    </>
+  );
+}
+
 function FormFields({
   currency,
   section,
 }: Readonly<{ currency: string; section: ManualSection }>) {
   const [safetyKind, setSafetyKind] = useState("fixed");
+  const { fields } = messages.onboarding.form;
 
   switch (section) {
     case "income":
       return (
         <>
-          <Field label="Income name" name="name" required />
-          <Field label={`Amount (${currency})`} name="amount" required />
-          <Field label="Expected date" name="expectedDate" required type="date" />
-          <SelectField label="Frequency" name="frequency">
-            <option value="monthly">Monthly</option>
-            <option value="weekly">Weekly</option>
-            <option value="biweekly">Every two weeks</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="annual">Annual</option>
-            <option value="one_time">One-time</option>
-            <option value="irregular">Irregular</option>
+          <Field label={fields.incomeName} name="name" required />
+          <Field
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.amount} />}
+            name="amount"
+            required
+          />
+          <Field
+            dir="ltr"
+            label={fields.expectedDate}
+            name="expectedDate"
+            required
+            type="date"
+          />
+          <SelectField label={fields.frequency} name="frequency">
+            <option value="monthly">{messages.onboarding.form.frequencies.monthly}</option>
+            <option value="weekly">{messages.onboarding.form.frequencies.weekly}</option>
+            <option value="biweekly">{messages.onboarding.form.frequencies.biweekly}</option>
+            <option value="quarterly">{messages.onboarding.form.frequencies.quarterly}</option>
+            <option value="annual">{messages.onboarding.form.frequencies.annual}</option>
+            <option value="one_time">{messages.onboarding.form.frequencies.one_time}</option>
+            <option value="irregular">{messages.onboarding.form.frequencies.irregular}</option>
           </SelectField>
           <Field
             defaultValue="100"
-            label="Certainty (%)"
+            dir="ltr"
+            inputMode="decimal"
+            label={fields.certainty}
             max="100"
             min="0"
             name="certainty"
             required
           />
-          <SelectField label="Destination" name="destination">
-            <option value="bank_account">Bank account</option>
-            <option value="cash">Cash</option>
-            <option value="savings">Savings</option>
-            <option value="investments">Investments</option>
+          <SelectField label={fields.destination} name="destination">
+            <option value="bank_account">{messages.onboarding.form.destinations.bank_account}</option>
+            <option value="cash">{messages.onboarding.form.destinations.cash}</option>
+            <option value="savings">{messages.onboarding.form.destinations.savings}</option>
+            <option value="investments">{messages.onboarding.form.destinations.investments}</option>
           </SelectField>
         </>
       );
     case "accounts":
       return (
         <>
-          <Field label="Account name" name="name" required />
-          <SelectField label="Account type" name="type">
-            <option value="bank">Bank</option>
-            <option value="cash">Cash</option>
-            <option value="savings">Savings</option>
-            <option value="investments">Investments</option>
+          <Field label={fields.accountName} name="name" required />
+          <SelectField label={fields.accountType} name="type">
+            <option value="bank">{messages.onboarding.form.accountTypes.bank}</option>
+            <option value="cash">{messages.onboarding.form.accountTypes.cash}</option>
+            <option value="savings">{messages.onboarding.form.accountTypes.savings}</option>
+            <option value="investments">{messages.onboarding.form.accountTypes.investments}</option>
           </SelectField>
-          <Field label={`Current balance (${currency})`} name="balance" required />
+          <Field
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.currentBalance} />}
+            name="balance"
+            required
+          />
         </>
       );
     case "cards":
       return (
         <>
-          <Field label="Card name" name="name" required />
-          <Field label="Issuer" name="issuer" required />
-          <Field label={`Credit limit (${currency})`} name="limit" required />
-          <Field label={`Currently used (${currency})`} name="used" required />
+          <Field label={fields.cardName} name="name" required />
+          <Field label={fields.issuer} name="issuer" required />
           <Field
-            label="Billing day"
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.limit} />}
+            name="limit"
+            required
+          />
+          <Field
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.currentlyUsed} />}
+            name="used"
+            required
+          />
+          <Field
+            dir="ltr"
+            label={fields.billingDay}
             max="31"
             min="1"
             name="billingDay"
@@ -247,90 +294,113 @@ function FormFields({
     case "expenses":
       return (
         <>
-          <Field label="Expense name" name="name" required />
-          <Field label={`Amount (${currency})`} name="amount" required />
-          <SelectField label="Category" name="category">
-            {[
-              "housing",
-              "utilities",
-              "insurance",
-              "communications",
-              "children",
-              "subscriptions",
-              "transport",
-              "food",
-              "debt_payment",
-              "other",
-            ].map((category) => (
+          <Field label={fields.expenseName} name="name" required />
+          <Field
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.amount} />}
+            name="amount"
+            required
+          />
+          <SelectField label={fields.category} name="category">
+            {(Object.keys(messages.onboarding.form.categories) as Array<keyof typeof messages.onboarding.form.categories>).map((category) => (
               <option key={category} value={category}>
-                {category.replaceAll("_", " ")}
+                {messages.onboarding.form.categories[category]}
               </option>
             ))}
           </SelectField>
-          <SelectField label="Frequency" name="frequency">
-            <option value="monthly">Monthly</option>
-            <option value="weekly">Weekly</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="annual">Annual</option>
-            <option value="irregular">Irregular</option>
+          <SelectField label={fields.frequency} name="frequency">
+            <option value="monthly">{messages.onboarding.form.frequencies.monthly}</option>
+            <option value="weekly">{messages.onboarding.form.frequencies.weekly}</option>
+            <option value="quarterly">{messages.onboarding.form.frequencies.quarterly}</option>
+            <option value="annual">{messages.onboarding.form.frequencies.annual}</option>
+            <option value="irregular">{messages.onboarding.form.frequencies.irregular}</option>
           </SelectField>
-          <Field label="Next due date" name="nextDueDate" required type="date" />
+          <Field
+            dir="ltr"
+            label={fields.nextDueDate}
+            name="nextDueDate"
+            required
+            type="date"
+          />
         </>
       );
     case "loans":
       return (
         <>
-          <Field label="Loan name" name="name" required />
+          <Field label={fields.loanName} name="name" required />
           <Field
-            label={`Original amount (${currency})`}
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.originalAmount} />}
             name="originalAmount"
             required
           />
           <Field
-            label={`Remaining balance (${currency})`}
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.remainingBalance} />}
             name="remainingBalance"
             required
           />
           <Field
-            label={`Monthly payment (${currency})`}
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.monthlyPayment} />}
             name="monthlyPayment"
             required
           />
           <Field
             defaultValue="0"
-            label="Annual interest rate (%)"
+            dir="ltr"
+            inputMode="decimal"
+            label={fields.annualInterestRate}
             name="annualInterestRate"
             required
           />
           <Field
-            label="Next payment date"
+            dir="ltr"
+            label={fields.nextPaymentDate}
             name="nextPaymentDate"
             required
             type="date"
           />
-          <Field label="End date (optional)" name="endDate" type="date" />
+          <Field
+            dir="ltr"
+            label={fields.endDateOptional}
+            name="endDate"
+            type="date"
+          />
         </>
       );
     case "safety_margin":
       return (
         <>
           <label className="block text-sm font-semibold">
-            Safety margin type
+            {fields.safetyMarginType}
             <select
               className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 font-normal"
               name="kind"
               onChange={(event) => setSafetyKind(event.target.value)}
               value={safetyKind}
             >
-              <option value="fixed">Fixed amount</option>
-              <option value="income_percentage">Percentage of income</option>
+              <option value="fixed">{messages.onboarding.form.safetyKinds.fixed}</option>
+              <option value="income_percentage">{messages.onboarding.form.safetyKinds.income_percentage}</option>
             </select>
           </label>
           {safetyKind === "fixed" ? (
-            <Field label={`Amount (${currency})`} name="amount" required />
+            <Field
+              dir="ltr"
+              inputMode="decimal"
+              label={<CurrencyLabel currency={currency} label={fields.amount} />}
+              name="amount"
+              required
+            />
           ) : (
             <Field
-              label="Income percentage (%)"
+              dir="ltr"
+              inputMode="decimal"
+              label={fields.incomePercentage}
               max="100"
               min="0"
               name="percentage"
@@ -342,37 +412,49 @@ function FormFields({
     case "goals":
       return (
         <>
-          <Field label="Goal title" name="title" required />
-          <SelectField label="Goal type" name="type">
-            <option value="debt_free">Become debt-free</option>
-            <option value="no_overdraft">End overdraft</option>
-            <option value="no_credit_dependency">End credit dependency</option>
-            <option value="emergency_fund">Build emergency fund</option>
-            <option value="savings_target">Savings target</option>
-            <option value="monthly_spending">Monthly spending target</option>
-            <option value="custom">Custom</option>
+          <Field label={fields.goalTitle} name="title" required />
+          <SelectField label={fields.goalType} name="type">
+            <option value="debt_free">{messages.onboarding.form.goalTypes.debt_free}</option>
+            <option value="no_overdraft">{messages.onboarding.form.goalTypes.no_overdraft}</option>
+            <option value="no_credit_dependency">{messages.onboarding.form.goalTypes.no_credit_dependency}</option>
+            <option value="emergency_fund">{messages.onboarding.form.goalTypes.emergency_fund}</option>
+            <option value="savings_target">{messages.onboarding.form.goalTypes.savings_target}</option>
+            <option value="monthly_spending">{messages.onboarding.form.goalTypes.monthly_spending}</option>
+            <option value="custom">{messages.onboarding.form.goalTypes.custom}</option>
           </SelectField>
           <Field
-            label={`Target amount (${currency})`}
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.targetAmount} />}
             name="targetAmount"
             required
           />
           <Field
             defaultValue="0"
-            label={`Starting value (${currency})`}
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.startingValue} />}
             name="startingValue"
             required
           />
           <Field
             defaultValue="0"
-            label={`Current value (${currency})`}
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.currentValue} />}
             name="currentValue"
             required
           />
-          <Field label="Target date (optional)" name="targetDate" type="date" />
+          <Field
+            dir="ltr"
+            label={fields.targetDateOptional}
+            name="targetDate"
+            type="date"
+          />
           <Field
             defaultValue="3"
-            label="Priority (1–5)"
+            dir="ltr"
+            label={fields.priority}
             max="5"
             min="1"
             name="priority"
@@ -402,7 +484,9 @@ function recordLabel(record: ManualRecordView): string {
     return name;
   }
 
-  return record.section === "safety_margin" ? "Safety margin" : "Manual record";
+  return record.section === "safety_margin"
+    ? messages.onboarding.sections.safety_margin.label
+    : messages.onboarding.form.common.manualRecord;
 }
 
 function firstMoneySummary(value: SerializedDomainValue): string | null {
@@ -417,7 +501,7 @@ function firstMoneySummary(value: SerializedDomainValue): string | null {
 
     if (typeof amountMinor === "string" && typeof currency === "string") {
       const digits =
-        new Intl.NumberFormat("en", {
+        new Intl.NumberFormat(appLocale.intlLocale, {
           currency,
           style: "currency",
         }).resolvedOptions().maximumFractionDigits ?? 2;
@@ -472,16 +556,19 @@ export function ManualSectionForm({
       const payload: unknown = await response.json();
 
       if (!response.ok) {
-        const error = payload as ErrorResponse;
-        throw new Error(error.error?.message ?? "The record could not be saved.");
+        throw new Error(
+          userFacingErrorMessage(payload, messages.errors.recordSave),
+        );
       }
 
       const result = payload as RecordResponse;
       setRecords((current) => [...current, result.record]);
       event.currentTarget.reset();
-      setMessage("Saved.");
+      setMessage(messages.onboarding.form.saved);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The record could not be saved.");
+      setMessage(
+        error instanceof Error ? error.message : messages.errors.recordSave,
+      );
     } finally {
       setWorking(false);
     }
@@ -503,14 +590,17 @@ export function ManualSectionForm({
       const payload: unknown = await response.json();
 
       if (!response.ok) {
-        const error = payload as ErrorResponse;
-        throw new Error(error.error?.message ?? "The record could not be removed.");
+        throw new Error(
+          userFacingErrorMessage(payload, messages.errors.recordRemove),
+        );
       }
 
       setRecords((current) => current.filter((item) => item.id !== record.id));
-      setMessage("Removed.");
+      setMessage(messages.onboarding.form.removed);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The record could not be removed.");
+      setMessage(
+        error instanceof Error ? error.message : messages.errors.recordRemove,
+      );
     } finally {
       setWorking(false);
     }
@@ -532,13 +622,16 @@ export function ManualSectionForm({
       const payload: unknown = await response.json();
 
       if (!response.ok) {
-        const error = payload as ErrorResponse;
-        throw new Error(error.error?.message ?? "The step could not be completed.");
+        throw new Error(
+          userFacingErrorMessage(payload, messages.errors.stepCompletion),
+        );
       }
 
       window.location.assign(nextPath);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The step could not be completed.");
+      setMessage(
+        error instanceof Error ? error.message : messages.errors.stepCompletion,
+      );
       setWorking(false);
     }
   }
@@ -549,23 +642,26 @@ export function ManualSectionForm({
         className="space-y-5 rounded-3xl border border-[var(--border)] bg-white p-6"
         onSubmit={submit}
       >
-        <h2 className="text-xl font-semibold">Add a manual record</h2>
+        <h2 className="text-xl font-semibold">
+          {messages.onboarding.form.common.addRecord}
+        </h2>
         <FormFields currency={currency} section={section} />
         <button
           className="w-full rounded-2xl bg-[var(--accent)] px-5 py-3 font-semibold text-white disabled:opacity-60"
           disabled={working}
           type="submit"
         >
-          Save record
+          {messages.onboarding.form.actions.saveRecord}
         </button>
       </form>
 
       <section className="rounded-3xl border border-[var(--border)] bg-white p-6">
-        <h2 className="text-xl font-semibold">Saved records</h2>
+        <h2 className="text-xl font-semibold">
+          {messages.onboarding.form.common.savedRecords}
+        </h2>
         {records.length === 0 ? (
           <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-            No records yet. You may explicitly continue with none if this section
-            does not apply.
+            {messages.onboarding.form.common.empty}
           </p>
         ) : (
           <ul className="mt-4 space-y-3">
@@ -577,7 +673,11 @@ export function ManualSectionForm({
                 <div>
                   <p className="font-semibold">{recordLabel(record)}</p>
                   <p className="mt-1 text-sm text-[var(--muted)]">
-                    {firstMoneySummary(record.fields) ?? "Manual configuration"}
+                    {firstMoneySummary(record.fields) === null ? (
+                      messages.onboarding.form.common.manualConfiguration
+                    ) : (
+                      <bdi dir="ltr">{firstMoneySummary(record.fields)}</bdi>
+                    )}
                   </p>
                 </div>
                 <button
@@ -586,7 +686,7 @@ export function ManualSectionForm({
                   onClick={() => void remove(record)}
                   type="button"
                 >
-                  Remove
+                  {messages.onboarding.form.actions.remove}
                 </button>
               </li>
             ))}
@@ -599,11 +699,11 @@ export function ManualSectionForm({
           onClick={() => void completeSection()}
           type="button"
         >
-          Complete this step
+          {messages.onboarding.form.actions.completeStep}
         </button>
         {!canComplete ? (
           <p className="mt-3 text-sm text-[var(--muted)]">
-            Complete the current onboarding step before advancing this one.
+            {messages.onboarding.form.common.stepLocked}
           </p>
         ) : null}
         <p aria-live="polite" className="mt-3 text-sm text-[var(--muted)]">

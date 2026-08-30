@@ -90,6 +90,14 @@ Future financial modules should be introduced by capability (`accounts`, `transa
 - Route handlers and future server actions validate untrusted input and derive identity from the server session. Client-supplied `userId` is never authorization evidence.
 - Monetary values cross JSON boundaries as base-10 minor-unit strings plus an ISO 4217 currency code. Dates cross as explicit UTC timestamps or validated calendar dates, never locale-formatted strings.
 
+## Localization and bidirectional text
+
+Financial OS is permanently Hebrew-first and RTL-first. The root document declares `lang="he"` and `dir="rtl"`; Financial OS-controlled navigation, onboarding, forms, validation feedback, empty states, financial labels, review, and error boundaries use natural Hebrew by default. This is a product invariant for every later phase, not deferred production polish.
+
+User-facing copy is centralized under `src/lib/i18n`. Components use the exported active catalog rather than embedding language selection logic, so a future English catalog and locale resolver can be added without rewriting domain components or API contracts. Source code, names, schemas, transport fields, logs, tests, and engineering records remain English. Internal error codes/messages remain stable; the client maps public error codes to localized safe messages rather than displaying arbitrary server text.
+
+The RTL document direction must not reverse inherently LTR data. Email addresses, URLs, currency and country codes, IANA timezones, dates, percentages, technical/account identifiers, and formatted financial values use explicit `dir="ltr"` or `<bdi dir="ltr">` isolation. External Google/provider-controlled screens remain provider-owned and are not treated as Financial OS localization work. Localization changes do not imply a visual redesign.
+
 ## Authentication architecture
 
 Financial OS uses a NextAuth/Auth.js-compatible server configuration with Google OAuth and database sessions. Provider credentials and the Auth secret remain optional in the build-time schema so a credential-free checkout can lint, test, and build; runtime capability reporting marks authentication unavailable until all values are supplied. Missing credentials are not substituted with fake values or a fake login.

@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 
+import { messages, userFacingErrorMessage } from "@/lib/i18n";
+
 type ReviewCompletionProps = Readonly<{
   canComplete: boolean;
   completed: boolean;
   profileVersion: number;
-}>;
-
-type ErrorResponse = Readonly<{
-  error?: Readonly<{ message?: string }>;
 }>;
 
 export function ReviewCompletion({
@@ -36,14 +34,15 @@ export function ReviewCompletion({
       const payload: unknown = await response.json();
 
       if (!response.ok) {
-        const error = payload as ErrorResponse;
-        throw new Error(error.error?.message ?? "Onboarding could not be completed.");
+        throw new Error(
+          userFacingErrorMessage(payload, messages.errors.completion),
+        );
       }
 
       window.location.reload();
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Onboarding could not be completed.",
+        error instanceof Error ? error.message : messages.errors.completion,
       );
       setWorking(false);
     }
@@ -52,8 +51,7 @@ export function ReviewCompletion({
   if (completed) {
     return (
       <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
-        Manual onboarding is complete. Your records remain available for review and
-        correction.
+        {messages.onboarding.review.completed}
       </div>
     );
   }
@@ -66,11 +64,13 @@ export function ReviewCompletion({
         onClick={() => void finish()}
         type="button"
       >
-        {working ? "Completing…" : "Complete manual onboarding"}
+        {working
+          ? messages.onboarding.review.completing
+          : messages.onboarding.review.complete}
       </button>
       {!canComplete ? (
         <p className="mt-3 text-sm text-[var(--muted)]">
-          Finish the current onboarding step before completing the review.
+          {messages.onboarding.review.finishFirst}
         </p>
       ) : null}
       <p aria-live="polite" className="mt-3 text-sm text-red-700">

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { HomeLink } from "@/components/navigation/home-link";
 import { ReviewCompletion } from "@/components/onboarding/review-completion";
 import { auth, signOut } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
+import { messages } from "@/lib/i18n";
 import type { ManualSection } from "@/lib/onboarding/manual-record";
 import { listManualRecords } from "@/lib/onboarding/manual-record-service";
 import type { OnboardingStep } from "@/lib/profiles/profile";
@@ -17,17 +19,17 @@ const sections: readonly Readonly<{
   path: string;
   section: ManualSection;
 }>[] = [
-  { label: "Income", path: "/onboarding/income", section: "income" },
-  { label: "Accounts", path: "/onboarding/accounts", section: "accounts" },
-  { label: "Credit cards", path: "/onboarding/cards", section: "cards" },
-  { label: "Recurring expenses", path: "/onboarding/expenses", section: "expenses" },
-  { label: "Loans and debts", path: "/onboarding/loans", section: "loans" },
+  { label: messages.onboarding.sections.income.label, path: "/onboarding/income", section: "income" },
+  { label: messages.onboarding.sections.accounts.label, path: "/onboarding/accounts", section: "accounts" },
+  { label: messages.onboarding.sections.cards.label, path: "/onboarding/cards", section: "cards" },
+  { label: messages.onboarding.sections.expenses.label, path: "/onboarding/expenses", section: "expenses" },
+  { label: messages.onboarding.sections.loans.label, path: "/onboarding/loans", section: "loans" },
   {
-    label: "Safety margin",
+    label: messages.onboarding.sections.safety_margin.label,
     path: "/onboarding/safety_margin",
     section: "safety_margin",
   },
-  { label: "Goals", path: "/onboarding/goals", section: "goals" },
+  { label: messages.onboarding.sections.goals.label, path: "/onboarding/goals", section: "goals" },
 ];
 
 const stepPaths: Readonly<Record<OnboardingStep, string>> = {
@@ -77,19 +79,16 @@ export default async function OnboardingReviewPage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-12 sm:py-20">
-      <Link className="text-sm font-semibold text-[var(--accent)]" href="/">
-        ← Financial OS
-      </Link>
+      <HomeLink />
       <section className="mt-8 rounded-3xl border border-[var(--border)] bg-white p-7 shadow-[0_24px_70px_rgba(18,35,28,0.08)] sm:p-10">
-        <p className="text-sm font-semibold tracking-wide text-[var(--accent)] uppercase">
-          Onboarding · Review
+        <p className="text-sm font-semibold text-[var(--accent)]">
+          {messages.onboarding.eyebrow(messages.onboarding.review.label)}
         </p>
         <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em]">
-          Review your manual profile
+          {messages.onboarding.review.title}
         </h1>
         <p className="mt-4 leading-7 text-[var(--muted)]">
-          Check each section before completing onboarding. A zero count is valid when
-          you explicitly completed a section that does not apply.
+          {messages.onboarding.review.description}
         </p>
 
         <ul className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -102,7 +101,7 @@ export default async function OnboardingReviewPage() {
                 {record.label}
               </Link>
               <span className="text-sm text-[var(--muted)]">
-                {record.count} {record.count === 1 ? "record" : "records"}
+                {messages.onboarding.review.recordCount(record.count)}
               </span>
             </li>
           ))}
@@ -110,12 +109,12 @@ export default async function OnboardingReviewPage() {
 
         {!canComplete && !completed ? (
           <p className="mt-6 text-sm text-[var(--muted)]">
-            Current step:{" "}
+            {messages.onboarding.review.currentStep}{" "}
             <Link
               className="font-semibold text-[var(--accent)]"
               href={stepPaths[profile.onboarding.currentStep]}
             >
-              continue onboarding
+              {messages.onboarding.review.resume}
             </Link>
           </p>
         ) : null}
@@ -128,7 +127,7 @@ export default async function OnboardingReviewPage() {
 
         <form action={signOutAction} className="mt-8 border-t border-[var(--border)] pt-6">
           <button className="text-sm font-semibold text-[var(--muted)]" type="submit">
-            Sign out
+            {messages.onboarding.review.signOut}
           </button>
         </form>
       </section>

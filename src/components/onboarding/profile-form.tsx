@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { messages, userFacingErrorMessage } from "@/lib/i18n";
 import type {
   HouseholdType,
   UserProfileView,
@@ -16,21 +17,14 @@ type ProfileResponse = Readonly<{
   profile: UserProfileView;
 }>;
 
-type ErrorResponse = Readonly<{
-  correlationId?: string;
-  error?: Readonly<{
-    message?: string;
-  }>;
-}>;
-
 const householdOptions: readonly Readonly<{
   label: string;
   value: HouseholdType;
 }>[] = [
-  { label: "Single", value: "single" },
-  { label: "Couple", value: "couple" },
-  { label: "Family", value: "family" },
-  { label: "Other", value: "other" },
+  { label: messages.onboarding.profile.form.householdOptions.single, value: "single" },
+  { label: messages.onboarding.profile.form.householdOptions.couple, value: "couple" },
+  { label: messages.onboarding.profile.form.householdOptions.family, value: "family" },
+  { label: messages.onboarding.profile.form.householdOptions.other, value: "other" },
 ];
 
 export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) {
@@ -61,7 +55,7 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus({ kind: "saving", message: "Saving securely…" });
+    setStatus({ kind: "saving", message: messages.onboarding.profile.form.saving });
 
     try {
       const response = await fetch("/api/profile", {
@@ -82,10 +76,8 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
       const payload: unknown = await response.json();
 
       if (!response.ok) {
-        const error = payload as ErrorResponse;
         throw new Error(
-          error.error?.message ??
-            "The profile could not be saved. Reload and try again.",
+          userFacingErrorMessage(payload, messages.errors.profileSave),
         );
       }
 
@@ -93,7 +85,7 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
       setVersion(saved.profile.version);
       setStatus({
         kind: "saved",
-        message: "Profile saved. Income is the next onboarding step.",
+        message: messages.onboarding.profile.form.saved,
       });
       window.location.assign(continuePath);
     } catch (error) {
@@ -102,7 +94,7 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
         message:
           error instanceof Error
             ? error.message
-            : "The profile could not be saved.",
+            : messages.errors.profileSave,
       });
     }
   }
@@ -111,7 +103,7 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
     <form className="mt-8 space-y-6" onSubmit={submit}>
       <div>
         <label className="text-sm font-semibold" htmlFor="displayName">
-          Name
+          {messages.onboarding.profile.form.name}
         </label>
         <input
           autoComplete="name"
@@ -127,12 +119,13 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
       <div className="grid gap-6 sm:grid-cols-2">
         <div>
           <label className="text-sm font-semibold" htmlFor="countryCode">
-            Country code
+            {messages.onboarding.profile.form.countryCode}
           </label>
           <input
             autoCapitalize="characters"
             className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 uppercase outline-none transition focus:border-[var(--accent)]"
             id="countryCode"
+            dir="ltr"
             maxLength={2}
             onChange={(event) => setCountryCode(event.target.value)}
             placeholder="IL"
@@ -143,12 +136,13 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
 
         <div>
           <label className="text-sm font-semibold" htmlFor="primaryCurrency">
-            Primary currency
+            {messages.onboarding.profile.form.currency}
           </label>
           <input
             autoCapitalize="characters"
             className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 uppercase outline-none transition focus:border-[var(--accent)]"
             id="primaryCurrency"
+            dir="ltr"
             maxLength={3}
             onChange={(event) => setPrimaryCurrency(event.target.value)}
             placeholder="ILS"
@@ -160,24 +154,25 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
 
       <div>
         <label className="text-sm font-semibold" htmlFor="timeZone">
-          Timezone
+          {messages.onboarding.profile.form.timeZone}
         </label>
         <input
           className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--accent)]"
           id="timeZone"
+          dir="ltr"
           onChange={(event) => setTimeZone(event.target.value)}
           placeholder="Asia/Jerusalem"
           required
           value={timeZone}
         />
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Financial month boundaries will use this IANA timezone.
+          {messages.onboarding.profile.form.timeZoneHelp}
         </p>
       </div>
 
       <div>
         <label className="text-sm font-semibold" htmlFor="householdType">
-          Household
+          {messages.onboarding.profile.form.household}
         </label>
         <select
           className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--accent)]"
@@ -200,7 +195,9 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
         disabled={status.kind === "saving"}
         type="submit"
       >
-        {status.kind === "saving" ? "Saving…" : "Save and continue"}
+        {status.kind === "saving"
+          ? messages.onboarding.profile.form.saving
+          : messages.onboarding.profile.form.save}
       </button>
 
       <p
