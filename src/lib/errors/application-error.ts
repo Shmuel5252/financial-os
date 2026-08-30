@@ -1,9 +1,11 @@
 export type ApplicationErrorCode =
+  | "CONFLICT"
   | "CONFIGURATION_ERROR"
   | "DEPENDENCY_UNAVAILABLE"
   | "INTERNAL_ERROR"
   | "INVALID_INPUT"
   | "NOT_FOUND"
+  | "RATE_LIMITED"
   | "UNAUTHENTICATED"
   | "UNAUTHORIZED";
 
@@ -67,6 +69,18 @@ export class NotFoundError extends ApplicationError {
   }
 }
 
+export class ConflictError extends ApplicationError {
+  constructor(message = "The resource changed. Reload it and try again.") {
+    super(message, { code: "CONFLICT", status: 409 });
+  }
+}
+
+export class RateLimitedError extends ApplicationError {
+  constructor(message = "Too many requests. Try again shortly.") {
+    super(message, { code: "RATE_LIMITED", status: 429 });
+  }
+}
+
 export class InputValidationError extends ApplicationError {
   readonly issues: readonly ValidationIssue[];
 
@@ -114,4 +128,8 @@ export function toPublicError(error: unknown, correlationId: string): PublicErro
       message: "An unexpected error occurred.",
     },
   };
+}
+
+export function applicationErrorStatus(error: unknown): number {
+  return error instanceof ApplicationError ? error.status : 500;
 }

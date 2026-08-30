@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const foundations = [
   "Deterministic money and date rules",
   "Server-side identity and data-isolation boundaries",
@@ -20,6 +22,12 @@ export default function HomePage() {
             The secure application core is in place. Financial profiles and product
             features begin only after this foundation passes its acceptance review.
           </p>
+          <Link
+            className="mt-8 inline-flex rounded-2xl bg-[var(--accent)] px-5 py-3 font-semibold text-white"
+            href="/sign-in"
+          >
+            Begin secure onboarding
+          </Link>
         </div>
 
         <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-7 shadow-[0_24px_70px_rgba(18,35,28,0.08)] sm:p-9">

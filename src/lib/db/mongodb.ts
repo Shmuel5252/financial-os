@@ -17,6 +17,7 @@ function createClientPromise(): Promise<MongoClient> {
     appName: "financial-os",
     maxPoolSize: 20,
     minPoolSize: 0,
+    promoteLongs: false,
     serverSelectionTimeoutMS: 5_000,
   });
 

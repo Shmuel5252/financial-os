@@ -52,6 +52,15 @@ describe("server environment configuration", () => {
     ).toThrow(/AUTH_URL must use HTTPS/);
   });
 
+  it("permits an HTTP loopback origin for local production-build verification", () => {
+    expect(
+      parseServerEnv({
+        AUTH_URL: "http://localhost:3000",
+        NODE_ENV: "production",
+      }).AUTH_URL,
+    ).toBe("http://localhost:3000");
+  });
+
   it("does not treat copied example placeholders as configured credentials", () => {
     expect(() =>
       parseServerEnv({

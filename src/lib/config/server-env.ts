@@ -9,6 +9,16 @@ const emptyStringToUndefined = (value: unknown) =>
 
 const isNotPlaceholder = (value: string) => !/[<>]/.test(value);
 
+function isHttpsOrLoopback(value: string): boolean {
+  const url = new URL(value);
+
+  return (
+    url.protocol === "https:" ||
+    (url.protocol === "http:" &&
+      ["127.0.0.1", "::1", "localhost"].includes(url.hostname))
+  );
+}
+
 const optionalNonEmptyString = z.preprocess(
   emptyStringToUndefined,
   z
@@ -77,11 +87,11 @@ export const serverEnvSchema = z
     if (
       env.NODE_ENV === "production" &&
       env.AUTH_URL !== undefined &&
-      !env.AUTH_URL.startsWith("https://")
+      !isHttpsOrLoopback(env.AUTH_URL)
     ) {
       context.addIssue({
         code: "custom",
-        message: "AUTH_URL must use HTTPS in production.",
+        message: "AUTH_URL must use HTTPS outside loopback development.",
         path: ["AUTH_URL"],
       });
     }

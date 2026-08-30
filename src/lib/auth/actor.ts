@@ -3,6 +3,8 @@ import "server-only";
 import type { Session } from "next-auth";
 
 import { auth } from "@/lib/auth";
+import { getConfigurationStatus } from "@/lib/config/server-env";
+import { ConfigurationError } from "@/lib/errors/application-error";
 import { UnauthenticatedError } from "@/lib/errors/application-error";
 
 export type Actor = Readonly<{
@@ -24,6 +26,10 @@ export function actorFromSession(session: Session | null): Actor {
 }
 
 export async function requireActor(): Promise<Actor> {
+  if (!getConfigurationStatus().authentication.ready) {
+    throw new ConfigurationError("Authentication is not configured.");
+  }
+
   const session = await auth();
   return actorFromSession(session);
 }
