@@ -868,6 +868,16 @@ Target:
 
 Goal Complete.
 
+Approved Phase 7 Purchase Impact Simulation policy (2026-09-01):
+
+- Purchase safety is classified deterministically from confirmed cash only. `SAFE` means the minimum confirmed projected balance throughout the applicable evaluation horizon remains at or above the applicable Safety Margin, all confirmed obligations are coverable, and no confirmed shortfall occurs. `CAUTION` means the confirmed balance remains non-negative but falls below the Safety Margin. `UNSAFE` means the projection becomes negative, an obligation is not coverable, or another confirmed-cash shortfall occurs. Balance equal to the margin is `SAFE`; balance equal to zero is `CAUTION` unless the margin is zero. AI may explain but never classify or alter the calculation.
+- The entered purchase amount is the total purchase price. One-time and monthly-installment inputs use exact integer minor units. When division is uneven, the earliest installments receive one additional minor unit so the schedule always sums exactly to the applicable total. Known interest and fees are explicit, provenance-bearing inputs included in true financed cost and projected outflows; unknown charges are never invented.
+- The simulator preserves the Phase 3 rolling 30-calendar-day evaluation horizon as an explicit typed policy input. For a `CAUTION` or `UNSAFE` result it searches forward, in the user's IANA timezone/calendar semantics, for the earliest date within 90 calendar days on which identical purchase terms are `SAFE`. `CAUTION` is never called safe, no date is returned when none is `SAFE`, and an already-`SAFE` purchase needs no later recommendation.
+- Risk and data freshness are separate outputs: `riskClassification` is `SAFE`, `CAUTION`, or `UNSAFE`, while `dataFreshness` is `FRESH` or `STALE` under the existing source/profile/calendar snapshot semantics. A stale snapshot may be simulated without changing its mathematical classification, but stale status remains explicit and stale `SAFE` is never presented as an unqualified current recommendation.
+- Simulations are ephemeral by default and persist only after the user explicitly saves one. A saved simulation is immutable, owner-scoped, engine/policy-versioned evidence containing the exact input, installment schedule, explicit charges/provenance, source snapshot, applicable budget-period reference when present, margin/minimum balance, classification, freshness, safer date, and timestamps needed to explain/reproduce the evaluation.
+- Saving a simulation never creates a transaction, changes a balance or budget, consumes an allocation, modifies Safe to Spend or verified Goal progress, or converts hypothetical values into confirmed financial truth. A future "purchase occurred" workflow must be a separate explicit command through normal validated financial-data boundaries.
+- Dependency direction is confirmed financial data -> deterministic Financial Engine -> deterministic purchase simulation -> classification/projection -> optional AI explanation. AI never becomes accounting or simulation truth.
+
 המשתמש מזין:
 Purchase:
 3,000 ₪

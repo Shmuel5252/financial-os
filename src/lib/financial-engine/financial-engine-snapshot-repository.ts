@@ -258,6 +258,40 @@ export class FinancialEngineSnapshotRepository {
       snapshots: pageDocuments.map(mapDocument),
     };
   }
+
+  async findForActor(
+    actor: Actor,
+    snapshotId: string,
+  ): Promise<FinancialEngineSnapshot | null> {
+    const document = await this.collection.findOne({
+      _id: parseObjectId(snapshotId, "sourceSnapshotId"),
+      kind: "engine_result",
+      userId: parseObjectId(actor.userId, "actor.userId"),
+    });
+    return document === null ? null : mapDocument(document);
+  }
+
+  async findLatestForActorWithMinimumHorizon(
+    actor: Actor,
+    minimumHorizonDays: number,
+  ): Promise<FinancialEngineSnapshot | null> {
+    if (
+      !Number.isInteger(minimumHorizonDays) ||
+      minimumHorizonDays < 1 ||
+      minimumHorizonDays > 366
+    ) {
+      throw new RangeError("The minimum engine horizon is invalid.");
+    }
+    const document = await this.collection.findOne(
+      {
+        kind: "engine_result",
+        "result.horizonDays": { $gte: minimumHorizonDays },
+        userId: parseObjectId(actor.userId, "actor.userId"),
+      },
+      { sort: { _id: -1 } },
+    );
+    return document === null ? null : mapDocument(document);
+  }
 }
 
 export function financialEngineSnapshotRepositoryForDatabase(

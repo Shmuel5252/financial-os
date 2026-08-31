@@ -145,6 +145,9 @@ export default async function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <HomeLink />
         <nav className="flex flex-wrap gap-4" aria-label={messages.dashboard.title}>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/purchase-simulation">
+            {messages.navigation.purchaseSimulation}
+          </Link>
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/goals">
             {messages.navigation.goals}
           </Link>

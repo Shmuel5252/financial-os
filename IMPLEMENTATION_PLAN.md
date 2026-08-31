@@ -110,15 +110,19 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 7 — Purchase impact simulation
 
+**Approved product policy (2026-09-01):** Deterministic confirmed-cash `SAFE`/`CAUTION`/`UNSAFE` thresholds with exact boundary behavior; entered amount as total price; exact one-time/monthly schedules with earliest-installment remainder allocation; explicit provenance-bearing interest/fees; explicit rolling 30-day evaluation under Phase 3 policy; earliest `SAFE` date only within a 90-calendar-day search; freshness separate from risk; and ephemeral-by-default simulations with immutable owner-scoped persistence only on explicit save. Saving never creates or changes financial truth.
+
+**Acceptance status (2026-09-01): Complete and verified.** The pure simulator, owner-scoped immutable save boundary, shared freshness semantics, Hebrew/RTL journey, and non-mutation guarantees passed 116 unit tests, 25 real-Mongo integration tests, the 141-test full suite, authenticated production-browser verification, strict type/lint/build, offline dependency audit against the unchanged Phase 6 dependency graph, and security/secret/Git gates recorded in `PROGRESS.md`.
+
 - **Objective:** Evaluate a proposed purchase as SAFE, CAUTION, or UNSAFE against the timeline.
-- **Scope:** One-time/installment purchase inputs, recalculated timeline, safety-margin impact, alternative date suggestions.
+- **Scope:** One-time/monthly-installment total-price inputs, explicit interest/fees, recalculated rolling evaluation timeline, deterministic safety-margin impact/classification, source freshness, earliest-safe-date search, ephemeral results, and explicit immutable saves.
 - **Dependencies:** Versioned Phase 3 engine and current source snapshot.
 - **Major tasks:** Isolated scenario inputs, policy thresholds, explanation codes, persistence only on explicit user choice.
-- **Data/model implications:** Owned simulation records reference input snapshot/engine version; simulations never mutate truth.
+- **Data/model implications:** Immutable owned saved-simulation records reference the Phase 3 snapshot and applicable budget period, preserve exact inputs/schedule/results/versions/freshness, and never mutate truth. Unsaved results create no simulation record.
 - **Security:** Authorized snapshot loading, input limits, no cross-user scenario access.
 - **Testing:** Boundary thresholds, alternative dates, installments, stale source data, invariant that source records remain unchanged.
-- **Acceptance criteria:** Results reproduce and reconcile with a hypothetical engine timeline.
-- **Definition of done:** Honest status/explanation and freshness are shown; no hardcoded outcomes.
+- **Acceptance criteria:** Verified. Results reproduce and reconcile with a hypothetical engine timeline; exact schedules conserve true financed cost; boundary classifications and 90-day search obey policy; stale state is separate and explicit; saves remain isolated and non-mutating.
+- **Definition of done:** Met. Honest Hebrew/RTL status, explanation, timeline, charge provenance, freshness, and explicit-save evidence are shown with no hardcoded outcomes or simulated values contaminating financial truth.
 - **Risks/migration:** Users interpreting estimates as guarantees; policy and stale-data communication.
 
 ## Phase 8 — Claude financial copilot

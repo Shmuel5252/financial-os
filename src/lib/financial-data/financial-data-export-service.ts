@@ -34,6 +34,14 @@ import {
 import { toUserProfileView, type UserProfileView } from "@/lib/profiles/profile";
 import type { UserProfileRepository } from "@/lib/profiles/profile-repository";
 import { loadProfile } from "@/lib/profiles/profile-service";
+import {
+  toSavedPurchaseSimulationView,
+  type SavedPurchaseSimulationView,
+} from "@/lib/purchase-simulations/purchase-simulation";
+import {
+  getPurchaseSimulationRepository,
+  type PurchaseSimulationRepository,
+} from "@/lib/purchase-simulations/purchase-simulation-repository";
 
 export type FinancialDataExport = Readonly<{
   budgets: Readonly<{
@@ -54,8 +62,9 @@ export type FinancialDataExport = Readonly<{
     progressEvidence: readonly GoalProgressEvidenceView[];
   }>;
   profile: UserProfileView | null;
+  purchaseSimulations: readonly SavedPurchaseSimulationView[];
   records: Readonly<Record<ManualSection, readonly ManualRecordView[]>>;
-  schemaVersion: 3;
+  schemaVersion: 4;
 }>;
 
 export type FinancialDataExportDependencies = Readonly<{
@@ -63,6 +72,7 @@ export type FinancialDataExportDependencies = Readonly<{
   goalRepository?: GoalRepository;
   now?: () => Date;
   profileRepository?: UserProfileRepository;
+  purchaseSimulationRepository?: PurchaseSimulationRepository;
   repositories?: Readonly<Partial<Record<ManualSection, ManualRecordRepository>>>;
 }>;
 
@@ -99,6 +109,11 @@ export async function buildFinancialDataExport(
     goalRepository.listAllDefinitionsForActor(actor),
     goalRepository.listAllProgressForActor(actor),
   ]);
+  const purchaseSimulationRepository =
+    dependencies?.purchaseSimulationRepository ??
+    (await getPurchaseSimulationRepository());
+  const purchaseSimulations =
+    await purchaseSimulationRepository.listAllForActor(actor);
 
   return {
     budgets: {
@@ -128,9 +143,12 @@ export async function buildFinancialDataExport(
       progressEvidence: goalProgress.map(toGoalProgressEvidenceView),
     },
     profile: profile === null ? null : toUserProfileView(profile),
+    purchaseSimulations: purchaseSimulations.map(
+      toSavedPurchaseSimulationView,
+    ),
     records: Object.fromEntries(entries) as unknown as Readonly<
       Record<ManualSection, readonly ManualRecordView[]>
     >,
-    schemaVersion: 3,
+    schemaVersion: 4,
   };
 }

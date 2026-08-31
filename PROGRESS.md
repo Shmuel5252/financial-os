@@ -1,5 +1,55 @@
 # Financial OS Progress
 
+## Phase 7 — Purchase Impact Simulation
+
+**Status:** Complete — all Phase 7 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.
+
+**Started:** 2026-09-01
+
+**Verified:** 2026-09-01
+
+**Scope boundary:** Deterministic one-time/monthly purchase impact, exact explicit charges and installment schedules, rolling 30-day classification, 90-day earliest-`SAFE` search, source freshness disclosure, ephemeral results, and immutable explicit saves only. No AI, provider integration, purchase commitment, advanced Phase 12 scenarios, or later-phase functionality.
+
+### Implemented
+
+- Preserved the clean Phase 6 checkpoint at `962c024911a59c7d9d50e1f581db6769825551ea` and recorded every owner-approved Phase 7 rule in both synchronized Master Plan copies, the implementation plan, architecture, and ADR-038 before relying on it.
+- Added a pure versioned purchase-simulation engine over immutable Phase 3 results. It reconstructs confirmed and expected balances with the original obligation/income ordering and Safety Margin boundaries, evaluates an explicit rolling 30-day window, and deterministically classifies exact boundary cases as `SAFE`, `CAUTION`, or `UNSAFE`.
+- Added one-time and monthly-installment total-price inputs. Known interest/fees are explicit user-reported provenance and enter the true financed cost; unknown charges remain absent. Exact minor-unit division gives remainders to earliest installments and always conserves the full cost. The full schedule is shown separately from installments that fall within a particular 30-day evaluation.
+- Added the approved 90-day first-`SAFE` search. The source snapshot must cover every candidate window; a proposed date may be up to 90 days after the source evaluation point, so the UI explicitly creates/selects a 210-day Phase 3 baseline. Incomplete data fails rather than extrapolating or calling `CAUTION` safe.
+- Extracted the existing Phase 4 source/profile/calendar freshness algorithm into one shared server-only service. Dashboard behavior remains unchanged; Phase 7 returns `FRESH`/`STALE` separately from risk and visibly qualifies stale results without changing their mathematics.
+- Added actor-owned, append-only `purchaseSimulations` with exact BSON `Long` evidence, owner-first indexes, source-snapshot and optional budget-period validation, idempotent explicit saves, one redacted save audit event, and no update/delete path. Ordinary evaluations remain non-persisting.
+- Extended the bounded owner-only export to schema version 4 with public saved-simulation evidence while continuing to omit owner IDs, audit events, idempotency material, Auth.js records, and secrets.
+- Added authenticated, trusted-origin, body-bounded, rate-limited, no-store evaluation/save APIs and protected Hebrew/RTL `/purchase-simulation`. The UI discloses hypothetical status, exact costs/schedule, 30-day timeline, classification, 90-day result, freshness, source/budget provenance, and explicit-save semantics with LTR money/date/identifier isolation.
+- Added purchase-simulation navigation without visual redesign. No Claude, bank/card provider, purchase commitment, advanced scenario, notification, household, or later-phase functionality was introduced.
+
+### Verification results
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Full automated suite against real MongoDB | Pass | 32 test files and 141 tests passed with no skips using the ignored real local configuration. |
+| Phase 7 deterministic/UI suite | Pass | 23 unit files and 116 tests passed. New coverage proves exact `34 + 33 + 33` remainder allocation, month-end schedule anchoring, classification boundaries, uncertain-income exclusion, same-day conservatism, earliest/no safe date, charges/true cost, insufficient-horizon failure, Hebrew copy, stale disclosure, and LTR isolation. |
+| Phase 7 real-Mongo integration | Pass | 9 integration files and 25 tests passed. New cases verify ephemeral reads, source/budget provenance, stale/math separation, immutable exact save/retry/conflict behavior, BSON `Long`, owner-first indexes, schema-4 export, two-actor isolation, and test-database cleanup. |
+| Non-mutation/data-integrity gate | Pass | Real MongoDB before/after evidence shows evaluation writes nothing and save changes only `purchaseSimulations`; accounts, transactions, budget periods, Financial Engine/source snapshots, Safe to Spend, and Goal Engine evidence remain unchanged. |
+| Real authenticated browser journey | Pass | The retained real Google/Auth.js MongoDB session opened the protected production page on port 3001, created an owned 210-day baseline, evaluated `1.00 ILS + 0.03 ILS` across three exact `0.35/0.34/0.34` installments as `SAFE`, explicitly saved/reloaded one labelled synthetic scenario, then evaluated an unsaved `100,000.00 ILS` purchase as `UNSAFE` with no invented safe date. No auth, repository, or calculation path was mocked. |
+| Browser/database ownership evidence | Pass | The saved scenario owner matched an active Auth.js database session; its engine snapshot was owned by the same actor; exact fields were BSON `Long`; the schedule was `35/34/34` minor units; and one save audit event existed. No identifier, token, or secret was printed. |
+| Hebrew/RTL/accessibility/responsive | Pass | Production DOM reported `lang="he"`, `dir="rtl"`, explicit LTR isolates, natural Hebrew labels/statuses, semantic headings/forms/lists/alerts, no browser warnings/errors, no default-width overflow, and no overflow at a reported 375-pixel narrow viewport. |
+| Strict type-check | Pass | `npm run typecheck`: exit 0. |
+| Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
+| Production build | Pass | `npm run build`: exit 0; `/purchase-simulation` and both purchase-simulation APIs compiled as dynamic server routes. |
+| Dependency audit | Pass at unchanged-dependency boundary | `npm audit --offline --audit-level=high`: zero vulnerabilities. Dependency manifests/lockfile are unchanged from Phase 6's same-day registry-backed zero-vulnerability gate; registry resubmission was blocked by the execution safety policy and is not claimed. |
+| Runtime/security smoke | Pass | Production port 3001 served the authenticated/no-store journey with clean browser/server logs and server-derived ownership; the unrelated port-3000 application was not modified. |
+| Secret/Git hygiene | Pass | `.env.local` remained ignored and untracked; no secret value was printed, logged, staged, exported, or added to source. |
+
+The authenticated acceptance journey added one immutable 210-day Phase 3 source/result pair and one clearly labelled synthetic saved purchase simulation to the existing local test profile. It also ran one unsaved `UNSAFE` evaluation. It did not create a transaction or modify another user's records.
+
+### Acceptance conclusion
+
+Phase 7 is fully accepted. Purchase impact is exact, deterministic, owner-isolated, provenance-bearing, freshness-aware, and visibly hypothetical. Classification and earliest-safe-date behavior reconcile to the confirmed Phase 3 timeline, while saving remains a separate immutable evidence operation with no contamination of financial truth. All Phase 0–6 and Hebrew/RTL guarantees remain intact.
+
+### Exact next milestone
+
+Phase 8 — Claude Financial Copilot. Under the autonomous progression rule, Phase 8 may begin only after this verified Phase 7 work is committed and pushed. Its credential, privacy/redaction, structured-context, prompt-injection, retention, and cost/rate gates must be preflighted before code changes.
+
 ## Phase 6 — Goals and Measurable Progress
 
 **Status:** Complete — all Phase 6 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.

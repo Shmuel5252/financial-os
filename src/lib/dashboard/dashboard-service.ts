@@ -1,10 +1,7 @@
 import "server-only";
 
 import type { Actor } from "@/lib/auth/actor";
-import {
-  addCalendarDays,
-  calendarDateAtInstant,
-} from "@/lib/domain/financial-engine/financial-calendar";
+import { addCalendarDays } from "@/lib/domain/financial-engine/financial-calendar";
 import {
   subtractMoney,
   serializeMoney,
@@ -20,17 +17,12 @@ import type {
   DashboardTimelineWindowView,
   DashboardView,
 } from "@/lib/dashboard/dashboard";
-import {
-  financialEngineSourceSections,
-} from "@/lib/financial-engine/financial-engine-input";
+import { assessFinancialEngineSnapshotFreshness } from "@/lib/financial-engine/financial-engine-snapshot-freshness";
 import {
   getFinancialEngineSnapshotRepository,
   type FinancialEngineSnapshotRepository,
 } from "@/lib/financial-engine/financial-engine-snapshot-repository";
-import {
-  getFinancialSnapshotRepository,
-  type FinancialSnapshotRepository,
-} from "@/lib/financial-snapshots/financial-snapshot-repository";
+import type { FinancialSnapshotRepository } from "@/lib/financial-snapshots/financial-snapshot-repository";
 import {
   manualSectionDomainSchemas,
   type ManualRecord,
@@ -54,29 +46,6 @@ export type DashboardDependencies = Readonly<{
     Partial<Record<ManualSection, ManualRecordRepository>>
   >;
 }>;
-
-function compareRecords(
-  records: readonly ManualRecord[],
-  manifestRecords: readonly Readonly<{
-    id: string;
-    updatedAt: Date;
-    version: number;
-  }>[],
-): boolean {
-  if (records.length !== manifestRecords.length) {
-    return false;
-  }
-
-  return records.every((record, index) => {
-    const manifestRecord = manifestRecords[index];
-    return (
-      manifestRecord !== undefined &&
-      record.id === manifestRecord.id &&
-      record.version === manifestRecord.version &&
-      record.updatedAt.getTime() === manifestRecord.updatedAt.getTime()
-    );
-  });
-}
 
 function goalViews(records: readonly ManualRecord[]): readonly DashboardGoalView[] {
   return records.map((record) => {
@@ -229,47 +198,16 @@ export async function loadDashboard(
     return { goals, goalsTruncated, kind: "empty" };
   }
 
-  const manifestRepository =
-    dependencies?.manifestRepository ??
-    (await getFinancialSnapshotRepository());
-  const manifest = await manifestRepository.findForActor(
-    actor,
-    snapshot.sourceManifestId,
-  );
-  const freshnessReasons: DashboardFreshnessReason[] = [];
-
-  if (manifest === null) {
-    freshnessReasons.push("manifest_unavailable");
-  } else {
-    const manifestBySection = new Map(
-      manifest.sources.map((source) => [source.section, source] as const),
-    );
-    const changed = await Promise.all(
-      financialEngineSourceSections.map(async (section) => {
-        const repository = await repositoryFor(section, dependencies);
-        const records = await repository.listAllForActor(actor);
-        const source = manifestBySection.get(section);
-        return (
-          source === undefined || !compareRecords(records, source.records)
-        );
-      }),
-    );
-    if (changed.some(Boolean)) {
-      freshnessReasons.push("source_changed");
-    }
-  }
-
-  if (profile.updatedAt.getTime() > snapshot.calculatedAt.getTime()) {
-    freshnessReasons.push("profile_changed");
-  }
-  const now = (dependencies?.now ?? (() => new Date()))();
-  const currentCalendarDate = calendarDateAtInstant(
-    now.toISOString(),
-    profile.fields.timeZone,
-  );
-  if (currentCalendarDate !== snapshot.result.evaluationDate) {
-    freshnessReasons.push("new_calendar_day");
-  }
+  const freshnessReasons: readonly DashboardFreshnessReason[] =
+    await assessFinancialEngineSnapshotFreshness(actor, profile, snapshot, {
+      ...(dependencies?.manifestRepository === undefined
+        ? {}
+        : { manifestRepository: dependencies.manifestRepository }),
+      ...(dependencies?.now === undefined ? {} : { now: dependencies.now }),
+      ...(dependencies?.sourceRepositories === undefined
+        ? {}
+        : { sourceRepositories: dependencies.sourceRepositories }),
+    });
 
   const previous = page.snapshots[1];
   const changeAmount =

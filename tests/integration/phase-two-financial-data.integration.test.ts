@@ -33,6 +33,7 @@ import {
   type UserProfileRepository,
 } from "@/lib/profiles/profile-repository";
 import { saveProfile } from "@/lib/profiles/profile-service";
+import { purchaseSimulationRepositoryForDatabase } from "@/lib/purchase-simulations/purchase-simulation-repository";
 
 const testUri = process.env.MONGODB_TEST_URI;
 const describeWithMongo = testUri === undefined ? describe.skip : describe;
@@ -346,6 +347,8 @@ describeWithMongo("Phase 2 financial data foundation", () => {
       goalRepository: goalRepositoryForDatabase(database),
       now: () => new Date("2026-08-31T12:00:00.000Z"),
       profileRepository,
+      purchaseSimulationRepository:
+        purchaseSimulationRepositoryForDatabase(database),
       repositories,
     });
     const serialized = JSON.stringify(exported);

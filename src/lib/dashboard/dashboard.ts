@@ -1,10 +1,7 @@
 import type { SerializedMoney } from "@/lib/domain/money/money";
+import type { FinancialSnapshotFreshnessReason } from "@/lib/financial-engine/financial-engine-snapshot-freshness";
 
-export type DashboardFreshnessReason =
-  | "manifest_unavailable"
-  | "new_calendar_day"
-  | "profile_changed"
-  | "source_changed";
+export type DashboardFreshnessReason = FinancialSnapshotFreshnessReason;
 
 export type DashboardAlertCode =
   | "high_credit_utilization"
