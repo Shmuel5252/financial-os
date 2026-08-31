@@ -126,6 +126,7 @@ describe("manual onboarding financial records", () => {
       fields,
       id: "507f1f77bcf86cd799439011",
       section: "accounts",
+      source: { kind: "manual" },
       updatedAt: new Date("2026-08-30T10:00:00.000Z"),
       version: 1,
     };
@@ -133,5 +134,81 @@ describe("manual onboarding financial records", () => {
 
     expect(JSON.stringify(view)).toContain('"amountMinor":"12345"');
     expect(() => JSON.stringify(view)).not.toThrow();
+  });
+
+  it("models transactions with positive amounts and explicit direction", () => {
+    const accountId = "507f1f77bcf86cd799439011";
+    const destinationAccountId = "507f191e810c19729de860ea";
+    const transfer = parseManualFields("transactions", {
+      accountId,
+      amount: { amount: "123.45", currency: "ILS" },
+      category: "transfer",
+      confidenceBps: 10_000,
+      date: "2026-08-31",
+      destinationAccountId,
+      merchant: null,
+      notes: "Transfer between owned accounts",
+      recurring: false,
+      type: "transfer",
+    });
+
+    expect(collectMoneyValues(transfer)[0]?.amountMinor).toBe(12_345n);
+    expect(() =>
+      parseManualFields("transactions", {
+        accountId,
+        amount: { amount: "100", currency: "ILS" },
+        category: "transfer",
+        confidenceBps: 10_000,
+        date: "2026-08-31",
+        destinationAccountId: accountId,
+        merchant: null,
+        notes: null,
+        recurring: false,
+        type: "transfer",
+      }),
+    ).toThrow(InputValidationError);
+  });
+
+  it("rejects ambiguous recurrence dates", () => {
+    expect(() =>
+      parseManualFields("recurring_transactions", {
+        accountId: "507f1f77bcf86cd799439011",
+        active: true,
+        amount: { amount: "95", currency: "ILS" },
+        category: "subscriptions",
+        endDate: "2026-09-30",
+        frequency: "monthly",
+        interval: 1,
+        merchant: "Service",
+        name: "Subscription",
+        nextOccurrenceDate: "2026-10-01",
+        startDate: "2026-08-01",
+        type: "expense",
+      }),
+    ).toThrow(InputValidationError);
+  });
+
+  it("requires maturity only for fixed-term savings", () => {
+    expect(
+      parseManualFields("savings", {
+        accountIdentifierLast4: "1234",
+        availability: "fixed_term",
+        balance: { amount: "10000", currency: "ILS" },
+        institution: "Example bank",
+        maturityDate: "2027-08-31",
+        name: "Deposit",
+      }),
+    ).toBeDefined();
+
+    expect(() =>
+      parseManualFields("savings", {
+        accountIdentifierLast4: null,
+        availability: "fixed_term",
+        balance: { amount: "10000", currency: "ILS" },
+        institution: null,
+        maturityDate: null,
+        name: "Invalid deposit",
+      }),
+    ).toThrow(InputValidationError);
   });
 });

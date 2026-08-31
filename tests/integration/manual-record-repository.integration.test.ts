@@ -104,6 +104,7 @@ describeWithMongo("manual record persistence and isolation", () => {
         name: "Current account",
         type: "bank",
       },
+      randomUUID(),
       dependencies,
     );
 
@@ -182,6 +183,7 @@ describeWithMongo("manual record persistence and isolation", () => {
           name: "Wrong currency",
           type: "bank",
         },
+        randomUUID(),
         accountDependencies,
       ),
     ).rejects.toBeInstanceOf(InputValidationError);
@@ -197,6 +199,7 @@ describeWithMongo("manual record persistence and isolation", () => {
         amount: { amount: "1500", currency: "ILS" },
         kind: "fixed",
       },
+      randomUUID(),
       safetyDependencies,
     );
 
@@ -208,6 +211,7 @@ describeWithMongo("manual record persistence and isolation", () => {
           basisPoints: 1_000,
           kind: "income_percentage",
         },
+        randomUUID(),
         safetyDependencies,
       ),
     ).rejects.toBeInstanceOf(ConflictError);

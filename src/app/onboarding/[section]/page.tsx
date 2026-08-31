@@ -7,9 +7,9 @@ import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
 import { messages } from "@/lib/i18n";
 import {
-  manualSectionSchema,
+  onboardingSectionSchema,
   toManualRecordView,
-  type ManualSection,
+  type OnboardingSection,
 } from "@/lib/onboarding/manual-record";
 import { listManualRecords } from "@/lib/onboarding/manual-record-service";
 import type { OnboardingStep } from "@/lib/profiles/profile";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 const sectionDetails: Readonly<
   Record<
-    ManualSection,
+    OnboardingSection,
     Readonly<{
       description: string;
       label: string;
@@ -81,7 +81,7 @@ export default async function ManualOnboardingPage({ params }: PageProps) {
     redirect("/sign-in");
   }
 
-  const parsedSection = manualSectionSchema.safeParse((await params).section);
+  const parsedSection = onboardingSectionSchema.safeParse((await params).section);
   if (!parsedSection.success) {
     notFound();
   }

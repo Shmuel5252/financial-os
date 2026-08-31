@@ -20,8 +20,100 @@ export const hebrewMessages = {
       UNAUTHORIZED: "אין לך הרשאה לבצע את הפעולה הזאת.",
     } satisfies Readonly<Record<ApplicationErrorCode, string>>,
     recordRemove: "לא הצלחנו להסיר את הרשומה.",
+    recordLoad: "לא הצלחנו לטעון רשומות נוספות.",
     recordSave: "לא הצלחנו לשמור את הרשומה.",
     stepCompletion: "לא הצלחנו להשלים את השלב.",
+  },
+  financialData: {
+    actions: {
+      back: "חזרה לנתונים הפיננסיים",
+      captureSnapshot: "שמירת תמונת מקור",
+      capturingSnapshot: "שומר תמונת מקור…",
+      export: "הורדת עותק JSON מאובטח",
+      loadMore: "טעינת רשומות נוספות",
+      manage: "ניהול הרשומות",
+    },
+    description:
+      "כאן אפשר לתחזק את נתוני המקור הידניים שלך. כל רשומה נשמרת עם דיוק מלא, היסטוריית שינויים ובעלות שנגזרת מההתחברות.",
+    eyebrow: "נתוני מקור ידניים",
+    form: {
+      fields: {
+        account: "חשבון",
+        active: "הגדרה פעילה",
+        availability: "זמינות הכסף",
+        definitionName: "שם ההגדרה הקבועה",
+        destinationAccount: "חשבון יעד",
+        endDateOptional: "תאריך סיום (לא חובה)",
+        institutionOptional: "מוסד פיננסי (לא חובה)",
+        interval: "מרווח בין מופעים",
+        lastFourOptional: "ארבע ספרות אחרונות של מזהה החשבון (לא חובה)",
+        maturityDate: "תאריך פירעון",
+        merchantOptional: "בית עסק או מקור (לא חובה)",
+        nextOccurrenceDate: "המועד הבא",
+        notesOptional: "הערה (לא חובה)",
+        recurring: "האם העסקה קשורה להגדרה קבועה?",
+        savingName: "שם החיסכון",
+        sourceAccount: "חשבון מקור",
+        startDate: "תאריך התחלה",
+        transactionDate: "תאריך העסקה",
+        transactionType: "סוג העסקה",
+      },
+      options: {
+        chooseAccount: "בחירת חשבון",
+        expense: "הוצאה",
+        fixedTerm: "פיקדון לתקופה קבועה",
+        income: "הכנסה",
+        liquid: "נזיל",
+        no: "לא",
+        other: "אחר",
+        transfer: "העברה בין חשבונות",
+        yes: "כן",
+      },
+    },
+    sections: {
+      accounts: {
+        description: "יתרות בחשבונות בנק, מזומן וחשבונות פיננסיים נוספים.",
+        label: "חשבונות",
+      },
+      cards: {
+        description: "מסגרות אשראי, ניצול נוכחי ומועדי חיוב.",
+        label: "כרטיסי אשראי",
+      },
+      expenses: {
+        description: "התחייבויות והוצאות קבועות שהוזנו ידנית.",
+        label: "הוצאות קבועות",
+      },
+      income: {
+        description: "מקורות הכנסה צפויים, מועדים ורמת ודאות.",
+        label: "מקורות הכנסה",
+      },
+      loans: {
+        description: "הלוואות וחובות, יתרות, ריביות ותשלומים.",
+        label: "הלוואות וחובות",
+      },
+      recurring_transactions: {
+        description: "הגדרות מפורשות להכנסות ולהוצאות שחוזרות במועדים קבועים.",
+        label: "עסקאות קבועות",
+      },
+      savings: {
+        description: "חסכונות נזילים ופיקדונות לתקופה קבועה.",
+        label: "חסכונות",
+      },
+      transactions: {
+        description: "הכנסות, הוצאות והעברות שבוצעו בפועל.",
+        label: "עסקאות",
+      },
+    },
+    snapshot: {
+      description:
+        "תמונת המקור שומרת manifest בלתי־משתנה של מזהי הרשומות והגרסאות שנכללו. היא עדיין אינה מכילה חישובים או תחזית.",
+      empty: "עדיין לא נשמרו תמונות מקור.",
+      latest: "תמונת המקור האחרונה",
+      saved: "תמונת המקור נשמרה.",
+      sourceCount: (count: number) => `${count} רשומות מקור`,
+      title: "תמונות מקור פיננסיות",
+    },
+    title: "הנתונים הפיננסיים שלי",
   },
   home: {
     badge: "תשתית מאובטחת",
@@ -51,6 +143,7 @@ export const hebrewMessages = {
         saveRecord: "שמירת הרשומה",
       },
       categories: {
+        benefits: "קצבאות והטבות",
         children: "ילדים",
         communications: "תקשורת",
         debt_payment: "החזרי חוב",
@@ -58,8 +151,11 @@ export const hebrewMessages = {
         housing: "דיור",
         insurance: "ביטוח",
         other: "אחר",
+        salary: "שכר",
+        savings: "חיסכון",
         subscriptions: "מינויים",
         transport: "תחבורה",
+        transfer: "העברה",
         utilities: "חשבונות שוטפים",
       },
       common: {
@@ -176,6 +272,7 @@ export const hebrewMessages = {
       description:
         "כדאי לבדוק כל סעיף לפני השלמת התהליך. גם אפס רשומות הוא מצב תקין, אם סימנת במפורש שהסעיף אינו רלוונטי.",
       finishFirst: "יש להשלים את השלב הנוכחי לפני סיום הבדיקה.",
+      manageFinancialData: "מעבר לניהול הנתונים הפיננסיים",
       label: "בדיקה",
       recordCount: (count: number) => `${count} ${count === 1 ? "רשומה" : "רשומות"}`,
       resume: "המשך תהליך הקליטה",

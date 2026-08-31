@@ -10,12 +10,15 @@ import {
 } from "@/lib/onboarding/manual-record";
 import {
   getManualRecordRepository,
+  type ManualRecordPage,
+  type ManualRecordPageRequest,
   type ManualRecordRepository,
 } from "@/lib/onboarding/manual-record-repository";
 import type { UserProfileRepository } from "@/lib/profiles/profile-repository";
 import { loadProfile } from "@/lib/profiles/profile-service";
 
-type ManualRecordDependencies = Readonly<{
+export type ManualRecordDependencies = Readonly<{
+  accountRepository?: ManualRecordRepository;
   profileRepository?: UserProfileRepository;
   repository: ManualRecordRepository;
 }>;
@@ -68,6 +71,52 @@ async function parseAndAuthorizeFields(
   return fields;
 }
 
+function accountReferences(
+  section: ManualSection,
+  fields: ReturnType<typeof parseManualFields>,
+): readonly string[] {
+  if (section !== "transactions" && section !== "recurring_transactions") {
+    return [];
+  }
+
+  const value = fields as Readonly<Record<string, unknown>>;
+  const accountId = value.accountId;
+  const destinationAccountId = value.destinationAccountId;
+
+  return [accountId, destinationAccountId].filter(
+    (reference): reference is string => typeof reference === "string",
+  );
+}
+
+async function assertOwnedAccountReferences(
+  actor: Actor,
+  section: ManualSection,
+  fields: ReturnType<typeof parseManualFields>,
+  dependencies?: ManualRecordDependencies,
+): Promise<void> {
+  const references = accountReferences(section, fields);
+
+  if (references.length === 0) {
+    return;
+  }
+
+  const repository =
+    dependencies?.accountRepository ??
+    (await getManualRecordRepository("accounts"));
+  const results = await Promise.all(
+    references.map((recordId) => repository.existsForActor(actor, recordId)),
+  );
+
+  if (results.some((exists) => !exists)) {
+    throw new InputValidationError([
+      {
+        field: "accountId",
+        message: "Every referenced account must belong to the authenticated user.",
+      },
+    ]);
+  }
+}
+
 export async function listManualRecords(
   actor: Actor,
   section: ManualSection,
@@ -77,15 +126,27 @@ export async function listManualRecords(
   return repository.listForActor(actor);
 }
 
+export async function listManualRecordPage(
+  actor: Actor,
+  section: ManualSection,
+  request: ManualRecordPageRequest,
+  dependencies?: ManualRecordDependencies,
+): Promise<ManualRecordPage> {
+  const { repository } = await resolveDependencies(section, dependencies);
+  return repository.listPageForActor(actor, request);
+}
+
 export async function createManualRecord(
   actor: Actor,
   section: ManualSection,
   input: unknown,
+  idempotencyKey: string,
   dependencies?: ManualRecordDependencies,
 ): Promise<ManualRecord> {
   const fields = await parseAndAuthorizeFields(actor, section, input, dependencies);
+  await assertOwnedAccountReferences(actor, section, fields, dependencies);
   const { repository } = await resolveDependencies(section, dependencies);
-  return repository.createForActor(actor, fields);
+  return repository.createForActor(actor, fields, idempotencyKey);
 }
 
 export async function updateManualRecord(
@@ -97,6 +158,7 @@ export async function updateManualRecord(
   dependencies?: ManualRecordDependencies,
 ): Promise<ManualRecord> {
   const fields = await parseAndAuthorizeFields(actor, section, input, dependencies);
+  await assertOwnedAccountReferences(actor, section, fields, dependencies);
   const { repository } = await resolveDependencies(section, dependencies);
   return repository.updateForActor(
     actor,

@@ -125,6 +125,15 @@ export default async function OnboardingReviewPage() {
           profileVersion={profile.version}
         />
 
+        {completed ? (
+          <Link
+            className="mt-6 inline-flex rounded-2xl bg-[var(--accent)] px-5 py-3 font-semibold text-white"
+            href="/financial-data"
+          >
+            {messages.onboarding.review.manageFinancialData}
+          </Link>
+        ) : null}
+
         <form action={signOutAction} className="mt-8 border-t border-[var(--border)] pt-6">
           <button className="text-sm font-semibold text-[var(--muted)]" type="submit">
             {messages.onboarding.review.signOut}

@@ -34,6 +34,8 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 2 — Core financial data foundation
 
+**Acceptance status (2026-08-31): Complete and verified.** The implementation reuses Phase 1 source collections, adds transactions/recurrence/savings/source-manifest snapshots, and passed the full real-Mongo, authenticated browser, type, lint, build, audit, security, ownership, precision, and Hebrew/RTL gates recorded in `PROGRESS.md` and `DECISIONS.md`.
+
 - **Objective:** Provide reliable manual financial records as a first-class product source.
 - **Scope:** Accounts, transactions, recurring transactions, incomes, expenses, credit cards, loans/debts, savings, and financial snapshot storage (not final calculations).
 - **Dependencies:** Phase 1 identity/profile conventions.

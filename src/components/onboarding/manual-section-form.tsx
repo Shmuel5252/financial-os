@@ -1,10 +1,12 @@
 "use client";
 
 import {
+  useRef,
   useState,
   type FormEvent,
   type InputHTMLAttributes,
   type ReactNode,
+  type SelectHTMLAttributes,
 } from "react";
 
 import type {
@@ -20,16 +22,23 @@ import {
 import type { OnboardingStep } from "@/lib/profiles/profile";
 
 type ManualSectionFormProps = Readonly<{
-  canComplete: boolean;
+  accountOptions?: readonly Readonly<{ id: string; label: string }>[];
+  apiBasePath?: "/api/financial-data" | "/api/onboarding";
+  canComplete?: boolean;
   currency: string;
   initialRecords: readonly ManualRecordView[];
-  nextPath: string;
-  profileVersion: number;
+  initialNextCursor?: string | null;
+  nextPath?: string;
+  profileVersion?: number;
   section: ManualSection;
-  step: OnboardingStep;
+  step?: OnboardingStep;
 }>;
 
 type RecordResponse = Readonly<{ record: ManualRecordView }>;
+type PageResponse = Readonly<{
+  nextCursor: string | null;
+  records: readonly ManualRecordView[];
+}>;
 
 function value(form: FormData, name: string): string {
   const entry = form.get(name);
@@ -131,6 +140,44 @@ function buildFields(
         title: value(form, "title"),
         type: value(form, "type"),
       };
+    case "transactions":
+      return {
+        accountId: value(form, "accountId"),
+        amount: moneyInput(form, "amount", currency),
+        category: value(form, "category"),
+        confidenceBps: percentageToBasisPoints(value(form, "confidence")),
+        date: value(form, "date"),
+        destinationAccountId: value(form, "destinationAccountId") || null,
+        merchant: value(form, "merchant") || null,
+        notes: value(form, "notes") || null,
+        recurring: value(form, "recurring") === "yes",
+        type: value(form, "type"),
+      };
+    case "recurring_transactions":
+      return {
+        accountId: value(form, "accountId"),
+        active: value(form, "active") === "yes",
+        amount: moneyInput(form, "amount", currency),
+        category: value(form, "category"),
+        endDate: value(form, "endDate") || null,
+        frequency: value(form, "frequency"),
+        interval: integer(form, "interval"),
+        merchant: value(form, "merchant") || null,
+        name: value(form, "name"),
+        nextOccurrenceDate: value(form, "nextOccurrenceDate"),
+        startDate: value(form, "startDate"),
+        type: value(form, "type"),
+      };
+    case "savings":
+      return {
+        accountIdentifierLast4:
+          value(form, "accountIdentifierLast4") || null,
+        availability: value(form, "availability"),
+        balance: moneyInput(form, "balance", currency),
+        institution: value(form, "institution") || null,
+        maturityDate: value(form, "maturityDate") || null,
+        name: value(form, "name"),
+      };
   }
 }
 
@@ -160,15 +207,17 @@ function SelectField({
   children,
   label,
   name,
+  ...props
 }: Readonly<{
   children: ReactNode;
   label: ReactNode;
   name: string;
-}>) {
+} & Omit<SelectHTMLAttributes<HTMLSelectElement>, "name">>) {
   return (
     <label className="block text-sm font-semibold">
       {label}
       <select
+        {...props}
         className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 font-normal outline-none transition focus:border-[var(--accent)]"
         name={name}
       >
@@ -190,10 +239,17 @@ function CurrencyLabel({
 }
 
 function FormFields({
+  accountOptions = [],
   currency,
   section,
-}: Readonly<{ currency: string; section: ManualSection }>) {
+}: Readonly<{
+  accountOptions?: readonly Readonly<{ id: string; label: string }>[];
+  currency: string;
+  section: ManualSection;
+}>) {
   const [safetyKind, setSafetyKind] = useState("fixed");
+  const [savingsAvailability, setSavingsAvailability] = useState("liquid");
+  const [transactionType, setTransactionType] = useState("expense");
   const { fields } = messages.onboarding.form;
 
   switch (section) {
@@ -463,6 +519,170 @@ function FormFields({
           />
         </>
       );
+    case "transactions":
+      return (
+        <>
+          <SelectField
+            label={messages.financialData.form.fields.sourceAccount}
+            name="accountId"
+            required
+          >
+            <option value="">
+              {messages.financialData.form.options.chooseAccount}
+            </option>
+            {accountOptions.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.label}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label={messages.financialData.form.fields.transactionType}
+            name="type"
+            onChange={(event) => setTransactionType(event.target.value)}
+            value={transactionType}
+          >
+            <option value="expense">{messages.financialData.form.options.expense}</option>
+            <option value="income">{messages.financialData.form.options.income}</option>
+            <option value="transfer">{messages.financialData.form.options.transfer}</option>
+          </SelectField>
+          {transactionType === "transfer" ? (
+            <SelectField
+              label={messages.financialData.form.fields.destinationAccount}
+              name="destinationAccountId"
+              required
+            >
+              <option value="">
+                {messages.financialData.form.options.chooseAccount}
+              </option>
+              {accountOptions.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.label}
+                </option>
+              ))}
+            </SelectField>
+          ) : null}
+          <Field
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.amount} />}
+            name="amount"
+            required
+          />
+          <Field
+            dir="ltr"
+            label={messages.financialData.form.fields.transactionDate}
+            name="date"
+            required
+            type="date"
+          />
+          <SelectField label={fields.category} name="category">
+            {(Object.keys(messages.onboarding.form.categories) as Array<keyof typeof messages.onboarding.form.categories>).map((category) => (
+              <option key={category} value={category}>
+                {messages.onboarding.form.categories[category]}
+              </option>
+            ))}
+          </SelectField>
+          <Field
+            label={messages.financialData.form.fields.merchantOptional}
+            maxLength={120}
+            name="merchant"
+          />
+          <Field
+            label={messages.financialData.form.fields.notesOptional}
+            maxLength={500}
+            name="notes"
+          />
+          <Field
+            defaultValue="100"
+            dir="ltr"
+            inputMode="decimal"
+            label={fields.certainty}
+            max="100"
+            min="0"
+            name="confidence"
+            required
+          />
+          <SelectField label={messages.financialData.form.fields.recurring} name="recurring">
+            <option value="no">{messages.financialData.form.options.no}</option>
+            <option value="yes">{messages.financialData.form.options.yes}</option>
+          </SelectField>
+        </>
+      );
+    case "recurring_transactions":
+      return (
+        <>
+          <Field label={messages.financialData.form.fields.definitionName} name="name" required />
+          <SelectField label={messages.financialData.form.fields.account} name="accountId" required>
+            <option value="">{messages.financialData.form.options.chooseAccount}</option>
+            {accountOptions.map((account) => (
+              <option key={account.id} value={account.id}>{account.label}</option>
+            ))}
+          </SelectField>
+          <SelectField label={messages.financialData.form.fields.transactionType} name="type">
+            <option value="expense">{messages.financialData.form.options.expense}</option>
+            <option value="income">{messages.financialData.form.options.income}</option>
+          </SelectField>
+          <Field
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.amount} />}
+            name="amount"
+            required
+          />
+          <SelectField label={fields.category} name="category">
+            {(Object.keys(messages.onboarding.form.categories) as Array<keyof typeof messages.onboarding.form.categories>).map((category) => (
+              <option key={category} value={category}>
+                {messages.onboarding.form.categories[category]}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label={fields.frequency} name="frequency">
+            <option value="weekly">{messages.onboarding.form.frequencies.weekly}</option>
+            <option value="biweekly">{messages.onboarding.form.frequencies.biweekly}</option>
+            <option value="monthly">{messages.onboarding.form.frequencies.monthly}</option>
+            <option value="quarterly">{messages.onboarding.form.frequencies.quarterly}</option>
+            <option value="annual">{messages.onboarding.form.frequencies.annual}</option>
+          </SelectField>
+          <Field defaultValue="1" dir="ltr" label={messages.financialData.form.fields.interval} max="365" min="1" name="interval" required type="number" />
+          <Field dir="ltr" label={messages.financialData.form.fields.startDate} name="startDate" required type="date" />
+          <Field dir="ltr" label={messages.financialData.form.fields.nextOccurrenceDate} name="nextOccurrenceDate" required type="date" />
+          <Field dir="ltr" label={messages.financialData.form.fields.endDateOptional} name="endDate" type="date" />
+          <Field label={messages.financialData.form.fields.merchantOptional} maxLength={120} name="merchant" />
+          <SelectField label={messages.financialData.form.fields.active} name="active">
+            <option value="yes">{messages.financialData.form.options.yes}</option>
+            <option value="no">{messages.financialData.form.options.no}</option>
+          </SelectField>
+        </>
+      );
+    case "savings":
+      return (
+        <>
+          <Field label={messages.financialData.form.fields.savingName} name="name" required />
+          <Field
+            dir="ltr"
+            inputMode="decimal"
+            label={<CurrencyLabel currency={currency} label={fields.currentBalance} />}
+            name="balance"
+            required
+          />
+          <SelectField
+            label={messages.financialData.form.fields.availability}
+            name="availability"
+            onChange={(event) => setSavingsAvailability(event.target.value)}
+            value={savingsAvailability}
+          >
+            <option value="liquid">{messages.financialData.form.options.liquid}</option>
+            <option value="fixed_term">{messages.financialData.form.options.fixedTerm}</option>
+            <option value="other">{messages.financialData.form.options.other}</option>
+          </SelectField>
+          {savingsAvailability === "fixed_term" ? (
+            <Field dir="ltr" label={messages.financialData.form.fields.maturityDate} name="maturityDate" required type="date" />
+          ) : null}
+          <Field label={messages.financialData.form.fields.institutionOptional} maxLength={100} name="institution" />
+          <Field dir="ltr" inputMode="numeric" label={messages.financialData.form.fields.lastFourOptional} maxLength={4} name="accountIdentifierLast4" pattern="[0-9]{4}" />
+        </>
+      );
   }
 }
 
@@ -529,27 +749,34 @@ function firstMoneySummary(value: SerializedDomainValue): string | null {
 }
 
 export function ManualSectionForm({
+  accountOptions = [],
+  apiBasePath = "/api/onboarding",
   canComplete,
   currency,
   initialRecords,
+  initialNextCursor = null,
   nextPath,
   profileVersion,
   section,
   step,
 }: ManualSectionFormProps) {
   const [records, setRecords] = useState([...initialRecords]);
+  const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [message, setMessage] = useState("");
   const [working, setWorking] = useState(false);
+  const idempotencyKey = useRef<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setWorking(true);
     setMessage("");
 
     try {
-      const fields = buildFields(section, new FormData(event.currentTarget), currency);
-      const response = await fetch(`/api/onboarding/${section}`, {
-        body: JSON.stringify({ fields }),
+      const fields = buildFields(section, new FormData(form), currency);
+      idempotencyKey.current ??= crypto.randomUUID();
+      const response = await fetch(`${apiBasePath}/${section}`, {
+        body: JSON.stringify({ fields, idempotencyKey: idempotencyKey.current }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
@@ -562,8 +789,13 @@ export function ManualSectionForm({
       }
 
       const result = payload as RecordResponse;
-      setRecords((current) => [...current, result.record]);
-      event.currentTarget.reset();
+      setRecords((current) =>
+        apiBasePath === "/api/onboarding"
+          ? [...current, result.record]
+          : [result.record, ...current],
+      );
+      idempotencyKey.current = null;
+      form.reset();
       setMessage(messages.onboarding.form.saved);
     } catch (error) {
       setMessage(
@@ -579,7 +811,7 @@ export function ManualSectionForm({
     setMessage("");
 
     try {
-      const response = await fetch(`/api/onboarding/${section}`, {
+      const response = await fetch(`${apiBasePath}/${section}`, {
         body: JSON.stringify({
           expectedVersion: record.version,
           id: record.id,
@@ -607,6 +839,14 @@ export function ManualSectionForm({
   }
 
   async function completeSection() {
+    if (
+      nextPath === undefined ||
+      profileVersion === undefined ||
+      step === undefined
+    ) {
+      return;
+    }
+
     setWorking(true);
     setMessage("");
 
@@ -636,16 +876,55 @@ export function ManualSectionForm({
     }
   }
 
+  async function loadMore() {
+    if (nextCursor === null) {
+      return;
+    }
+
+    setWorking(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${apiBasePath}/${section}?cursor=${encodeURIComponent(nextCursor)}&limit=20`,
+      );
+      const payload: unknown = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          userFacingErrorMessage(payload, messages.errors.recordLoad),
+        );
+      }
+
+      const page = payload as PageResponse;
+      setRecords((current) => [...current, ...page.records]);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : messages.errors.recordLoad,
+      );
+    } finally {
+      setWorking(false);
+    }
+  }
+
   return (
     <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_0.8fr]">
       <form
         className="space-y-5 rounded-3xl border border-[var(--border)] bg-white p-6"
+        onChange={() => {
+          idempotencyKey.current = null;
+        }}
         onSubmit={submit}
       >
         <h2 className="text-xl font-semibold">
           {messages.onboarding.form.common.addRecord}
         </h2>
-        <FormFields currency={currency} section={section} />
+        <FormFields
+          accountOptions={accountOptions}
+          currency={currency}
+          section={section}
+        />
         <button
           className="w-full rounded-2xl bg-[var(--accent)] px-5 py-3 font-semibold text-white disabled:opacity-60"
           disabled={working}
@@ -693,19 +972,33 @@ export function ManualSectionForm({
           </ul>
         )}
 
-        <button
-          className="mt-6 w-full rounded-2xl border border-[var(--accent)] px-5 py-3 font-semibold text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!canComplete || working}
-          onClick={() => void completeSection()}
-          type="button"
-        >
-          {messages.onboarding.form.actions.completeStep}
-        </button>
-        {!canComplete ? (
-          <p className="mt-3 text-sm text-[var(--muted)]">
-            {messages.onboarding.form.common.stepLocked}
-          </p>
-        ) : null}
+        {nextCursor === null ? null : (
+          <button
+            className="mt-6 w-full rounded-2xl border border-[var(--border)] px-5 py-3 font-semibold disabled:opacity-50"
+            disabled={working}
+            onClick={() => void loadMore()}
+            type="button"
+          >
+            {messages.financialData.actions.loadMore}
+          </button>
+        )}
+        {nextPath === undefined || profileVersion === undefined || step === undefined ? null : (
+          <>
+            <button
+              className="mt-6 w-full rounded-2xl border border-[var(--accent)] px-5 py-3 font-semibold text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!canComplete || working}
+              onClick={() => void completeSection()}
+              type="button"
+            >
+              {messages.onboarding.form.actions.completeStep}
+            </button>
+            {!canComplete ? (
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                {messages.onboarding.form.common.stepLocked}
+              </p>
+            ) : null}
+          </>
+        )}
         <p aria-live="polite" className="mt-3 text-sm text-[var(--muted)]">
           {message}
         </p>

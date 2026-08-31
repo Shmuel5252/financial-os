@@ -298,7 +298,195 @@ const goalDomainSchema = z.object({
   }
 });
 
-export const manualSectionSchema = z.enum([
+const recordIdSchema = z.string().regex(/^[0-9a-f]{24}$/i);
+const transactionCategorySchema = z.enum([
+  "housing",
+  "utilities",
+  "insurance",
+  "communications",
+  "children",
+  "subscriptions",
+  "transport",
+  "food",
+  "debt_payment",
+  "salary",
+  "benefits",
+  "transfer",
+  "savings",
+  "other",
+]);
+
+const transactionShape = {
+  accountId: recordIdSchema,
+  category: transactionCategorySchema,
+  confidenceBps: z.number().int().min(0).max(10_000),
+  date: calendarDateSchema,
+  destinationAccountId: recordIdSchema.nullable(),
+  merchant: z.string().trim().min(1).max(120).nullable(),
+  notes: z.string().trim().max(500).nullable(),
+  recurring: z.boolean(),
+  type: z.enum(["income", "expense", "transfer"]),
+};
+
+function validateTransferAccounts(
+  value: Readonly<{
+    accountId: string;
+    destinationAccountId: string | null;
+    type: "income" | "expense" | "transfer";
+  }>,
+  context: z.RefinementCtx,
+) {
+  if (value.type === "transfer") {
+    if (value.destinationAccountId === null) {
+      context.addIssue({
+        code: "custom",
+        message: "A transfer requires a destination account.",
+        path: ["destinationAccountId"],
+      });
+    } else if (value.destinationAccountId === value.accountId) {
+      context.addIssue({
+        code: "custom",
+        message: "Transfer accounts must be different.",
+        path: ["destinationAccountId"],
+      });
+    }
+  } else if (value.destinationAccountId !== null) {
+    context.addIssue({
+      code: "custom",
+      message: "Only transfers may include a destination account.",
+      path: ["destinationAccountId"],
+    });
+  }
+}
+
+const transactionInputSchema = z
+  .object({
+    ...transactionShape,
+    amount: positiveMoneyInputSchema,
+  })
+  .superRefine(validateTransferAccounts);
+const transactionDomainSchema = z
+  .object({
+    ...transactionShape,
+    amount: positiveMoneyDomainSchema,
+  })
+  .superRefine(validateTransferAccounts);
+
+const recurringTransactionShape = {
+  accountId: recordIdSchema,
+  active: z.boolean(),
+  category: transactionCategorySchema,
+  endDate: calendarDateSchema.nullable(),
+  frequency: z.enum([
+    "weekly",
+    "biweekly",
+    "monthly",
+    "quarterly",
+    "annual",
+  ]),
+  interval: z.number().int().min(1).max(365),
+  merchant: z.string().trim().min(1).max(120).nullable(),
+  name: z.string().trim().min(1).max(100),
+  nextOccurrenceDate: calendarDateSchema,
+  startDate: calendarDateSchema,
+  type: z.enum(["income", "expense"]),
+};
+
+function validateRecurringDates(
+  value: Readonly<{
+    endDate: string | null;
+    nextOccurrenceDate: string;
+    startDate: string;
+  }>,
+  context: z.RefinementCtx,
+) {
+  if (value.endDate !== null && value.endDate < value.startDate) {
+    context.addIssue({
+      code: "custom",
+      message: "The recurrence end date cannot precede its start date.",
+      path: ["endDate"],
+    });
+  }
+
+  if (value.nextOccurrenceDate < value.startDate) {
+    context.addIssue({
+      code: "custom",
+      message: "The next occurrence cannot precede the recurrence start date.",
+      path: ["nextOccurrenceDate"],
+    });
+  }
+
+  if (
+    value.endDate !== null &&
+    value.nextOccurrenceDate > value.endDate
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "The next occurrence cannot follow the recurrence end date.",
+      path: ["nextOccurrenceDate"],
+    });
+  }
+}
+
+const recurringTransactionInputSchema = z
+  .object({
+    ...recurringTransactionShape,
+    amount: positiveMoneyInputSchema,
+  })
+  .superRefine(validateRecurringDates);
+const recurringTransactionDomainSchema = z
+  .object({
+    ...recurringTransactionShape,
+    amount: positiveMoneyDomainSchema,
+  })
+  .superRefine(validateRecurringDates);
+
+const savingsShape = {
+  accountIdentifierLast4: z.string().regex(/^\d{4}$/).nullable(),
+  availability: z.enum(["liquid", "fixed_term", "other"]),
+  institution: z.string().trim().min(1).max(100).nullable(),
+  maturityDate: calendarDateSchema.nullable(),
+  name: z.string().trim().min(1).max(100),
+};
+
+function validateSavingsMaturity(
+  value: Readonly<{
+    availability: "liquid" | "fixed_term" | "other";
+    maturityDate: string | null;
+  }>,
+  context: z.RefinementCtx,
+) {
+  if (value.availability === "fixed_term" && value.maturityDate === null) {
+    context.addIssue({
+      code: "custom",
+      message: "A fixed-term saving requires a maturity date.",
+      path: ["maturityDate"],
+    });
+  }
+
+  if (value.availability !== "fixed_term" && value.maturityDate !== null) {
+    context.addIssue({
+      code: "custom",
+      message: "Only fixed-term savings may include a maturity date.",
+      path: ["maturityDate"],
+    });
+  }
+}
+
+const savingsInputSchema = z
+  .object({
+    ...savingsShape,
+    balance: nonNegativeMoneyInputSchema,
+  })
+  .superRefine(validateSavingsMaturity);
+const savingsDomainSchema = z
+  .object({
+    ...savingsShape,
+    balance: nonNegativeMoneyDomainSchema,
+  })
+  .superRefine(validateSavingsMaturity);
+
+export const onboardingSectionSchema = z.enum([
   "income",
   "accounts",
   "cards",
@@ -308,8 +496,16 @@ export const manualSectionSchema = z.enum([
   "goals",
 ]);
 
+export const manualSectionSchema = z.enum([
+  ...onboardingSectionSchema.options,
+  "transactions",
+  "recurring_transactions",
+  "savings",
+]);
+
 export const createManualRecordCommandSchema = z.object({
   fields: z.unknown(),
+  idempotencyKey: z.string().uuid(),
 });
 
 export const updateManualRecordCommandSchema = z.object({
@@ -323,7 +519,13 @@ export const deleteManualRecordCommandSchema = z.object({
   id: z.string().regex(/^[0-9a-f]{24}$/i),
 });
 
+export const manualRecordPageQuerySchema = z.object({
+  cursor: recordIdSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
 export type ManualSection = z.infer<typeof manualSectionSchema>;
+export type OnboardingSection = z.infer<typeof onboardingSectionSchema>;
 
 export const manualSectionInputSchemas = {
   accounts: accountInputSchema,
@@ -332,7 +534,10 @@ export const manualSectionInputSchemas = {
   goals: goalInputSchema,
   income: incomeInputSchema,
   loans: loanInputSchema,
+  recurring_transactions: recurringTransactionInputSchema,
   safety_margin: safetyMarginInputSchema,
+  savings: savingsInputSchema,
+  transactions: transactionInputSchema,
 } as const;
 
 export const manualSectionDomainSchemas = {
@@ -342,7 +547,10 @@ export const manualSectionDomainSchemas = {
   goals: goalDomainSchema,
   income: incomeDomainSchema,
   loans: loanDomainSchema,
+  recurring_transactions: recurringTransactionDomainSchema,
   safety_margin: safetyMarginDomainSchema,
+  savings: savingsDomainSchema,
+  transactions: transactionDomainSchema,
 } as const;
 
 export type ManualFields = z.output<
@@ -354,6 +562,7 @@ export type ManualRecord = Readonly<{
   fields: ManualFields;
   id: string;
   section: ManualSection;
+  source: Readonly<{ kind: "manual" }>;
   updatedAt: Date;
   version: number;
 }>;
@@ -372,12 +581,17 @@ export type ManualRecordView = Readonly<{
   fields: SerializedDomainValue;
   id: string;
   section: ManualSection;
+  source: Readonly<{ kind: "manual" }>;
   updatedAt: string;
   version: number;
 }>;
 
 export function parseManualSection(value: unknown): ManualSection {
   return parseUntrusted(manualSectionSchema, value);
+}
+
+export function parseOnboardingSection(value: unknown): OnboardingSection {
+  return parseUntrusted(onboardingSectionSchema, value);
 }
 
 export function parseManualFields(
@@ -487,6 +701,7 @@ export function toManualRecordView(record: ManualRecord): ManualRecordView {
     fields: serializeDomainValue(record.fields),
     id: record.id,
     section: record.section,
+    source: record.source,
     updatedAt: record.updatedAt.toISOString(),
     version: record.version,
   };

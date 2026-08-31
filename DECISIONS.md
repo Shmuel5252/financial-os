@@ -160,6 +160,27 @@ This log records durable product and architecture decisions. Status is `accepted
 - **Alternatives:** Scattered Hebrew literals were rejected because they make future locale support and completeness checks brittle. Globally forcing every value to RTL was rejected because currency codes, URLs, email addresses, technical identifiers, dates, and numbers become ambiguous. Introducing a full third-party localization framework now was rejected as unnecessary for one active locale.
 - **Consequences:** The root document is Hebrew/RTL; Phase 1 navigation, forms, buttons, validation feedback, empty states, labels, review, and error boundaries are localized without a visual redesign. New phases must add their copy to the catalog and extend localization/directionality tests. A future English catalog can reuse the same component boundary. Internal API/error codes remain English, while clients map them to safe Hebrew messages.
 
+## ADR-026 — Phase 2 evolves Phase 1 source collections without duplication
+
+- **Decision:** Treat the Phase 1 manual collections as the first version of the Phase 2 source-data platform. Keep `accounts`, `incomeSources`, `creditCards`, `recurringExpenses`, and `loans` authoritative, and add only `transactions`, `recurringTransactions`, `savings`, and `financialSnapshots`. Actual income/expense movements live in `transactions`; expected income remains in `incomeSources`; planned recurring expenses remain in `recurringExpenses`; explicit recurring movement definitions live in `recurringTransactions`; loans remain the shared loan/debt capability.
+- **Reasoning:** Creating parallel Phase 2 collections for concepts already captured during onboarding would create two conflicting sources of truth and require an unnecessary destructive migration. The distinctions above separate expected/planned data from actual movements while retaining the completed onboarding data.
+- **Alternatives:** Copying onboarding documents into new collections was rejected because dual writes and reconciliation would immediately become financial-integrity risks. Collapsing every concept into `transactions` was rejected because expected income, obligations, cards, debts, and savings have different invariants and lifecycles.
+- **Consequences:** Existing Phase 1 documents remain readable. New documents use schema version 2 and structured manual source metadata; repository mapping accepts the legacy `source: "manual"` representation without rewriting user data. Future provider normalization may extend the source union but must feed the same capability model.
+
+## ADR-027 — Owner-scoped idempotency, cursors, and references
+
+- **Decision:** Phase 2 create mutations require a UUID idempotency key. The repository stores only SHA-256 key and canonical-payload hashes under a unique `{ userId, idempotencyKeyHash }` index. An identical retry returns the original record; a changed payload with the same key conflicts. Lists use bounded ObjectId cursors and owner-prefixed indexes. Transaction account references are resolved server-side and must point to active records owned by the same actor.
+- **Reasoning:** Retried financial writes must not silently duplicate records, cursor pagination must remain stable and bounded, and client-provided object IDs cannot establish ownership. Per-owner hashing prevents raw retry tokens from becoming stored identifiers and allows different users to use the same client key safely.
+- **Alternatives:** Unbounded lists and offset pagination were rejected for growth and consistency reasons. Global idempotency uniqueness was rejected because keys are client-generated and user-relative. Returning an existing record for a changed payload was rejected because it hides an integrity conflict.
+- **Consequences:** New browser forms retain a key across an uncertain retry and clear it after success or a user edit. Optimistic versions remain the update/delete conflict mechanism. Every custom Phase 2 index begins with `userId`; `_id` remains MongoDB's built-in global primary index.
+
+## ADR-028 — Phase 2 snapshots are immutable source manifests, not calculations
+
+- **Decision:** Store Phase 2 financial snapshots as versioned, immutable `source_manifest` documents containing the profile currency and the owned source record IDs, versions, and update timestamps included at capture time. Do not store calculated balances, cash flow, forecast, timeline, net worth, or Safe to Spend until the deterministic Phase 3 engine and its policies are approved. Exports are separate bounded owner-only JSON views and exclude internal ownership, audit, idempotency, authentication, and provider fields.
+- **Reasoning:** Phase 2 requires snapshot storage and auditability but explicitly excludes final calculations. A source manifest establishes provenance and staleness checks without inventing engine outputs. Keeping exports on public view models avoids exposing server-only fields.
+- **Alternatives:** Persisting guessed calculated fields was rejected as Phase 3 work and false financial truth. Storing one unbounded copy of every full financial record in a snapshot was rejected because it recreates giant-document drift and MongoDB document-size risk. A non-versioned count-only snapshot was rejected because it cannot identify which record revisions were represented.
+- **Consequences:** Phase 3 may add versioned calculated outputs associated with a source manifest and input hash after policy approval. Reproducing historical values after source mutation will require a reviewed event/version retention design; the Phase 2 manifest detects version drift but does not pretend to preserve a full historical ledger.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.
@@ -196,6 +217,15 @@ This log records durable product and architecture decisions. Status is `accepted
 - Explicit LTR isolation covers currency/country codes, IANA timezones, financial values, dates, percentages, and numeric inputs. Provider-controlled Google UI remains unchanged.
 - The localization suite passed 5/5 tests; the complete suite passed 64 tests with five explicit infrastructure skips; real MongoDB passed 5/5. Type-check, lint, production build, dependency audit, and rendered browser inspection passed.
 - The existing design was preserved. Phase 2 has not started.
+
+## Phase 2 verification addendum — 2026-08-31
+
+- Phase 2 reuses the Phase 1 source collections and adds `transactions`, `recurringTransactions`, `savings`, and `financialSnapshots`; no destructive migration or parallel source of truth was introduced.
+- The real-Mongo full suite passed all 78 tests in 17 files with no skips. Evidence covers owner-scoped CRUD and references, idempotency/conflicts, pagination, BSON int64 mapping, indexes, audit, snapshot isolation, safe export views, and prior Phase 0/1 regressions.
+- A real Google callback and MongoDB-backed Auth.js session drove the protected Playwright journey. The Hebrew/RTL UI created and reloaded exact manual account and transaction amounts, then captured an immutable source manifest. A database read-only check matched both record owners to the active session without printing identifiers or tokens.
+- The initial callback retry failure was operational: the local server process lacked outbound HTTPS permission and Google discovery failed with `EACCES`. Restarting only port 3001 with outbound access restored the unchanged OAuth security architecture. The acceptance journey then exposed and fixed an async form-reference lifecycle defect.
+- Strict type-check, zero-warning lint, production build, security-header/unauthenticated-route smoke checks, and the registry-backed audit with zero vulnerabilities passed. `.env.local` remained ignored and untracked.
+- Phase 2 is accepted. Phase 3 remains blocked on the documented product decisions for forecast-confidence semantics and the exact Safe to Spend horizon/policy; no engine implementation may encode guesses for them.
 
 ## Open product/engineering questions
 

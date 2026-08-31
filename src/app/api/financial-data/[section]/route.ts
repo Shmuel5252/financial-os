@@ -7,14 +7,15 @@ import { errorResponse, noStoreJson } from "@/lib/http/route-response";
 import {
   createManualRecordCommandSchema,
   deleteManualRecordCommandSchema,
-  parseOnboardingSection,
+  manualRecordPageQuerySchema,
+  parseManualSection,
   toManualRecordView,
   updateManualRecordCommandSchema,
 } from "@/lib/onboarding/manual-record";
 import {
   createManualRecord,
   deleteManualRecord,
-  listManualRecords,
+  listManualRecordPage,
   updateManualRecord,
 } from "@/lib/onboarding/manual-record-service";
 import { consumeMutationRateLimit } from "@/lib/security/rate-limiter";
@@ -27,18 +28,25 @@ type RouteContext = Readonly<{
 }>;
 
 async function resolveSection(context: RouteContext) {
-  const { section } = await context.params;
-  return parseOnboardingSection(section);
+  return parseManualSection((await context.params).section);
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const section = await resolveSection(context);
     const actor = await requireActor();
-    const records = await listManualRecords(actor, section);
+    const url = new URL(request.url);
+    const cursor = url.searchParams.get("cursor");
+    const limit = url.searchParams.get("limit");
+    const pageRequest = parseUntrusted(manualRecordPageQuerySchema, {
+      ...(cursor === null ? {} : { cursor }),
+      ...(limit === null ? {} : { limit }),
+    });
+    const page = await listManualRecordPage(actor, section, pageRequest);
 
     return noStoreJson({
-      records: records.map(toManualRecordView),
+      nextCursor: page.nextCursor,
+      records: page.records.map(toManualRecordView),
     });
   } catch (error) {
     return errorResponse(error);
@@ -50,7 +58,7 @@ export async function POST(request: Request, context: RouteContext) {
     assertTrustedMutationOrigin(request);
     const section = await resolveSection(context);
     const actor = await requireActor();
-    await consumeMutationRateLimit(actor, `onboarding-${section}`);
+    await consumeMutationRateLimit(actor, `financial-data-${section}`);
     const command = parseUntrusted(
       createManualRecordCommandSchema,
       await readJsonBody(request),
@@ -73,7 +81,7 @@ export async function PUT(request: Request, context: RouteContext) {
     assertTrustedMutationOrigin(request);
     const section = await resolveSection(context);
     const actor = await requireActor();
-    await consumeMutationRateLimit(actor, `onboarding-${section}`);
+    await consumeMutationRateLimit(actor, `financial-data-${section}`);
     const command = parseUntrusted(
       updateManualRecordCommandSchema,
       await readJsonBody(request),
@@ -97,7 +105,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     assertTrustedMutationOrigin(request);
     const section = await resolveSection(context);
     const actor = await requireActor();
-    await consumeMutationRateLimit(actor, `onboarding-${section}`);
+    await consumeMutationRateLimit(actor, `financial-data-${section}`);
     const command = parseUntrusted(
       deleteManualRecordCommandSchema,
       await readJsonBody(request),

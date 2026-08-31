@@ -1,9 +1,12 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import {
   type Collection,
   type Db,
   type Document,
+  MongoServerError,
   ObjectId,
 } from "mongodb";
 
@@ -37,7 +40,10 @@ export type ManualRecordDocument = {
   createdAt: Date;
   deletedAt: Date | null;
   fields: Document;
-  source: "manual";
+  idempotencyKeyHash?: string;
+  idempotencyPayloadHash?: string;
+  schemaVersion?: number;
+  source: "manual" | Readonly<{ kind: "manual" }>;
   updatedAt: Date;
   userId: ObjectId;
   version: number;
@@ -50,8 +56,21 @@ const sectionCollections: Readonly<Record<ManualSection, string>> = {
   goals: "goals",
   income: "incomeSources",
   loans: "loans",
+  recurring_transactions: "recurringTransactions",
   safety_margin: "safetyMargins",
+  savings: "savings",
+  transactions: "transactions",
 };
+
+export type ManualRecordPage = Readonly<{
+  nextCursor: string | null;
+  records: readonly ManualRecord[];
+}>;
+
+export type ManualRecordPageRequest = Readonly<{
+  cursor?: string | undefined;
+  limit: number;
+}>;
 
 function isDomainMoney(
   value: unknown,
@@ -126,6 +145,40 @@ function toStoredFields(fields: ManualFields): Document {
   return stored;
 }
 
+function stableSerializableValue(value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(stableSerializableValue);
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([first], [second]) => first.localeCompare(second))
+        .map(([key, item]) => [key, stableSerializableValue(item)]),
+    );
+  }
+
+  return value;
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function idempotencyHashes(
+  key: string,
+  fields: ManualFields,
+): Readonly<{ keyHash: string; payloadHash: string }> {
+  return {
+    keyHash: sha256(key),
+    payloadHash: sha256(JSON.stringify(stableSerializableValue(fields))),
+  };
+}
+
 function mapDocument(
   section: ManualSection,
   document: ManualRecordDocument,
@@ -145,6 +198,7 @@ function mapDocument(
     fields: validateManualFields(section, fromStoredValue(document.fields)),
     id: document._id.toHexString(),
     section,
+    source: { kind: "manual" },
     updatedAt: document.updatedAt,
     version: document.version,
   };
@@ -159,9 +213,40 @@ export class ManualRecordRepository {
 
   async ensureIndexes(): Promise<void> {
     await this.collection.createIndex(
-      { userId: 1, deletedAt: 1, updatedAt: -1 },
-      { name: `${this.section}_owner_active_updated` },
+      { userId: 1, deletedAt: 1, _id: -1 },
+      { name: `${this.section}_owner_active_page` },
     );
+    await this.collection.createIndex(
+      { userId: 1, idempotencyKeyHash: 1 },
+      {
+        name: `${this.section}_owner_idempotency`,
+        partialFilterExpression: { idempotencyKeyHash: { $type: "string" } },
+        unique: true,
+      },
+    );
+    await this.collection.createIndex(
+      { userId: 1, _id: 1, deletedAt: 1, version: 1 },
+      { name: `${this.section}_owner_record_version` },
+    );
+
+    if (this.section === "transactions") {
+      await this.collection.createIndex(
+        { userId: 1, deletedAt: 1, "fields.date": -1, _id: -1 },
+        { name: "transactions_owner_date" },
+      );
+    }
+
+    if (this.section === "recurring_transactions") {
+      await this.collection.createIndex(
+        {
+          userId: 1,
+          deletedAt: 1,
+          "fields.nextOccurrenceDate": 1,
+          _id: 1,
+        },
+        { name: "recurring_transactions_owner_next_occurrence" },
+      );
+    }
 
     if (this.section === "safety_margin") {
       await this.collection.createIndex(
@@ -176,23 +261,99 @@ export class ManualRecordRepository {
   }
 
   async listForActor(actor: Actor): Promise<readonly ManualRecord[]> {
+    return (await this.listPageForActor(actor, { limit: 100 })).records;
+  }
+
+  async listPageForActor(
+    actor: Actor,
+    request: ManualRecordPageRequest,
+  ): Promise<ManualRecordPage> {
+    const cursor =
+      request.cursor === undefined
+        ? undefined
+        : parseObjectId(request.cursor, "cursor");
+    const documents = await this.collection
+      .find({
+        ...(cursor === undefined ? {} : { _id: { $lt: cursor } }),
+        deletedAt: null,
+        userId: parseObjectId(actor.userId, "actor.userId"),
+      })
+      .sort({ _id: -1 })
+      .limit(request.limit + 1)
+      .toArray();
+
+    const hasNextPage = documents.length > request.limit;
+    const pageDocuments = hasNextPage
+      ? documents.slice(0, request.limit)
+      : documents;
+
+    return {
+      nextCursor: hasNextPage
+        ? (pageDocuments.at(-1)?._id.toHexString() ?? null)
+        : null,
+      records: pageDocuments.map((document) =>
+        mapDocument(this.section, document),
+      ),
+    };
+  }
+
+  async listAllForActor(
+    actor: Actor,
+    maximumRecords = 10_000,
+  ): Promise<readonly ManualRecord[]> {
     const documents = await this.collection
       .find({
         deletedAt: null,
         userId: parseObjectId(actor.userId, "actor.userId"),
       })
-      .sort({ createdAt: 1, _id: 1 })
-      .limit(100)
+      .sort({ _id: 1 })
+      .limit(maximumRecords + 1)
       .toArray();
 
+    if (documents.length > maximumRecords) {
+      throw new DependencyUnavailableError(
+        "The owned data set is too large for the bounded manual export.",
+      );
+    }
+
     return documents.map((document) => mapDocument(this.section, document));
+  }
+
+  async existsForActor(actor: Actor, recordId: string): Promise<boolean> {
+    return (
+      (await this.collection.countDocuments(
+        {
+          _id: parseObjectId(recordId),
+          deletedAt: null,
+          userId: parseObjectId(actor.userId, "actor.userId"),
+        },
+        { limit: 1 },
+      )) === 1
+    );
   }
 
   async createForActor(
     actor: Actor,
     fields: ManualFields,
+    idempotencyKey: string,
   ): Promise<ManualRecord> {
     const actorUserId = parseObjectId(actor.userId, "actor.userId");
+    const hashes = idempotencyHashes(idempotencyKey, fields);
+    const previous = await this.collection.findOne({
+      idempotencyKeyHash: hashes.keyHash,
+      userId: actorUserId,
+    });
+
+    if (previous !== null) {
+      if (previous.idempotencyPayloadHash !== hashes.payloadHash) {
+        throw new ConflictError(
+          "The idempotency key was already used for different data.",
+        );
+      }
+
+      return mapDocument(this.section, previous);
+    }
+
     const now = this.now();
     const document: ManualRecordDocument = {
       _id: new ObjectId(),
@@ -209,7 +370,10 @@ export class ManualRecordRepository {
       createdAt: now,
       deletedAt: null,
       fields: toStoredFields(fields),
-      source: "manual",
+      idempotencyKeyHash: hashes.keyHash,
+      idempotencyPayloadHash: hashes.payloadHash,
+      schemaVersion: 2,
+      source: { kind: "manual" },
       updatedAt: now,
       userId: actorUserId,
       version: 1,
@@ -218,6 +382,20 @@ export class ManualRecordRepository {
     try {
       await this.collection.insertOne(document);
     } catch (error) {
+      if (error instanceof MongoServerError && error.code === 11000) {
+        const concurrent = await this.collection.findOne({
+          idempotencyKeyHash: hashes.keyHash,
+          userId: actorUserId,
+        });
+
+        if (
+          concurrent !== null &&
+          concurrent.idempotencyPayloadHash === hashes.payloadHash
+        ) {
+          return mapDocument(this.section, concurrent);
+        }
+      }
+
       if (
         this.section === "safety_margin" &&
         typeof error === "object" &&

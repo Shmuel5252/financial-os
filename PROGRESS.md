@@ -1,5 +1,50 @@
 # Financial OS Progress
 
+## Phase 2 — Core Financial Data Foundation
+
+**Status:** Complete — all Phase 2 acceptance criteria verified and accepted.
+
+**Started:** 2026-08-31
+
+**Verified:** 2026-08-31
+
+**Scope boundary:** Phase 2 source-data storage and management only. No cash-flow engine, recurrence expansion, forecasting, Safe to Spend calculation, Claude, Open Banking, dashboard, household, gamification, or other later-phase behavior was implemented.
+
+### Implemented
+
+- Extended the Phase 1 manual-data architecture without duplicating financial truth. Existing `accounts`, `incomeSources`, `creditCards`, `recurringExpenses`, and `loans` collections remain authoritative; Phase 2 adds `transactions`, `recurringTransactions`, `savings`, and `financialSnapshots`.
+- Added closed Zod schemas and invariants for actual income/expense/transfer transactions, explicit recurring-transaction definitions, and liquid/fixed-term savings. Transfers require two distinct owned accounts; recurrence dates and fixed-term maturity are validated deterministically.
+- Preserved exact money as decimal input -> domain `bigint` minor units -> MongoDB BSON `Long` -> JSON minor-unit strings. Phase 2 browser and database verification included values beyond JavaScript's safe-integer range and exact reload checks.
+- Added authenticated Phase 2 management pages and APIs for accounts, transactions, recurring transactions, incomes, recurring expenses, credit cards, loans/debts, and savings. All Financial OS-controlled copy is Hebrew, the document remains RTL, and currency/date/numeric values are LTR-isolated.
+- Added cursor pagination with bounded page sizes, bounded full-data reads for exports/snapshots, optimistic concurrency, recoverable soft deletion, entity-local audit events, and user-prefixed query/version/date indexes.
+- Added create idempotency using per-owner SHA-256 key hashes and payload hashes. Exact retries return the original result; reuse of the same key for different data returns a conflict. Raw idempotency keys are not persisted.
+- Added server-side validation of transaction account references. Every referenced account must be active and owned by the authenticated actor; destination accounts are accepted only for transfers.
+- Added immutable versioned `source_manifest` snapshots. Phase 2 snapshots record the exact source record IDs, versions, and update timestamps included, but deliberately contain no calculated balance, forecast, timeline, or Safe to Spend result.
+- Added a bounded owner-only JSON export that contains public profile/record view models but excludes `userId`, audit trails, idempotency hashes, Auth.js records, tokens, and provider secrets. Responses are no-store, attachment-marked, and MIME-sniff protected.
+- Preserved backward compatibility for Phase 1 records whose stored source metadata used the earlier string representation; new records use `{ kind: "manual" }` without rewriting or destructively migrating existing data.
+
+### Verification results
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Full automated suite against real MongoDB | Pass | 17 test files and 78 tests passed with no skips. |
+| Phase 2 integration suite | Pass | Real MongoDB verified owner-scoped CRUD, foreign-account rejection, per-owner idempotency, conflict recovery, cursor pagination, BSON `Long`, source metadata, custom indexes, snapshot isolation, and safe exports for two constructed actors. |
+| Real authenticated browser journey | Pass | A real Google OAuth callback returned to Financial OS; the protected Hebrew/RTL data hub loaded; an explicitly labelled synthetic account and transaction were created through the UI, persisted, and reloaded with exact `1.23 ILS` and `2.34 ILS` values; a source snapshot was captured. No auth/session path was mocked. |
+| Database-session ownership evidence | Pass | A read-only database check confirmed an active Auth.js MongoDB session and that both E2E records' owners matched that session user. Their money fields were BSON `Long`, their source was manual, and both had audit entries. No IDs or tokens were printed. |
+| UI failure recovery | Pass | The browser exposed an async React form-lifecycle defect after a successful insert. The form reference is now captured before `await`; rebuild and real-browser retry returned the Hebrew success state and reloaded correctly. |
+| Strict type-check | Pass | `npm run typecheck`: exit 0. |
+| Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
+| Production build | Pass | `npm run build`: exit 0; all Phase 2 pages and APIs compiled as dynamic protected routes. |
+| Dependency audit | Pass | Registry-backed `npm run security:audit`: zero vulnerabilities. |
+| Runtime/security smoke | Pass | Global CSP/frame/MIME headers were present; unauthenticated financial API access returned 401 with `Cache-Control: no-store`; the authenticated server log remained error-free after the fixed OAuth retry and Phase 2 journey. |
+| Secret/Git hygiene | Pass | `.env.local` remained ignored and untracked; no credential value was printed, committed, or prepared for push. |
+
+The authenticated acceptance run intentionally left its clearly labelled synthetic account, transaction, and immutable source snapshot in the authenticated local test profile. No user-owned financial record was automatically deleted.
+
+### Acceptance conclusion
+
+Authorized users can maintain and reload the complete Phase 2 manual source-data set without precision loss. Ownership is derived from the real Auth.js database session, foreign account references fail closed, source mutations are audited, duplicates are controlled by idempotency, lists are bounded, and snapshots/exports remain owner-scoped. Every defined Phase 2 criterion and regression gate passed. Phase 2 is accepted.
+
 ## Hebrew-first / RTL-first localization baseline
 
 **Status:** Complete — permanent pre-Phase-2 product requirement implemented and verified.
