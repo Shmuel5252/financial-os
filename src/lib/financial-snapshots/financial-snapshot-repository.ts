@@ -102,6 +102,7 @@ export class FinancialSnapshotRepository {
       .digest("hex");
     const previous = await this.collection.findOne({
       idempotencyKeyHash,
+      kind: "source_manifest",
       userId: actorUserId,
     });
 
@@ -137,6 +138,7 @@ export class FinancialSnapshotRepository {
       if (error instanceof MongoServerError && error.code === 11000) {
         const concurrent = await this.collection.findOne({
           idempotencyKeyHash,
+          kind: "source_manifest",
           userId: actorUserId,
         });
 
@@ -164,6 +166,7 @@ export class FinancialSnapshotRepository {
     const documents = await this.collection
       .find({
         ...(cursor === undefined ? {} : { _id: { $lt: cursor } }),
+        kind: "source_manifest",
         userId: parseObjectId(actor.userId, "actor.userId"),
       })
       .sort({ _id: -1 })

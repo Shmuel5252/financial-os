@@ -294,6 +294,11 @@ Before doing anything else:
   The exact algorithm belongs to the deterministic Financial Engine and must eventually be thoroughly unit tested.
   Do NOT implement the final Safe to Spend algorithm during Phase 0.
   Preserve the architectural boundary for it.
+  Approved Phase 3 Financial Engine policies (2026-08-31):
+- The default Safe to Spend evaluation horizon is a rolling 30 calendar days from the explicit evaluation point. Horizon is a typed engine input, not a hard-coded architectural constant.
+- Only income with 100% confidence/confirmed certainty may increase core Safe to Spend. Expected or uncertain income remains visible as a separate timeline/result value and never increases the core safety value.
+- A percentage Safety Margin is calculated from confirmed income in the applicable calendar month in the user's configured timezone. Uncertain income is excluded. Integer-minor-unit arithmetic and round-half-to-even apply.
+- When an obligation and income share a calendar date and no reliable timestamp establishes order, the obligation is processed first. Future reliable timestamps may replace this conservative fallback with actual chronological ordering.
   The application must ultimately be fully useful without Open Banking.
   Manual financial data is a first-class source, not a temporary fake implementation.
   Future Open Banking data should flow through normalization boundaries into the same domain model rather than creating an entirely separate financial system.

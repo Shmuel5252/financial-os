@@ -1,5 +1,50 @@
 # Financial OS Progress
 
+## Phase 3 — Deterministic Financial Engine
+
+**Status:** Complete — all Phase 3 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.
+
+**Started:** 2026-08-31
+
+**Verified:** 2026-08-31
+
+**Scope boundary:** Phase 3 pure financial calculation and owned snapshot orchestration only. No dashboard/read-model UI, budgets, Claude, Open Banking, longer-range forecast product, household, gamification, or other later-phase functionality was implemented.
+
+### Implemented
+
+- Recorded the approved horizon, uncertainty, percentage-margin, and same-day-order policies in the Master Plan, implementation plan, architecture, and ADR-029 before treating them as invariants.
+- Added a pure versioned financial engine with explicit `asOf`, IANA timezone, currency, 1–366-day horizon, exact-money balances, typed events, monthly confirmed-income basis, and fixed/percentage Safety Margin inputs. The product default is 30 rolling calendar days; calculation architecture is not fixed to that value.
+- Added anchored recurrence expansion for one-time, irregular, weekly, biweekly, monthly, quarterly, and annual schedules. Short months clamp from the original anchor rather than drifting. Cards become one billing obligation; loan installments are monthly and the final payment is capped at remaining principal.
+- Implemented deterministic ordering and balance projection. Reliable UTC timestamps order chronologically; otherwise a same-date obligation precedes income. The engine tracks confirmed and expected balances separately, evaluates the minimum confirmed balance across the full timeline, and derives non-negative Safe to Spend plus an explicit shortfall.
+- Enforced the 100%-certainty rule. Confirmed income may affect core safety; uncertain income is preserved in timeline/totals/expected balance but cannot raise Safe to Spend. Percentage margins use confirmed income in each applicable user-timezone calendar month and exact round-half-to-even minor-unit arithmetic.
+- Added exact monthly realized/forecast metrics, account/available-cash/savings/debt/credit summaries, and credit utilization without floating-point money arithmetic.
+- Added conservative Phase 2 source mapping under ADR-030: current bank/cash liquidity is not mutated by replaying historical transactions; restricted-destination and non-confirmed income do not fund core safety; recurring income without certainty remains uncertain; detailed savings avoid legacy savings double-counting; and separate source records remain separate auditable events.
+- Extended `financialSnapshots` with immutable owned `engine_result` documents linked to immutable source manifests. Results store engine/policy versions, canonical SHA-256 input hash, exact BSON `Long` money, audit metadata, and JSON-safe views. Source/result queries discriminate by both owner and kind.
+- Added authenticated, origin-protected, rate-limited, no-store `GET`/`POST /api/financial-engine/snapshots` orchestration. The route derives the actor from Auth.js and accepts no ownership field; all source reads and snapshot writes remain server-only.
+
+### Verification results
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Full automated suite against real MongoDB | Pass | 21 test files and 96 tests passed with no skips. |
+| Phase 3 deterministic unit suite | Pass | 83 total unit tests passed. Engine fixtures cover the approved four policies, alternative horizons, negative balances/shortfall, exact monthly metrics, timeline minima, timestamp fallback/override, int64 overflow, repeated safety invariants, missing data, duplicate obligations, recurrence anchors, leap years, cards, and capped loan installments. |
+| Phase 3 real-Mongo integration | Pass | 13 total integration tests passed. Two actors verified owned source assembly and isolated engine/manifest listings; results persisted as BSON `Long`; audit/source-manifest linkage included Safety Margin; exact retries were idempotent; changed-input key reuse conflicted; and independent identical inputs produced identical hashes/results. |
+| Strict type-check | Pass | `npm run typecheck`: exit 0. |
+| Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
+| Production build | Pass | `npm run build`: exit 0; `/api/financial-engine/snapshots` compiled as a dynamic server route. |
+| Dependency audit | Pass | Registry-backed `npm run security:audit`: zero vulnerabilities. |
+| Runtime/security smoke | Pass | Production build on port 3001 returned health 200; unauthenticated engine access failed closed with 401 and `no-store`; MIME/frame security headers remained present. Port 3000 was not modified. |
+| Authentication boundary | Pass at inherited verified boundary | No Phase 3 auth path was mocked or weakened. The route uses the same real Auth.js server-derived actor boundary accepted in Phases 1–2; Phase 3 did not require a new interactive provider flow. |
+| Secret/Git hygiene | Pass | `.env.local` remained ignored and untracked; no secret value was printed, logged, staged, or included in source. Tracked code uses no public secret variables. |
+
+### Acceptance conclusion
+
+Phase 3 is fully accepted. Safe to Spend is deterministic, conservative, exact, reproducible from the same typed input, provenance-linked, and owner-isolated. All Phase 0–2, authentication, security, data-integrity, and Hebrew/RTL regressions remain green. No Phase 4 code was pulled forward.
+
+### Exact next milestone
+
+Phase 4 — Financial Dashboard. Under the owner's autonomous progression authorization, Phase 4 may begin only after this verified Phase 3 change is committed and pushed to `origin/main`.
+
 ## Phase 2 — Core Financial Data Foundation
 
 **Status:** Complete — all Phase 2 acceptance criteria verified and accepted.

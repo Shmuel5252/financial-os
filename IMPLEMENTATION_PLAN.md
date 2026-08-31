@@ -49,9 +49,13 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 3 — Deterministic financial engine
 
+**Policy gate approved (2026-08-31):** Default rolling 30-calendar-day explicit horizon; only 100%-confirmed income may increase core Safe to Spend; uncertain income remains separate; percentage Safety Margin uses confirmed income in the applicable user-timezone calendar month with exact half-even minor-unit rounding; same-day obligations precede income when no reliable timestamp exists.
+
+**Acceptance status (2026-08-31): Complete and verified.** The versioned pure engine and owner-scoped snapshot orchestration pass 83 unit tests and 13 real-Mongo integration tests as part of the 96-test full suite, plus strict type, lint, production-build, runtime security, and dependency-audit gates recorded in `PROGRESS.md`.
+
 - **Objective:** Produce tested cash flow, timeline, future balance, safety margin, monthly metrics, and Safe to Spend as financial truth.
 - **Scope:** Pure engine and snapshot orchestration; no AI calculation.
-- **Dependencies:** Phase 2 normalized financial data; approved horizon, uncertainty, and safety policies.
+- **Dependencies:** Phase 2 normalized financial data; the approved horizon, uncertainty, margin-basis, and same-day-order policies recorded above.
 - **Major tasks:** Define typed inputs/outputs; recurrence expansion; event ordering; minimum-future-balance algorithm; deterministic rounding; versioned snapshot calculation.
 - **Data/model implications:** Persist engine/version/as-of/input-hash outputs; source records remain truth inputs.
 - **Security:** Services load only authorized data; snapshots are owned; logs omit raw data.

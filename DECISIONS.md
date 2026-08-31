@@ -181,6 +181,27 @@ This log records durable product and architecture decisions. Status is `accepted
 - **Alternatives:** Persisting guessed calculated fields was rejected as Phase 3 work and false financial truth. Storing one unbounded copy of every full financial record in a snapshot was rejected because it recreates giant-document drift and MongoDB document-size risk. A non-versioned count-only snapshot was rejected because it cannot identify which record revisions were represented.
 - **Consequences:** Phase 3 may add versioned calculated outputs associated with a source manifest and input hash after policy approval. Reproducing historical values after source mutation will require a reviewed event/version retention design; the Phase 2 manifest detects version drift but does not pretend to preserve a full historical ledger.
 
+## ADR-029 — Phase 3 Safe to Spend policy package
+
+- **Decision:** Use an explicit horizon input with a rolling 30-calendar-day default. Only 100%-confirmed income may increase core Safe to Spend; uncertain income remains separately visible. Calculate percentage Safety Margin from confirmed income in the applicable calendar month in the user's configured timezone with integer-minor-unit, round-half-to-even arithmetic. When an obligation and income share a calendar date without reliable timestamps, order the obligation first; actual timestamps may supersede this fallback later.
+- **Reasoning:** Safe to Spend is a safety value, so uncertain income cannot fund present spending. A typed horizon prevents the 30-day product default from constraining future 7/14/60/90-day views. Calendar-month margin basis must follow the user's timezone. Conservative same-day ordering prevents an unknown intraday sequence from hiding a temporary safety violation.
+- **Alternatives:** Probability-weighting uncertain income into core Safe to Spend was rejected because an expected value is not guaranteed liquidity. Hard-coding 30 days inside the algorithm was rejected because horizon is policy. Income-first same-day ordering was rejected because it assumes unavailable timing evidence. Floating-point percentage multiplication was rejected under the canonical money invariant.
+- **Consequences:** Engine inputs and outputs explicitly distinguish confirmed and uncertain events. Tests must prove that uncertain income never raises core Safe to Spend, horizon changes do not require engine changes, half-even margin rounding is deterministic, month/timezone selection is correct, and obligations win same-day fallback ties. Phase 4 may present additional horizons but must not reimplement these calculations.
+
+## ADR-030 — Conservative Phase 2 source-to-engine mapping
+
+- **Decision:** Define Phase 3 available cash as bank-plus-cash account balances and the displayed account balance as bank accounts. Use detailed `savings` records when present, otherwise fall back to onboarding accounts typed as savings; never add both without a shared identity. Treat actual transactions as realized monthly metrics, not future balance movements. Only 10,000-basis-point scheduled income directed to bank/cash becomes confirmed engine income. Preserve lower-certainty income and recurring-transaction income without a certainty field as uncertain. Exclude savings/investment-destination income from available-cash events. Treat separate source records as separate events even when their visible fields match.
+- **Reasoning:** Current balances already incorporate realized transactions, so replay would double-count. Savings records and savings-typed accounts have no approved linkage, so adding both could duplicate assets. Income without explicit 100% certainty cannot satisfy ADR-029. Field-similarity deduplication could silently erase real obligations; counting separately is the conservative and auditable choice until source identity/linking exists.
+- **Alternatives:** Replaying actual transactions, assuming recurring income is confirmed, including restricted-destination income in liquidity, adding both savings representations, and heuristic deduplication were rejected as unsafe or untraceable.
+- **Consequences:** Phase 4 must label these metrics consistently and must not recalculate them. A future source-linking/migration policy may refine deduplication or savings precedence, but must version the engine/policy and preserve existing snapshot interpretation.
+
+## ADR-031 — Versioned calculated snapshots share the manifest collection
+
+- **Decision:** Extend `financialSnapshots` with an immutable, discriminated schema-version-1 `engine_result` document rather than create another truth collection. Store owner, calculation audit metadata, source-manifest ID, engine/policy versions, canonical input hash, and exact BSON-int64 result. Source and result queries always include both owner and `kind`; idempotency hashes are derived separately for the paired manifest and result writes.
+- **Reasoning:** ADR-028 intentionally reserved this extension. Co-locating immutable snapshot kinds preserves one snapshot boundary while explicit discriminators prevent mapping confusion. Linking the result to exact source record revisions and hashing canonical input makes provenance and deterministic comparison testable.
+- **Alternatives:** Mutating a Phase 2 source manifest in place was rejected because manifests are immutable. Persisting only a computed value was rejected because it loses timeline, policy, and provenance. A UI-only calculation was rejected because it violates engine truth, ownership, and auditability.
+- **Consequences:** The standalone MongoDB deployment cannot atomically write both documents; a failed result write may leave an owner-only source manifest but never a false result. Historical reconstruction still requires future source-version retention; Phase 3 proves reproducibility when the same typed input is available and records its hash/version honestly.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.
@@ -225,7 +246,7 @@ This log records durable product and architecture decisions. Status is `accepted
 - A real Google callback and MongoDB-backed Auth.js session drove the protected Playwright journey. The Hebrew/RTL UI created and reloaded exact manual account and transaction amounts, then captured an immutable source manifest. A database read-only check matched both record owners to the active session without printing identifiers or tokens.
 - The initial callback retry failure was operational: the local server process lacked outbound HTTPS permission and Google discovery failed with `EACCES`. Restarting only port 3001 with outbound access restored the unchanged OAuth security architecture. The acceptance journey then exposed and fixed an async form-reference lifecycle defect.
 - Strict type-check, zero-warning lint, production build, security-header/unauthenticated-route smoke checks, and the registry-backed audit with zero vulnerabilities passed. `.env.local` remained ignored and untracked.
-- Phase 2 is accepted. Phase 3 remains blocked on the documented product decisions for forecast-confidence semantics and the exact Safe to Spend horizon/policy; no engine implementation may encode guesses for them.
+- Phase 2 is accepted. At its acceptance boundary, Phase 3 remained blocked on the documented product decisions for confidence semantics and the exact Safe to Spend horizon/policy; the owner subsequently resolved that gate in ADR-029 before engine implementation began.
 
 ## Open product/engineering questions
 
@@ -233,4 +254,4 @@ This log records durable product and architecture decisions. Status is `accepted
 - Audit retention versus full account deletion needs legal/privacy input before production.
 - The licensed Open Banking provider, jurisdiction, token-encryption/KMS design, and consent requirements remain undecided.
 - Household private/shared resource semantics need product rules before Phase 11.
-- Forecast confidence semantics and the precise Safe to Spend horizon/policy need product approval during Phase 3, backed by deterministic fixtures.
+- Phase 3 core income-confidence, horizon, margin-basis, and same-day-order policies are resolved by ADR-029. Phase 12 forecast-range/confidence presentation remains a later product decision.

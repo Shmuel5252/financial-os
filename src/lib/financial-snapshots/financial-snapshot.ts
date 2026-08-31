@@ -11,6 +11,7 @@ export const financialSnapshotSections = [
   "cards",
   "loans",
   "savings",
+  "safety_margin",
 ] as const satisfies readonly ManualSection[];
 
 export const createFinancialSnapshotCommandSchema = z.object({
