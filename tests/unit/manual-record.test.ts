@@ -169,6 +169,41 @@ describe("manual onboarding financial records", () => {
     ).toThrow(InputValidationError);
   });
 
+  it("requires refunds to reference an original transaction", () => {
+    const base = {
+      accountId: "507f1f77bcf86cd799439011",
+      amount: { amount: "50", currency: "ILS" },
+      category: "food",
+      confidenceBps: 10_000,
+      date: "2026-08-31",
+      destinationAccountId: null,
+      merchant: "Refund",
+      notes: null,
+      recurring: false,
+      type: "refund",
+    };
+
+    expect(() => parseManualFields("transactions", base)).toThrow(
+      InputValidationError,
+    );
+    expect(
+      parseManualFields("transactions", {
+        ...base,
+        refundOfTransactionId: "507f191e810c19729de860ea",
+      }),
+    ).toMatchObject({
+      refundOfTransactionId: "507f191e810c19729de860ea",
+      type: "refund",
+    });
+    expect(() =>
+      parseManualFields("transactions", {
+        ...base,
+        refundOfTransactionId: "507f191e810c19729de860ea",
+        type: "expense",
+      }),
+    ).toThrow(InputValidationError);
+  });
+
   it("rejects ambiguous recurrence dates", () => {
     expect(() =>
       parseManualFields("recurring_transactions", {

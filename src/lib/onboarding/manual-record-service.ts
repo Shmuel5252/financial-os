@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { Actor } from "@/lib/auth/actor";
-import { InputValidationError } from "@/lib/errors/application-error";
+import {
+  ConflictError,
+  InputValidationError,
+} from "@/lib/errors/application-error";
 import {
   collectMoneyValues,
   parseManualFields,
@@ -117,6 +120,43 @@ async function assertOwnedAccountReferences(
   }
 }
 
+async function assertOwnedRefundReference(
+  actor: Actor,
+  section: ManualSection,
+  fields: ReturnType<typeof parseManualFields>,
+  dependencies?: ManualRecordDependencies,
+): Promise<void> {
+  if (section !== "transactions") {
+    return;
+  }
+
+  const value = fields as Readonly<Record<string, unknown>>;
+  const refundOfTransactionId = value.refundOfTransactionId;
+  if (typeof refundOfTransactionId !== "string") {
+    return;
+  }
+
+  const repository =
+    dependencies?.repository ??
+    (await getManualRecordRepository("transactions"));
+  const original = await repository.findForActor(
+    actor,
+    refundOfTransactionId,
+  );
+  const originalFields = original?.fields as
+    | Readonly<Record<string, unknown>>
+    | undefined;
+
+  if (originalFields?.type !== "expense") {
+    throw new InputValidationError([
+      {
+        field: "refundOfTransactionId",
+        message: "The refund must reference an owned expense transaction.",
+      },
+    ]);
+  }
+}
+
 export async function listManualRecords(
   actor: Actor,
   section: ManualSection,
@@ -145,6 +185,7 @@ export async function createManualRecord(
 ): Promise<ManualRecord> {
   const fields = await parseAndAuthorizeFields(actor, section, input, dependencies);
   await assertOwnedAccountReferences(actor, section, fields, dependencies);
+  await assertOwnedRefundReference(actor, section, fields, dependencies);
   const { repository } = await resolveDependencies(section, dependencies);
   return repository.createForActor(actor, fields, idempotencyKey);
 }
@@ -159,7 +200,24 @@ export async function updateManualRecord(
 ): Promise<ManualRecord> {
   const fields = await parseAndAuthorizeFields(actor, section, input, dependencies);
   await assertOwnedAccountReferences(actor, section, fields, dependencies);
+  await assertOwnedRefundReference(actor, section, fields, dependencies);
   const { repository } = await resolveDependencies(section, dependencies);
+  if (section === "transactions") {
+    const existing = await repository.findForActor(actor, recordId);
+    const existingFields = existing?.fields as
+      | Readonly<Record<string, unknown>>
+      | undefined;
+    const nextFields = fields as Readonly<Record<string, unknown>>;
+
+    if (
+      typeof existingFields?.category === "string" &&
+      existingFields.category !== nextFields.category
+    ) {
+      throw new ConflictError(
+        "Transaction categories must be corrected through immutable correction evidence.",
+      );
+    }
+  }
   return repository.updateForActor(
     actor,
     recordId,

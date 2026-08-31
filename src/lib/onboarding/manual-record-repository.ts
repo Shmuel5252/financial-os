@@ -332,6 +332,19 @@ export class ManualRecordRepository {
     );
   }
 
+  async findForActor(
+    actor: Actor,
+    recordId: string,
+  ): Promise<ManualRecord | null> {
+    const document = await this.collection.findOne({
+      _id: parseObjectId(recordId),
+      deletedAt: null,
+      userId: parseObjectId(actor.userId, "actor.userId"),
+    });
+
+    return document === null ? null : mapDocument(this.section, document);
+  }
+
   async createForActor(
     actor: Actor,
     fields: ManualFields,

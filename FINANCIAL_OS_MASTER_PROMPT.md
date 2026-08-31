@@ -748,6 +748,17 @@ Salary = 10,000
 Unallocated:
 0
 
+Approved Phase 5 budget policy:
+
+- Budget taxonomy is hybrid: Financial OS ships stable system/default category identifiers, while users may create custom categories and customize user-facing labels, visibility, and order without changing referential identities.
+- Only confirmed income is allocatable in the real zero-based budget. Expected or uncertain income is excluded from real allocation and may appear only in an explicitly separate scenario/planning layer.
+- Over-allocation is allowed and represented exactly as negative unallocated money / a budget deficit. The deterministic engine, never AI, calculates this truth.
+- Rollover is configured per category and defaults to `reset`. Reset categories carry neither positive nor negative remaining amounts into the next month, while preserving the completed month's full surplus/deficit history. Rollover categories carry positive and negative amounts under their stored rollover rules.
+- Same-period refunds reduce that period's category spending. Later-period refunds belong to their actual received period and should link to the original transaction where possible; they do not rewrite a closed earlier period.
+- Category corrections create immutable correction/adjustment/audit evidence. Reports may present corrected classification and totals, but the original fact, change time, actor, and reason remain explainable.
+- The core conservative forecast uses confirmed financial truth only. Uncategorized transactions always affect cash truth fully even when they do not yet contribute to a named category budget.
+- Scenario/goal forecasts are separate hypothetical calculations supporting forward simulation and target-seeking. Hypothetical or unrealized income, expense changes, and investment gains never contaminate confirmed balances, allocations, or the core forecast. Deterministic engines calculate numerical truth; future AI may only explain or recommend from those outputs.
+
 מסך ייעודי.
 
 כל Card:

@@ -1,5 +1,55 @@
 # Financial OS Progress
 
+## Phase 5 — Budgets and Monthly Allocation
+
+**Status:** Complete — all Phase 5 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.
+
+**Started:** 2026-08-31
+
+**Verified:** 2026-08-31
+
+**Scope boundary:** Phase 5 budget taxonomy, monthly allocation, rollover, refund/correction reporting, and explicitly separate deterministic scenarios only. No Phase 6 goal strategy/progress history, purchase-impact simulation, Claude, Open Banking, notifications, household behavior, gamification, or later-phase functionality was implemented.
+
+### Implemented
+
+- Recorded the owner's approved Phase 5 policies in both synchronized Master Plan copies, the implementation plan, architecture, and ADR-033 before using them as invariants.
+- Added a pure exact-money budget engine. Real allocations use confirmed income only and reconcile as `confirmed income - allocations = signed unallocated`; over-allocation remains valid and is displayed as a highly visible negative deficit. Expected income is reported separately and cannot raise real allocatable money.
+- Added hybrid categories with stable internal system/custom identifiers and user-controlled labels, visibility, order, and per-category rollover. System defaults are available without duplicating records; custom categories and overrides are owner-scoped. The default policy is `reset`, while `carry` forwards the exact signed prior remainder.
+- Added owner-scoped `budgetCategories`, `budgetPeriods`, and append-only `budgetCategoryCorrections` repositories with owner-first indexes, bounded reads, BSON `Long` money, idempotent custom-category creation/correction commands, optimistic period/category updates, and entity-local audit evidence.
+- Added open-period save and completed-month close behavior. Closing freezes exact allocation/results and rollover evidence; a later period prevents retroactive save/close of an earlier period. Reset categories carry zero, carry categories preserve both positive and negative remainders, and historical overspending remains visible.
+- Added refund semantics to actual transactions. A refund must link to an owned expense, reduces category spending in its actual calendar period, and never rewrites an earlier closed period. Refunds do not become confirmed-income basis.
+- Prevented silent category rewrites on transactions. Category corrections append immutable evidence with original/corrected identity, actor, reason, and time; reporting projects corrected classifications while retaining source facts.
+- Added a separate deterministic scenario/target-gap calculation. It starts from the latest actor-owned Phase 3 conservative result, accepts hypothetical income, uncertain income, expense reductions, investment proceeds, and additional expenses, and never persists them as real transactions, balances, allocations, or engine inputs.
+- Added protected, no-store category/period/correction/scenario APIs and a protected Hebrew/RTL `/budgets` planner with exact LTR money/date values, deficit disclosure, category settings, close-state explanation, corrections, and scenario separation. Dashboard and financial-data navigation now link to the planner.
+- Extended the bounded owner-only financial export with budget periods, categories, and correction evidence while continuing to exclude ownership internals, audit/idempotency material, Auth.js records, and secrets.
+
+### Verification results
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Full automated suite against real MongoDB | Pass | 26 test files and 112 tests passed with no skips when loaded with the ignored real local test configuration. |
+| Phase 5 deterministic/unit suite | Pass | 19 unit files and 96 tests passed. New fixtures cover confirmed/uncertain income separation, exact signed deficits, reset and signed carry, same/later-period refunds, uncategorized cash truth, correction projection, scenario isolation/target gaps, schema invariants, and Hebrew/RTL UI behavior. |
+| Phase 5 real-Mongo integration | Pass | 7 integration files and 16 tests passed. Phase 5 cases verify BSON `Long`, owner-first indexes, optimistic/audited saves, frozen close evidence, rollover chains, immutable corrections, later-period refunds, two-user isolation, and exact scenario separation. |
+| Real authenticated browser journey | Pass | The production `/budgets` page used the retained real Google/Auth.js MongoDB session on port 3001. Through the real UI it created a custom carry category, appended a correction, saved a 100.00 ILS over-allocation against 0.00 confirmed income, displayed `-100.00 ILS` unallocated, calculated a non-persisting scenario, and renamed/reordered/hid the stable category while preserving the saved allocation. No auth, API, repository, or calculation path was mocked. |
+| Historical close acceptance | Pass at the objectively testable boundary | The current browser month was still open and therefore correctly could not be closed. Real-Mongo integration used completed months to verify close eligibility, frozen evidence, reset/signed-carry behavior, later-period protection, post-close correction evidence, and later-period refund recognition. |
+| Hebrew/RTL/accessibility/responsive | Pass | The authenticated production DOM reported `lang="he"`, `dir="rtl"`, 136 explicit LTR isolates, 446px document/client widths with no horizontal overflow, natural Hebrew labels/errors/states, and no browser warnings or errors. |
+| Strict type-check | Pass | `npm run typecheck`: exit 0. |
+| Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
+| Production build | Pass | `npm run build`: exit 0; `/budgets` and all four budget API routes compiled as dynamic server routes. |
+| Dependency audit | Pass | Registry-backed `npm run security:audit`: zero vulnerabilities. |
+| Runtime/security smoke | Pass | The production build served the authenticated planner on port 3001 with no browser/server warnings or errors; responses retained server-derived identity and no-store boundaries. Port 3000 was not modified. |
+| Secret/Git hygiene | Pass | `.env.local` remained ignored and untracked; no secret value was printed, logged, staged, or included in source. |
+
+The authenticated journey created one custom category, one immutable category correction, and one open-period allocation in the existing synthetic local test profile. It did not alter or delete another user's records. Scenario values were not persisted as financial truth.
+
+### Acceptance conclusion
+
+Phase 5 is fully accepted. Current and historical budget truth is exact, deterministic, auditable, user-isolated, and explainable; over-allocation, refunds, corrections, rollover, uncertain income, and scenarios follow the approved policy without weakening Phase 0–4 or Hebrew/RTL guarantees. No Phase 6 behavior was pulled forward.
+
+### Exact next milestone
+
+Phase 6 — Goals and Measurable Progress. Under the owner's autonomous progression authorization, Phase 6 may begin only after this verified Phase 5 change is committed and pushed to `origin/main`.
+
 ## Phase 4 — Financial Dashboard
 
 **Status:** Complete — all Phase 4 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.

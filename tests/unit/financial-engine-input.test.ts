@@ -239,6 +239,23 @@ describe("financial engine Phase 2 source mapping", () => {
           },
           "0".repeat(24),
         ),
+        record(
+          "transactions",
+          {
+            accountId: cashId,
+            amount: money(500n, "ILS"),
+            category: "food",
+            confidenceBps: 10_000,
+            date: "2026-08-31",
+            destinationAccountId: null,
+            merchant: null,
+            notes: null,
+            recurring: false,
+            refundOfTransactionId: "0".repeat(24),
+            type: "refund",
+          },
+          "a".repeat(24),
+        ),
       ],
     } as const;
     const input = buildFinancialEngineInput(
@@ -252,7 +269,7 @@ describe("financial engine Phase 2 source mapping", () => {
     expect(input.availableCash.amountMinor).toBe(120_000n);
     expect(input.savingsBalance.amountMinor).toBe(40_000n);
     expect(input.actualMonthlyIncome.amountMinor).toBe(15_000n);
-    expect(input.actualMonthlyExpenses.amountMinor).toBe(2_000n);
+    expect(input.actualMonthlyExpenses.amountMinor).toBe(1_500n);
     expect(input.creditUsed.amountMinor).toBe(10_000n);
     expect(input.debtBalance.amountMinor).toBe(15_000n);
     expect(

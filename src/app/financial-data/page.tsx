@@ -37,12 +37,14 @@ export default async function FinancialDataPage() {
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <HomeLink />
-        <Link
-          className="text-sm font-semibold text-[var(--accent)]"
-          href="/dashboard"
-        >
-          {messages.navigation.dashboard}
-        </Link>
+        <nav className="flex flex-wrap gap-4" aria-label={messages.financialData.title}>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/budgets">
+            {messages.navigation.budgets}
+          </Link>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/dashboard">
+            {messages.navigation.dashboard}
+          </Link>
+        </nav>
       </div>
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">
         {messages.financialData.eyebrow}

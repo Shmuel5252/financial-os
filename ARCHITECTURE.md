@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-This document defines the implemented architecture through the fully verified Phase 4 acceptance gate and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
+This document defines the implemented architecture through the fully verified Phase 5 acceptance gate and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
 
 | Status | Meaning |
 | --- | --- |
@@ -12,6 +12,7 @@ This document defines the implemented architecture through the fully verified Ph
 | Implemented and verified in Phase 2 | Normalized manual source records, transactions, recurrence definitions, savings, pagination, idempotency, audit, snapshots, exports, and authenticated Hebrew/RTL management passed their stated gates. |
 | Implemented and verified in Phase 3 | The pure deterministic engine, recurrence expansion, conservative event ordering, future balances, Safe to Spend, monthly metrics, and owned versioned result snapshots passed deterministic and real-Mongo gates. |
 | Implemented and verified in Phase 4 | The authenticated Hebrew/RTL dashboard, freshness-aware query view, bounded timeline windows, alerts, manual-goal summary, and explicit refresh journey passed reconciliation, isolation, browser, accessibility, and regression gates. |
+| Implemented and verified in Phase 5 | Exact confirmed-income monthly allocation, stable customizable categories, explicit deficits, signed rollover, actual-period refunds, immutable corrections, and isolated deterministic scenarios passed unit, real-Mongo, authenticated-browser, and regression gates. |
 | Boundary prepared | An interface, module boundary, convention, or configuration seam exists; no provider capability is claimed. |
 | Planned | The product behavior belongs to a later roadmap phase and does not exist yet. |
 
@@ -62,7 +63,16 @@ Dependency flow is inward. UI code may call server actions or route handlers, bu
 - **Calculation boundary preserved:** the dashboard receives serialized Phase 3 result values and performs no money arithmetic. Its query service may filter already-calculated events by date window, calculate an exact delta between two engine results, and select the engine-provided minimum-capacity point; it does not reconstruct Safe to Spend or future balances.
 - **Freshness:** a result is stale when its owner-scoped source manifest no longer matches current source IDs/versions/timestamps, the profile changed after calculation, the associated manifest is unavailable, or the user's configured timezone has entered a new calendar day. Stale values remain visible but are explicitly labelled and paired with an explicit recalculation action.
 - **Payload/accessibility boundary:** client timeline windows are limited to 100 ordered events each and goals to 20 priority-ordered entries with disclosed truncation. The page is dynamic and server-authenticated; no owner or raw Mongo document reaches the client. Hebrew semantic headings/lists/terms/tabs, ARIA relationships/live regions, responsive base layouts, and LTR isolation protect usability without a visual redesign.
-- **Not started:** Phase 5 budgets/allocation, Phase 6 goal intelligence/progress policy, proactive notification delivery, or any later feature. Phase 4 alerts are snapshot-derived on-screen status only; goals show persisted current/target values without inventing progress policy.
+- **At Phase 4 acceptance:** Phase 5 budgets/allocation had not started. Its implemented architecture is recorded separately below. Phase 6 goal intelligence/progress policy, proactive notification delivery, and later features remain unimplemented; Phase 4 alerts are snapshot-derived on-screen status only and goals still show persisted current/target values without inventing progress policy.
+
+### Phase 5 implementation map
+
+- **Implemented:** protected Hebrew/RTL `/budgets`; actor-owned system/custom category views with stable internal IDs; mutable labels, visibility, order, and explicit `reset`/`carry` policy; exact monthly periods and category allocations; visible signed unallocated deficits; actual, planned, remaining, and forecast category figures; actual-period refunds linked to owned expenses; append-only category-correction evidence; closed-period snapshots; and a separate non-persisting scenario calculator.
+- **Calculation boundary:** the pure budget engine accepts normalized exact-minor-unit inputs and returns deterministic reconciliation. Confirmed monthly income is the only real allocation basis. Uncertain income is exposed separately and can enter only the explicit scenario command. Uncategorized expenses still enter total cash truth and conservative forecast. The scenario engine starts from the latest owned Phase 3 core result, returns hypothetical deltas/target gaps, and cannot write transactions, balances, allocations, or engine snapshots.
+- **Persistence and history:** `budgetCategories`, `budgetPeriods`, and `budgetCategoryCorrections` use owner-first indexes and server-derived ownership. Category IDs remain stable across presentation changes. Open-period saves use optimistic concurrency and entity-local audit evidence. Closing freezes exact category results and rollover inputs; a later period prevents retroactive save/close of an earlier period. Reset categories carry zero while carry categories carry the prior signed remainder. Original transactions and closed periods are never silently rewritten.
+- **Refund/correction boundary:** a refund is an actual transaction in the calendar period in which it arrives and may reference only an owned expense. Same-period refunds reduce that period's category spending. Later-period refunds affect only their actual period. Transaction category changes are rejected after creation; corrected report classification is projected from immutable correction records retaining original/corrected category, actor, reason, and time.
+- **Security and payload boundary:** all budget pages and four API routes derive identity from the Auth.js actor, enforce origin/body/rate limits on mutations/calculations, return no-store responses, serialize exact money as strings, and expose neither owner IDs nor MongoDB documents. Financial-data export includes bounded owned budget records and correction evidence, but excludes internal audit/idempotency/auth data.
+- **Not started:** Phase 6 goal strategies/progress history, purchase impact, Claude, Open Banking, notifications, households, gamification, or any later-phase capability.
 
 ## Phase 1 profile and onboarding architecture
 
@@ -218,6 +228,12 @@ Phase 3 source mapping is deliberately conservative. `availableCash` is the sum 
 ## Dashboard read boundary
 
 The Phase 4 dashboard is an owner-scoped read projection assembled on demand; it is not a second financial truth or a persisted cache. The dynamic server page derives its actor from Auth.js, loads the latest two owned engine snapshots for current value/change, loads the linked owned source manifest, compares current owned record revisions, and serializes a bounded view. The browser can request a new default-30-day snapshot only through the existing authenticated, origin-checked, rate-limited Phase 3 mutation route. Next/UI code never accepts `userId`, never queries MongoDB, and never caches one user's view for another.
+
+## Phase 5 approved budget boundaries
+
+Phase 5 must model category identity separately from presentation: stable owner-scoped system/custom identifiers retain references while user labels, visibility, and order may change. Real monthly allocations derive from confirmed income only and conserve exact minor units as `confirmed income - allocations = signed unallocated`; a negative result is a visible deficit, not a validation failure. Expected income and other hypotheticals belong to a separate scenario input/output boundary and never become confirmed allocation or core forecast data.
+
+Budget periods use the profile timezone and currency. Each category stores an explicit rollover policy whose default is `reset`. Reset closes a period without carrying either surplus or deficit while preserving history; rollover carries the prior signed remainder according to stored rules. Refunds are recognized on their actual transaction date. Classification corrections are append-only evidence retaining original category, corrected category, actor, reason, and time; reports may project the corrected classification without mutating the original fact. Uncategorized transactions remain part of balances and conservative forecasts even when omitted from a named category subtotal.
 
 ## Error handling and auditability
 

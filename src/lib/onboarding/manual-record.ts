@@ -299,7 +299,7 @@ const goalDomainSchema = z.object({
 });
 
 const recordIdSchema = z.string().regex(/^[0-9a-f]{24}$/i);
-const transactionCategorySchema = z.enum([
+export const transactionCategorySchema = z.enum([
   "housing",
   "utilities",
   "insurance",
@@ -313,6 +313,10 @@ const transactionCategorySchema = z.enum([
   "benefits",
   "transfer",
   "savings",
+  "vehicle",
+  "entertainment",
+  "shopping",
+  "restaurants",
   "other",
 ]);
 
@@ -325,14 +329,16 @@ const transactionShape = {
   merchant: z.string().trim().min(1).max(120).nullable(),
   notes: z.string().trim().max(500).nullable(),
   recurring: z.boolean(),
-  type: z.enum(["income", "expense", "transfer"]),
+  refundOfTransactionId: recordIdSchema.nullable().default(null),
+  type: z.enum(["income", "expense", "refund", "transfer"]),
 };
 
-function validateTransferAccounts(
+function validateTransactionRelationships(
   value: Readonly<{
     accountId: string;
     destinationAccountId: string | null;
-    type: "income" | "expense" | "transfer";
+    refundOfTransactionId: string | null;
+    type: "income" | "expense" | "refund" | "transfer";
   }>,
   context: z.RefinementCtx,
 ) {
@@ -357,6 +363,22 @@ function validateTransferAccounts(
       path: ["destinationAccountId"],
     });
   }
+
+  if (value.type === "refund") {
+    if (value.refundOfTransactionId === null) {
+      context.addIssue({
+        code: "custom",
+        message: "A refund requires the original expense transaction.",
+        path: ["refundOfTransactionId"],
+      });
+    }
+  } else if (value.refundOfTransactionId !== null) {
+    context.addIssue({
+      code: "custom",
+      message: "Only refunds may reference an original transaction.",
+      path: ["refundOfTransactionId"],
+    });
+  }
 }
 
 const transactionInputSchema = z
@@ -364,13 +386,13 @@ const transactionInputSchema = z
     ...transactionShape,
     amount: positiveMoneyInputSchema,
   })
-  .superRefine(validateTransferAccounts);
+  .superRefine(validateTransactionRelationships);
 const transactionDomainSchema = z
   .object({
     ...transactionShape,
     amount: positiveMoneyDomainSchema,
   })
-  .superRefine(validateTransferAccounts);
+  .superRefine(validateTransactionRelationships);
 
 const recurringTransactionShape = {
   accountId: recordIdSchema,

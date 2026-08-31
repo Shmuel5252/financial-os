@@ -431,8 +431,15 @@ export function buildFinancialEngineInput(
     ),
     actualMonthlyExpenses: sumMoney(
       actualTransactions
-        .filter(({ fields }) => fields.type === "expense")
-        .map(({ fields }) => fields.amount),
+        .filter(
+          ({ fields }) =>
+            fields.type === "expense" || fields.type === "refund",
+        )
+        .map(({ fields }) =>
+          fields.type === "refund"
+            ? money(-fields.amount.amountMinor, fields.amount.currency)
+            : fields.amount,
+        ),
       currency,
     ),
     actualMonthlyIncome: sumMoney(

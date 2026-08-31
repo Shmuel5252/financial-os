@@ -144,12 +144,14 @@ export default async function DashboardPage() {
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <HomeLink />
-        <Link
-          className="text-sm font-semibold text-[var(--accent)]"
-          href="/financial-data"
-        >
-          {messages.dashboard.actions.financialData}
-        </Link>
+        <nav className="flex flex-wrap gap-4" aria-label={messages.dashboard.title}>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/budgets">
+            {messages.navigation.budgets}
+          </Link>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/financial-data">
+            {messages.dashboard.actions.financialData}
+          </Link>
+        </nav>
       </div>
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">
         {messages.dashboard.eyebrow}

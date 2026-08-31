@@ -32,6 +32,7 @@ type ManualSectionFormProps = Readonly<{
   profileVersion?: number;
   section: ManualSection;
   step?: OnboardingStep;
+  transactionOptions?: readonly Readonly<{ id: string; label: string }>[];
 }>;
 
 type RecordResponse = Readonly<{ record: ManualRecordView }>;
@@ -151,6 +152,8 @@ function buildFields(
         merchant: value(form, "merchant") || null,
         notes: value(form, "notes") || null,
         recurring: value(form, "recurring") === "yes",
+        refundOfTransactionId:
+          value(form, "refundOfTransactionId") || null,
         type: value(form, "type"),
       };
     case "recurring_transactions":
@@ -242,10 +245,12 @@ function FormFields({
   accountOptions = [],
   currency,
   section,
+  transactionOptions = [],
 }: Readonly<{
   accountOptions?: readonly Readonly<{ id: string; label: string }>[];
   currency: string;
   section: ManualSection;
+  transactionOptions?: readonly Readonly<{ id: string; label: string }>[];
 }>) {
   const [safetyKind, setSafetyKind] = useState("fixed");
   const [savingsAvailability, setSavingsAvailability] = useState("liquid");
@@ -544,6 +549,7 @@ function FormFields({
           >
             <option value="expense">{messages.financialData.form.options.expense}</option>
             <option value="income">{messages.financialData.form.options.income}</option>
+            <option value="refund">{messages.financialData.form.options.refund}</option>
             <option value="transfer">{messages.financialData.form.options.transfer}</option>
           </SelectField>
           {transactionType === "transfer" ? (
@@ -558,6 +564,22 @@ function FormFields({
               {accountOptions.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.label}
+                </option>
+              ))}
+            </SelectField>
+          ) : null}
+          {transactionType === "refund" ? (
+            <SelectField
+              label={messages.financialData.form.fields.originalTransaction}
+              name="refundOfTransactionId"
+              required
+            >
+              <option value="">
+                {messages.financialData.form.options.chooseOriginalTransaction}
+              </option>
+              {transactionOptions.map((transaction) => (
+                <option key={transaction.id} value={transaction.id}>
+                  {transaction.label}
                 </option>
               ))}
             </SelectField>
@@ -759,6 +781,7 @@ export function ManualSectionForm({
   profileVersion,
   section,
   step,
+  transactionOptions = [],
 }: ManualSectionFormProps) {
   const [records, setRecords] = useState([...initialRecords]);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
@@ -924,6 +947,7 @@ export function ManualSectionForm({
           accountOptions={accountOptions}
           currency={currency}
           section={section}
+          transactionOptions={transactionOptions}
         />
         <button
           className="w-full rounded-2xl bg-[var(--accent)] px-5 py-3 font-semibold text-white disabled:opacity-60"

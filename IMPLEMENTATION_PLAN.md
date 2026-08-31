@@ -81,6 +81,8 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 5 — Budgets and monthly allocation
 
+- **Status (2026-08-31):** Complete and objectively verified; accepted under the authorized autonomous progression rule.
+- **Approved product policy (2026-08-31):** Hybrid stable-ID system/custom categories; confirmed-income-only real allocation; uncertain income isolated to scenarios; visible negative unallocated deficits; per-category rollover with `reset` default; actual-period refund recognition; immutable correction evidence; uncategorized cash truth; and deterministic, strictly separated core/scenario forecasts.
 - **Objective:** Support category budgets, forecasts, zero-based allocation, and monthly planning.
 - **Scope:** Categories, budget/spent/remaining/forecast, income roles, unallocated balance.
 - **Dependencies:** Transactions, engine monthly metrics, profile timezone/currency.
@@ -88,9 +90,9 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 - **Data/model implications:** User-owned budget periods/items and category mappings; immutable period history where needed.
 - **Security:** Ownership on budget/category/transaction aggregates and audit on plan changes.
 - **Testing:** Allocation conservation, over-budget/negative/refund/month-boundary cases, E2E monthly plan.
-- **Acceptance criteria:** Budget figures reconcile exactly with source transactions and allocations sum deterministically.
-- **Definition of done:** Current and historical months are stable, explainable, and user-editable within policy.
-- **Risks/migration:** Category corrections rewriting history; rollover policy ambiguity.
+- **Acceptance criteria:** Verified. Budget figures reconcile exactly with source transactions; allocations conserve confirmed income as an explicit signed unallocated amount; refunds, corrections, rollover, uncategorized activity, and scenario separation passed deterministic and real-Mongo checks.
+- **Definition of done:** Met. Current and historical months are stable, explainable, owner-isolated, and user-editable within policy; the authenticated Hebrew/RTL production journey passed on port 3001.
+- **Risks/migration:** Preserve original transaction/category facts and closed-period evidence while presenting auditable corrected reports; never let rollover, refunds, uncertain income, or scenario values contaminate another period or confirmed financial truth.
 
 ## Phase 6 — Goals and measurable progress
 

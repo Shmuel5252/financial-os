@@ -33,6 +33,21 @@ function accountLabel(record: ReturnType<typeof toManualRecordView>): string {
   return record.id;
 }
 
+function transactionLabel(record: ReturnType<typeof toManualRecordView>): string {
+  if (typeof record.fields === "object" && record.fields !== null) {
+    const fields = record.fields as Readonly<Record<string, unknown>>;
+    const merchant = fields.merchant;
+    const date = fields.date;
+    return [
+      typeof merchant === "string" ? merchant : null,
+      typeof date === "string" ? date : null,
+    ]
+      .filter((value): value is string => value !== null)
+      .join(" · ") || record.id;
+  }
+  return record.id;
+}
+
 export default async function FinancialDataSectionPage({ params }: PageProps) {
   if (!getConfigurationStatus().authentication.ready) {
     redirect("/sign-in");
@@ -57,10 +72,13 @@ export default async function FinancialDataSectionPage({ params }: PageProps) {
   }
 
   const section = parsedSection.data;
-  const [page, accounts] = await Promise.all([
+  const [page, accounts, transactions] = await Promise.all([
     listManualRecordPage(actor, section, { limit: 20 }),
     section === "transactions" || section === "recurring_transactions"
       ? listManualRecords(actor, "accounts")
+      : Promise.resolve([]),
+    section === "transactions"
+      ? listManualRecords(actor, "transactions")
       : Promise.resolve([]),
   ]);
   const details = messages.financialData.sections[section];
@@ -93,6 +111,13 @@ export default async function FinancialDataSectionPage({ params }: PageProps) {
         initialNextCursor={page.nextCursor}
         initialRecords={page.records.map(toManualRecordView)}
         section={section}
+        transactionOptions={transactions
+          .filter((record) => {
+            const recordFields = record.fields as Readonly<Record<string, unknown>>;
+            return recordFields.type === "expense";
+          })
+          .map(toManualRecordView)
+          .map((record) => ({ id: record.id, label: transactionLabel(record) }))}
       />
     </main>
   );
