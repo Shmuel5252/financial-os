@@ -202,6 +202,13 @@ This log records durable product and architecture decisions. Status is `accepted
 - **Alternatives:** Mutating a Phase 2 source manifest in place was rejected because manifests are immutable. Persisting only a computed value was rejected because it loses timeline, policy, and provenance. A UI-only calculation was rejected because it violates engine truth, ownership, and auditability.
 - **Consequences:** The standalone MongoDB deployment cannot atomically write both documents; a failed result write may leave an owner-only source manifest but never a false result. Historical reconstruction still requires future source-version retention; Phase 3 proves reproducibility when the same typed input is available and records its hash/version honestly.
 
+## ADR-032 — Dashboard is a bounded freshness-aware snapshot projection
+
+- **Decision:** Build Phase 4 as a dynamic, server-authenticated view of the latest owned Phase 3 engine snapshot, not a cached/persisted dashboard model. Mark it stale when the linked owned manifest differs from current source revisions, the profile changed after calculation, the manifest cannot be loaded for that actor, or the user's timezone has entered another calendar day. Keep stale values visible with a clear reason and require an explicit authenticated refresh. Filter the already-calculated timeline into 7/14/30-day windows; do not recalculate money in React. Limit each client window to 100 events and the goal list to 20 priority-ordered records with visible truncation notices.
+- **Reasoning:** Persisting or calculating dashboard totals would create a competing financial truth and cross-user cache risk. Exact source/profile/day freshness makes staleness explainable without an arbitrary wall-clock threshold. Explicit refresh avoids hidden writes during GET rendering. Bounded serialized views minimize financial payload exposure and rendering risk.
+- **Alternatives:** UI-side Safe to Spend calculations, automatic snapshot writes during page reads, shared response caching, silently showing stale values, and unbounded event/goal payloads were rejected. Advanced goal progress was deferred to Phase 6 rather than guessed in Phase 4.
+- **Consequences:** Phase 4 adds no collection and no new financial formula. On-screen alerts are deterministic status derived from the snapshot and are not Phase 17 notifications. A future cache/read model must preserve owner keys, engine provenance, freshness semantics, and the no-UI-calculation invariant.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.

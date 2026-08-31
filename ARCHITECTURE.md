@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-This document defines the implemented architecture through the fully verified Phase 3 acceptance gate and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
+This document defines the implemented architecture through the fully verified Phase 4 acceptance gate and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
 
 | Status | Meaning |
 | --- | --- |
@@ -11,6 +11,7 @@ This document defines the implemented architecture through the fully verified Ph
 | Verified in Phase 1 | Real Google OAuth, Auth.js MongoDB sessions, server-derived identity, sign-out, onboarding, and two-user isolation passed their operational gate. |
 | Implemented and verified in Phase 2 | Normalized manual source records, transactions, recurrence definitions, savings, pagination, idempotency, audit, snapshots, exports, and authenticated Hebrew/RTL management passed their stated gates. |
 | Implemented and verified in Phase 3 | The pure deterministic engine, recurrence expansion, conservative event ordering, future balances, Safe to Spend, monthly metrics, and owned versioned result snapshots passed deterministic and real-Mongo gates. |
+| Implemented and verified in Phase 4 | The authenticated Hebrew/RTL dashboard, freshness-aware query view, bounded timeline windows, alerts, manual-goal summary, and explicit refresh journey passed reconciliation, isolation, browser, accessibility, and regression gates. |
 | Boundary prepared | An interface, module boundary, convention, or configuration seam exists; no provider capability is claimed. |
 | Planned | The product behavior belongs to a later roadmap phase and does not exist yet. |
 
@@ -53,7 +54,15 @@ Dependency flow is inward. UI code may call server actions or route handlers, bu
 - **Implemented:** pure typed financial-engine input/output; explicit 1–366-calendar-day horizon with a 30-day default; anchored weekly/biweekly/monthly/quarterly/annual recurrence expansion; cards and capped loan installments; conservative event ordering; confirmed and expected future balances; minimum future balance; fixed/percentage Safety Margin; Safe to Spend and shortfall; exact monthly metrics; engine/policy versions; canonical input hashes; and immutable calculated snapshots linked to source manifests.
 - **Verified by deterministic tests:** uncertain income never raises core safety; same-day obligations precede income without timestamps; reliable timestamps take precedence; user-timezone calendar months and DST boundaries; half-even percentage rounding; negative balances; missing and duplicate inputs; card/loan obligations; final-installment caps; alternative horizons; int64 overflow; and repeated safety invariants.
 - **Verified against real local MongoDB:** owner-only input assembly and snapshot listing for two actors; source-manifest association including Safety Margin; BSON `Long` result persistence; calculation audit; idempotent retry/conflict behavior; identical result/input hash from identical source inputs; and mixed snapshot-kind isolation.
-- **Not started:** Phase 4 dashboard/read models or any later financial feature. Phase 3 adds no AI, provider integration, user-facing calculation UI, or UI-side financial arithmetic.
+- **At Phase 3 acceptance:** the Phase 4 dashboard/read model had not started. Phase 3 itself added no AI, provider integration, user-facing calculation UI, or UI-side financial arithmetic; the implemented dashboard remains separated in the Phase 4 map below.
+
+### Phase 4 implementation map
+
+- **Implemented:** protected `/dashboard`; real Safe to Spend, current/future balances, margin/shortfall, credit/debt/savings, monthly metrics, limiting-point explanation, 7/14/30-day event windows, snapshot-to-snapshot change, calculation freshness, derived on-screen alerts, stored manual-goal summaries, explicit refresh, empty/loading/error states, and navigation from onboarding/data management.
+- **Calculation boundary preserved:** the dashboard receives serialized Phase 3 result values and performs no money arithmetic. Its query service may filter already-calculated events by date window, calculate an exact delta between two engine results, and select the engine-provided minimum-capacity point; it does not reconstruct Safe to Spend or future balances.
+- **Freshness:** a result is stale when its owner-scoped source manifest no longer matches current source IDs/versions/timestamps, the profile changed after calculation, the associated manifest is unavailable, or the user's configured timezone has entered a new calendar day. Stale values remain visible but are explicitly labelled and paired with an explicit recalculation action.
+- **Payload/accessibility boundary:** client timeline windows are limited to 100 ordered events each and goals to 20 priority-ordered entries with disclosed truncation. The page is dynamic and server-authenticated; no owner or raw Mongo document reaches the client. Hebrew semantic headings/lists/terms/tabs, ARIA relationships/live regions, responsive base layouts, and LTR isolation protect usability without a visual redesign.
+- **Not started:** Phase 5 budgets/allocation, Phase 6 goal intelligence/progress policy, proactive notification delivery, or any later feature. Phase 4 alerts are snapshot-derived on-screen status only; goals show persisted current/target values without inventing progress policy.
 
 ## Phase 1 profile and onboarding architecture
 
@@ -206,6 +215,10 @@ Safe to Spend evaluates the minimum projected balance across a typed evaluation 
 
 Phase 3 source mapping is deliberately conservative. `availableCash` is the sum of bank and cash accounts; `accountBalance` is bank accounts; detailed savings records take precedence over the onboarding savings-account fallback to avoid adding the same saving twice. Actual transactions inform realized monthly metrics and are never replayed against current balances. Confirmed scheduled income reaches core cash only when its destination is bank/cash and certainty is exactly 10,000 basis points. Recurring transaction income has no certainty field and therefore remains expected-only. Income directed to savings/investments does not increase available cash. Distinct source records are distinct events—even if their fields look identical—because no approved deduplication identity exists; this conservative behavior is explicit and tested.
 
+## Dashboard read boundary
+
+The Phase 4 dashboard is an owner-scoped read projection assembled on demand; it is not a second financial truth or a persisted cache. The dynamic server page derives its actor from Auth.js, loads the latest two owned engine snapshots for current value/change, loads the linked owned source manifest, compares current owned record revisions, and serializes a bounded view. The browser can request a new default-30-day snapshot only through the existing authenticated, origin-checked, rate-limited Phase 3 mutation route. Next/UI code never accepts `userId`, never queries MongoDB, and never caches one user's view for another.
+
 ## Error handling and auditability
 
 Typed application errors separate public status/code/message from private causes. Unknown errors return a generic response and are logged server-side with a correlation ID. Secrets, OAuth tokens, raw financial payloads, and MongoDB URIs must be redacted. Expected validation/auth/not-found/conflict errors are not silently swallowed.
@@ -236,9 +249,9 @@ Future server-only placeholders are documented for Anthropic and Open Banking, b
 
 ## Testing architecture
 
-- Unit tests exercise pure money, dates, validation, authorization policies, and the Phase 3 financial-engine policy/edge-case matrix.
-- Integration tests exercise repository ownership filters and real MongoDB/Auth/provider adapters in isolated test infrastructure. Credential-dependent suites must explicitly skip with a documented reason; mocks are permitted only at named adapter boundaries and never reported as real integration success.
-- E2E tests use Playwright against isolated application/database boundaries as their phases arrive. The Phase 1 acceptance journey used the in-app Playwright controller with a real interactive Google/Auth.js session to complete, reload, review, and finish onboarding. Phase 2 reused a fresh real callback/session to create and reload exact manual account/transaction values and capture a source manifest. No mocked auth or reusable authenticated storage state was committed. Later repeatable non-interactive suites require an approved secure test-identity/session strategy.
+- Unit tests exercise pure money, dates, validation, authorization policies, the Phase 3 financial-engine policy/edge-case matrix, and Phase 4 dashboard projection/rendering behavior.
+- Integration tests exercise repository ownership filters and real MongoDB/Auth/provider adapters in isolated test infrastructure. Credential-dependent suites must explicitly skip with a documented reason; mocks are permitted only at named adapter boundaries and never reported as real integration success. Phase 4 reuses the real-Mongo Phase 3 fixture to verify two-owner dashboard/read-manifest isolation.
+- E2E tests use Playwright against isolated application/database boundaries as their phases arrive. The Phase 1 acceptance journey used the in-app Playwright controller with a real interactive Google/Auth.js session to complete, reload, review, and finish onboarding. Phase 2 reused a fresh real callback/session to create and reload exact manual account/transaction values and capture a source manifest. Phase 4 used the retained real Auth.js session to create/reload an engine snapshot, reconcile displayed values, refresh without change, switch timeline windows, and inspect Hebrew/RTL/ARIA output. No mocked auth or reusable authenticated storage state was committed. Later repeatable non-interactive suites require an approved secure test-identity/session strategy.
 - Production builds, strict type-checking, ESLint, and tests are separate required checks. No rules or type errors are suppressed to make gates pass.
 
 ## Deployment architecture

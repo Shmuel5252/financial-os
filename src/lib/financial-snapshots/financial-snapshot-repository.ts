@@ -155,6 +155,19 @@ export class FinancialSnapshotRepository {
     return mapDocument(document);
   }
 
+  async findForActor(
+    actor: Actor,
+    snapshotId: string,
+  ): Promise<FinancialSnapshot | null> {
+    const document = await this.collection.findOne({
+      _id: parseObjectId(snapshotId, "snapshotId"),
+      kind: "source_manifest",
+      userId: parseObjectId(actor.userId, "actor.userId"),
+    });
+
+    return document === null ? null : mapDocument(document);
+  }
+
   async listForActor(
     actor: Actor,
     request: Readonly<{ cursor?: string | undefined; limit: number }>,

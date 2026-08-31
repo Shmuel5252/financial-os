@@ -66,6 +66,8 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 4 — Financial dashboard
 
+**Acceptance status (2026-08-31): Complete and verified.** The dashboard reconciles exclusively to Phase 3 snapshots, detects stale source/profile/calendar state, bounds client payloads, and passed the 101-test real-Mongo suite, authenticated browser journey, type, lint, production-build, runtime-security, Hebrew/RTL, accessibility, and dependency gates recorded in `PROGRESS.md`.
+
 - **Objective:** Answer the user's current position, forecast, safe spend, and goal-direction questions within seconds.
 - **Scope:** Real Safe to Spend, balances, upcoming events, 7/14/30-day timeline, alerts, goals, and summaries from engine snapshots.
 - **Dependencies:** Phase 3 engine outputs and Phase 2 source data.

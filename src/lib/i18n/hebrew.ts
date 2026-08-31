@@ -24,6 +24,123 @@ export const hebrewMessages = {
     recordSave: "לא הצלחנו לשמור את הרשומה.",
     stepCompletion: "לא הצלחנו להשלים את השלב.",
   },
+  dashboard: {
+    actions: {
+      calculate: "חישוב תמונת מצב",
+      calculating: "מחשב תמונת מצב…",
+      financialData: "ניהול נתוני המקור",
+      refresh: "חישוב מחדש",
+    },
+    alerts: {
+      empty: "לא זוהו כרגע התראות בתמונת המצב המחושבת.",
+      high_credit_utilization: {
+        description: "ניצול האשראי הוא 90% או יותר מהמסגרת שהוגדרה.",
+        title: "ניצול אשראי גבוה",
+      },
+      no_safe_to_spend: {
+        description: "לא נשאר כרגע סכום שמסווג כבטוח להוצאה באופק החישוב.",
+        title: "אין כרגע סכום בטוח להוצאה",
+      },
+      projected_shortfall: {
+        description: "היתרה המאושרת צפויה לרדת מתחת למרווח הביטחון.",
+        title: "צפוי חוסר מול מרווח הביטחון",
+      },
+      title: "נקודות שדורשות תשומת לב",
+      uncertain_income: {
+        description: "קיימת הכנסה צפויה שלא נכללה בסכום הבטוח להוצאה.",
+        title: "הכנסה לא־ודאית מוצגת בנפרד",
+      },
+    },
+    change: {
+      down: "ירידה של",
+      fromPrevious: "מהחישוב הקודם",
+      same: "ללא שינוי מהחישוב הקודם",
+      up: "עלייה של",
+    },
+    description:
+      "תמונת מצב מחושבת מנתוני המקור שלך בלבד. הסכום הבטוח מבוסס על כל ההתחייבויות וההכנסות המאושרות באופק, ולא על היתרה הנוכחית בלבד.",
+    empty: {
+      description:
+        "עדיין אין תמונת מנוע מחושבת. החישוב יטען רק את הנתונים שבבעלותך וישמור תוצאה גרסאית ומבוקרת.",
+      title: "צריך לחשב תמונת מצב ראשונה",
+    },
+    eventKinds: {
+      confirmed_income: "הכנסה מאושרת",
+      obligation: "התחייבות",
+      uncertain_income: "הכנסה צפויה",
+    },
+    eventSources: {
+      credit_card: "חיוב כרטיס אשראי",
+      income_source: "מקור הכנסה",
+      loan: "תשלום הלוואה",
+      recurring_expense: "הוצאה קבועה",
+      recurring_transaction: "עסקה קבועה",
+    },
+    eyebrow: "תמונת מצב פיננסית",
+    freshness: {
+      current: "החישוב עדכני לנתונים וליום הנוכחי.",
+      manifest_unavailable: "לא ניתן לאמת את manifest המקור של החישוב.",
+      new_calendar_day: "התחיל יום פיננסי חדש מאז החישוב.",
+      profile_changed: "הפרופיל הפיננסי השתנה מאז החישוב.",
+      source_changed: "נתוני המקור השתנו מאז החישוב.",
+      staleTitle: "התמונה דורשת חישוב מחדש",
+      title: "עדכניות",
+    },
+    goals: {
+      current: "ערך נוכחי",
+      empty: "עדיין לא הוגדרו יעדים ידניים.",
+      target: "יעד",
+      targetDate: "תאריך יעד",
+      title: "היעדים שלי",
+      truncated: "מוצגים 20 היעדים הראשונים לפי עדיפות.",
+    },
+    limiting: {
+      current_liquidity: "הנזילות הנוכחית ומרווח הביטחון הם הנקודה המגבילה.",
+      eventAfter: "הוא הנקודה המגבילה באופק.",
+      eventBefore: (label: string) => `${label} בתאריך`,
+      margin_boundary: "מרווח הביטחון בנקודת מעבר חודשית הוא הנקודה המגבילה.",
+      title: "למה זה הסכום הבטוח?",
+    },
+    monthly: {
+      actualExpenses: "הוצאות שבוצעו",
+      actualIncome: "הכנסות שבוצעו",
+      actualNet: "תזרים שבוצע נטו",
+      confirmedForecastIncome: "הכנסה מאושרת שעדיין צפויה",
+      scheduledObligations: "התחייבויות מתוכננות",
+      title: "סיכום החודש",
+      uncertainForecastIncome: "הכנסה צפויה שאינה ודאית",
+    },
+    safeToSpend: {
+      label: "בטוח להוצאה",
+      margin: "מרווח ביטחון מוגן",
+      shortfall: "חוסר צפוי",
+    },
+    snapshot: {
+      calculatedAt: "חושב לאחרונה",
+      horizon: (days: number) => `אופק של ${days} ימים`,
+      through: "עד",
+    },
+    summary: {
+      accountBalance: "יתרה בבנק",
+      availableCash: "מזומן זמין",
+      credit: "ניצול אשראי",
+      debtBalance: "יתרת חוב",
+      futureConfirmedBalance: "יתרה מאושרת בסוף האופק",
+      futureExpectedBalance: "יתרה צפויה כולל הכנסה לא־ודאית",
+      savingsBalance: "חסכונות",
+      title: "איפה אני עומד עכשיו?",
+    },
+    timeline: {
+      balanceAfter: "יתרה מאושרת לאחר האירוע",
+      empty: "אין אירועים בחלון הזמן הזה.",
+      fourteenDays: "14 ימים",
+      sevenDays: "7 ימים",
+      thirtyDays: "30 ימים",
+      title: "מה צפוי לקרות?",
+      truncated: "מוצגים 100 האירועים הקרובים הראשונים בחלון הזה.",
+    },
+    title: "הדשבורד הפיננסי שלי",
+  },
   financialData: {
     actions: {
       back: "חזרה לנתונים הפיננסיים",
@@ -132,6 +249,7 @@ export const hebrewMessages = {
     title: "בהירות פיננסית מתחילה בתשתית שאפשר לסמוך עליה.",
   },
   navigation: {
+    dashboard: "מעבר לדשבורד",
     home: "חזרה לדף הבית",
   },
   onboarding: {

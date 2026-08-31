@@ -35,7 +35,15 @@ export default async function FinancialDataPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <HomeLink />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <HomeLink />
+        <Link
+          className="text-sm font-semibold text-[var(--accent)]"
+          href="/dashboard"
+        >
+          {messages.navigation.dashboard}
+        </Link>
+      </div>
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">
         {messages.financialData.eyebrow}
       </p>

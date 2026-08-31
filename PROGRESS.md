@@ -1,5 +1,52 @@
 # Financial OS Progress
 
+## Phase 4 — Financial Dashboard
+
+**Status:** Complete — all Phase 4 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.
+
+**Started:** 2026-08-31
+
+**Verified:** 2026-08-31
+
+**Scope boundary:** Phase 4 snapshot presentation and freshness-aware dashboard reads only. No budgets/allocation, advanced goal progress policy, Claude, Open Banking, proactive notifications, household behavior, gamification, or later-phase functionality was implemented.
+
+### Implemented
+
+- Added a protected dynamic `/dashboard` that answers current position, expected future position, Safe to Spend, and stored manual-goal direction from the latest owned Phase 3 result. Navigation now connects completed onboarding, financial-data management, and the dashboard.
+- Added a server-only dashboard query service. It loads the latest two actor-owned engine snapshots, linked actor-owned source manifest, current profile/source revisions, and actor-owned goals. The browser receives bounded serialized view models only; no MongoDB documents, owners, audit data, or `bigint` values cross the boundary.
+- Preserved the Phase 3 truth boundary. Safe to Spend, current/future balances, Safety Margin, shortfall, monthly totals, debt, savings, credit, and timeline balances come directly from versioned engine results. The dashboard only selects already-calculated events for 7/14/30-day windows, finds the recorded minimum-capacity point, and computes an exact result-to-result change delta on the server.
+- Added explicit freshness semantics. Source revision drift, profile updates, a missing/foreign source manifest, and a new calendar day in the user's configured timezone mark the view stale and state why. Reads never write; the user explicitly requests a new 30-day snapshot through the authenticated, origin-checked, rate-limited engine endpoint.
+- Added real empty, loading, error, current, stale, and no-alert states; a main Safe to Spend card; current/future balance summaries; limiting-point explanation; snapshot-derived on-screen alerts; timeline tabs; monthly metrics; and persisted goal current/target summaries without pulling Phase 6 goal policy forward.
+- Kept Financial OS Hebrew-first/RTL-first and isolated all money, percentages, dates, month codes, and timestamps as LTR values. Semantic headings, definition lists, ordered/unordered lists, tab roles/relationships, status live regions, clear focusable buttons, mobile-first grids, wrapping, and long-money break behavior protect accessibility and responsive layout without a redesign.
+- Limited each client timeline window to the first 100 ordered events and goals to the first 20 priority-ordered records, with explicit Hebrew truncation notices. Phase 4 adds no database collection or shared dashboard cache.
+
+### Verification results
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Full automated suite against real MongoDB | Pass | 23 test files and 101 tests passed with no skips. |
+| Dashboard unit/view tests | Pass | 17 unit files and 88 tests passed. Phase 4 fixtures reconcile Safe to Spend and change to engine outputs, verify limiting event/alerts/windows/goals, stale source/profile/day states, honest empty state, 100-event/20-goal payload bounds, Hebrew copy, ARIA tabs, and LTR isolation. |
+| Real-Mongo isolation | Pass | 6 integration files and 13 tests passed. The Phase 3 fixture now verifies that two actors receive distinct dashboard snapshots/currencies, cannot load the other actor's manifest, and retain all prior result/source ownership guarantees. |
+| Real authenticated browser journey | Pass | The protected dashboard loaded with the retained real Google/Auth.js database session. An explicit first calculation produced and reloaded the complete dashboard; a second explicit refresh showed no engine-result change; 7/14/30 controls switched the visible event window; displayed values reconciled to the stored Phase 3 result. No auth or calculation path was mocked. |
+| Hebrew/RTL/accessibility | Pass | The production DOM reported `lang="he"`, `dir="rtl"`, 26 explicit LTR isolates, semantic headings/lists/terms, named tablist/tabs/tabpanel, live status regions, and one instance of each dashboard section. User-entered goal text remained user-controlled rather than forcibly translated. |
+| Responsive presentation | Pass at implemented/tested boundary | Authenticated wide-layout inspection had no horizontal overflow; mobile-first base classes stack before `sm`/`lg` enhancements, long exact-money values use break-safe typography, and component/build tests protect the responsive structure. The browser backend's attempted narrow viewport override did not change its reported viewport and is not claimed as narrow-device visual evidence. |
+| Strict type-check | Pass | `npm run typecheck`: exit 0. |
+| Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
+| Production build | Pass | `npm run build`: exit 0; `/dashboard` compiled as a dynamic protected route. |
+| Dependency audit | Pass | Registry-backed `npm run security:audit`: zero vulnerabilities. |
+| Runtime/security smoke | Pass | Production build ran on port 3001; protected dashboard/API behavior remained authenticated/no-store and server logs remained error-free. Port 3000 was not modified. |
+| Secret/Git hygiene | Pass | `.env.local` remained ignored and untracked; no secret value was printed, logged, staged, or included in source. |
+
+The authenticated acceptance journey created immutable Phase 3 engine/source snapshot pairs in the existing synthetic local test profile through the intended explicit refresh action. No user-owned source record was altered or deleted.
+
+### Acceptance conclusion
+
+Phase 4 is fully accepted. The dashboard is useful with manual data, reconciles to deterministic engine truth, remains owner-isolated and bounded, handles missing/stale state honestly, and preserves Hebrew/RTL, exact money, security, and all prior regressions. No Phase 5 code was pulled forward.
+
+### Exact next milestone
+
+Phase 5 — Budgets and Monthly Allocation. Under the owner's autonomous progression authorization, Phase 5 may begin only after this verified Phase 4 change is committed and pushed to `origin/main`.
+
 ## Phase 3 — Deterministic Financial Engine
 
 **Status:** Complete — all Phase 3 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.

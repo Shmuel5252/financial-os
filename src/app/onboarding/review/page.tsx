@@ -126,12 +126,20 @@ export default async function OnboardingReviewPage() {
         />
 
         {completed ? (
-          <Link
-            className="mt-6 inline-flex rounded-2xl bg-[var(--accent)] px-5 py-3 font-semibold text-white"
-            href="/financial-data"
-          >
-            {messages.onboarding.review.manageFinancialData}
-          </Link>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              className="inline-flex rounded-2xl bg-[var(--accent)] px-5 py-3 font-semibold text-white"
+              href="/dashboard"
+            >
+              {messages.navigation.dashboard}
+            </Link>
+            <Link
+              className="inline-flex rounded-2xl border border-[var(--accent)] px-5 py-3 font-semibold text-[var(--accent)]"
+              href="/financial-data"
+            >
+              {messages.onboarding.review.manageFinancialData}
+            </Link>
+          </div>
         ) : null}
 
         <form action={signOutAction} className="mt-8 border-t border-[var(--border)] pt-6">

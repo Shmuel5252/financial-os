@@ -4,6 +4,7 @@ import { Long, MongoClient, ObjectId, type Db } from "mongodb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Actor } from "@/lib/auth/actor";
+import { loadDashboard } from "@/lib/dashboard/dashboard-service";
 import { ConflictError } from "@/lib/errors/application-error";
 import {
   financialEngineSourceSections,
@@ -49,6 +50,7 @@ describeWithMongo("Phase 3 financial engine persistence", () => {
   let sourceRepositories: Readonly<
     Record<FinancialEngineSourceSection, ManualRecordRepository>
   >;
+  let goalsRepository: ManualRecordRepository;
   let sourceManifestRepository: ReturnType<
     typeof financialSnapshotRepositoryForDatabase
   >;
@@ -70,11 +72,13 @@ describeWithMongo("Phase 3 financial engine persistence", () => {
     >;
     sourceManifestRepository = financialSnapshotRepositoryForDatabase(database);
     engineRepository = financialEngineSnapshotRepositoryForDatabase(database);
+    goalsRepository = manualRecordRepositoryForDatabase(database, "goals");
 
     await Promise.all([
       profileRepository.ensureIndexes(),
       sourceManifestRepository.ensureIndexes(),
       engineRepository.ensureIndexes(),
+      goalsRepository.ensureIndexes(),
       ...Object.values(sourceRepositories).map((repository) =>
         repository.ensureIndexes(),
       ),
@@ -249,7 +253,7 @@ describeWithMongo("Phase 3 financial engine persistence", () => {
     ).toBe(true);
   });
 
-  it("isolates engine and manifest listings for two owners", async () => {
+  it("isolates engine, manifest, and dashboard reads for two owners", async () => {
     const secondSnapshot = await calculateFinancialEngineSnapshot(
       secondActor,
       {
@@ -288,6 +292,35 @@ describeWithMongo("Phase 3 financial engine persistence", () => {
         repository: sourceManifestRepository,
       })).snapshots.every((snapshot) => snapshot.kind === "source_manifest"),
     ).toBe(true);
+    const dashboardDependencies = {
+      engineRepository,
+      manifestRepository: sourceManifestRepository,
+      now: () => new Date("2026-08-31T12:00:00.000Z"),
+      profileRepository,
+      sourceRepositories: { ...sourceRepositories, goals: goalsRepository },
+    };
+    const firstDashboard = await loadDashboard(
+      firstActor,
+      dashboardDependencies,
+    );
+    const secondDashboard = await loadDashboard(
+      secondActor,
+      dashboardDependencies,
+    );
+    expect(firstDashboard.kind).toBe("ready");
+    expect(secondDashboard.kind).toBe("ready");
+    if (firstDashboard.kind !== "ready" || secondDashboard.kind !== "ready") {
+      throw new Error("Expected owner-specific dashboard snapshots.");
+    }
+    expect(firstDashboard.snapshotId).not.toBe(secondDashboard.snapshotId);
+    expect(firstDashboard.safeToSpend.currency).toBe("ILS");
+    expect(secondDashboard.safeToSpend.currency).toBe("USD");
+    expect(
+      await sourceManifestRepository.findForActor(
+        secondActor,
+        firstPage.snapshots[0]?.sourceManifestId ?? "",
+      ),
+    ).toBeNull();
   });
 
   it("rejects idempotency reuse after source data changes", async () => {
