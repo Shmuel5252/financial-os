@@ -814,6 +814,25 @@ Goal types:
 - monthly_spending
 - custom
 
+Approved Phase 6 Goal Engine policy (2026-08-31):
+
+- Every goal has a versioned, explicit deterministic canonical metric. AI never decides verified progress or completion.
+- Debt freedom measures the remaining balance of an explicit immutable liability scope against zero. Exit-overdraft measures the actual combined balance of an explicit account scope against zero. Adding unrelated liabilities or accounts never silently changes historical meaning.
+- Credit independence is a stability metric proved from deterministic Financial Engine evidence that available funds and confirmed income cover the applicable period without increased overdraft, revolving credit, or debt dependence; temporary positive cash is insufficient and the evidence strategy remains extensible for future provider data.
+- Emergency-fund and savings goals count only explicitly included verified liquid/savings funds. Emergency-fund targets may be an exact amount or an explicit number of months multiplied deterministically by a verified essential-expense basis. Hypothetical gains are excluded.
+- Monthly-spending goals compare actual qualifying spending in the applicable profile-timezone budget/calendar period with a configured ceiling, preserving Phase 5 refund, correction, and category rules.
+- Custom financial goals must declare an explicit measurable metric and target. If available Financial OS data cannot verify them, they remain clearly manual/unverified rather than being interpreted by AI.
+- A goal receives a provenance-bearing baseline when active tracking begins. Existing Phase 1 starting/current values remain user-reported evidence; an engine-derived verified baseline is stored separately and never silently replaces manual evidence.
+- Progress outputs include baseline, current and target values, remaining gap, direction-aware normalized percentage, trend/direction, evaluation time, and evidence provenance. Raw values may exceed targets and regression is never hidden.
+- Deterministic 25/50/75/100 percent milestones are immutable historical events. The milestone model permits later goal-specific thresholds without changing the core engine.
+- Point-in-time accumulation/reduction goals may complete when the deterministic target is met. Stability goals require an explicit sustained-success duration whose default is 30 calendar days and use a pending-confirmation state until satisfied.
+- Completion history is never erased. Later violations append regression/reopen evidence and distinguish historical achievement from current maintenance.
+- Presentation-only edits do not change financial meaning. Material changes to target, deadline, metric, scope, target basis, sustained duration, or other success semantics create a new immutable goal version; old evidence remains linked to its original version.
+- Progress evidence is append-only and created only for meaningful deterministic evaluations such as relevant engine snapshots, budget closes, milestone/threshold changes, sustained confirmation, completion, regression/reopen, material version changes, or approved periodic evaluation events—not page reads.
+- Evidence retains goal/version, evaluation time, source references and metric inputs, including the applicable Financial Engine snapshot and budget period where relevant, so a historical result is explainable without mutable reconstruction.
+- Verified progress and projected/what-if outcomes are separate types. Scenario results may later consume verified goal definitions but uncertain income, hypothetical gains, and other projections never change verified progress until they become confirmed financial facts.
+- Dependency direction remains: financial truth -> deterministic Financial Engine -> verified Goal Engine -> deterministic scenario/projection layer -> AI explanation. Phase 6 implements only verified goals, current roadmap analytics, and the minimal existing Phase 5 scenario separation needed to preserve this boundary.
+
 כל Goal מקבל:
 Baseline
 Target

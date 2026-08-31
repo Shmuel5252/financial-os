@@ -12,6 +12,16 @@ import {
   type BudgetRepository,
 } from "@/lib/budgets/budget-repository";
 import {
+  toGoalDefinitionView,
+  toGoalProgressEvidenceView,
+  type GoalDefinitionView,
+  type GoalProgressEvidenceView,
+} from "@/lib/goals/goal";
+import {
+  getGoalRepository,
+  type GoalRepository,
+} from "@/lib/goals/goal-repository";
+import {
   manualSectionSchema,
   toManualRecordView,
   type ManualRecordView,
@@ -39,13 +49,18 @@ export type FinancialDataExport = Readonly<{
     periods: readonly BudgetPeriodView[];
   }>;
   generatedAt: string;
+  goalEngine: Readonly<{
+    definitions: readonly GoalDefinitionView[];
+    progressEvidence: readonly GoalProgressEvidenceView[];
+  }>;
   profile: UserProfileView | null;
   records: Readonly<Record<ManualSection, readonly ManualRecordView[]>>;
-  schemaVersion: 2;
+  schemaVersion: 3;
 }>;
 
 export type FinancialDataExportDependencies = Readonly<{
   budgetRepository?: BudgetRepository;
+  goalRepository?: GoalRepository;
   now?: () => Date;
   profileRepository?: UserProfileRepository;
   repositories?: Readonly<Partial<Record<ManualSection, ManualRecordRepository>>>;
@@ -78,6 +93,12 @@ export async function buildFinancialDataExport(
     budgetRepository.listPeriodsForActor(actor),
     budgetRepository.listAllCorrectionsForActor(actor),
   ]);
+  const goalRepository =
+    dependencies?.goalRepository ?? (await getGoalRepository());
+  const [goalDefinitions, goalProgress] = await Promise.all([
+    goalRepository.listAllDefinitionsForActor(actor),
+    goalRepository.listAllProgressForActor(actor),
+  ]);
 
   return {
     budgets: {
@@ -102,10 +123,14 @@ export async function buildFinancialDataExport(
       })),
     },
     generatedAt: (dependencies?.now?.() ?? new Date()).toISOString(),
+    goalEngine: {
+      definitions: goalDefinitions.map(toGoalDefinitionView),
+      progressEvidence: goalProgress.map(toGoalProgressEvidenceView),
+    },
     profile: profile === null ? null : toUserProfileView(profile),
     records: Object.fromEntries(entries) as unknown as Readonly<
       Record<ManualSection, readonly ManualRecordView[]>
     >,
-    schemaVersion: 2,
+    schemaVersion: 3,
   };
 }

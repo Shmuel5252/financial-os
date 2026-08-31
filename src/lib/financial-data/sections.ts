@@ -11,6 +11,7 @@ export const phaseTwoFinancialSectionSchema = z.enum([
   "cards",
   "loans",
   "savings",
+  "goals",
 ]);
 
 export type PhaseTwoFinancialSection = z.infer<

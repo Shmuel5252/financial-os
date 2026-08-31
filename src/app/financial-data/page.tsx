@@ -38,6 +38,9 @@ export default async function FinancialDataPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <HomeLink />
         <nav className="flex flex-wrap gap-4" aria-label={messages.financialData.title}>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/goals">
+            {messages.navigation.goals}
+          </Link>
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/budgets">
             {messages.navigation.budgets}
           </Link>

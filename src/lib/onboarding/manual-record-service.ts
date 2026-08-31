@@ -7,6 +7,7 @@ import {
 } from "@/lib/errors/application-error";
 import {
   collectMoneyValues,
+  manualSectionDomainSchemas,
   parseManualFields,
   type ManualRecord,
   type ManualSection,
@@ -19,9 +20,11 @@ import {
 } from "@/lib/onboarding/manual-record-repository";
 import type { UserProfileRepository } from "@/lib/profiles/profile-repository";
 import { loadProfile } from "@/lib/profiles/profile-service";
+import { getGoalRepository, type GoalRepository } from "@/lib/goals/goal-repository";
 
 export type ManualRecordDependencies = Readonly<{
   accountRepository?: ManualRecordRepository;
+  goalTrackingRepository?: Pick<GoalRepository, "hasDefinitionForActor">;
   profileRepository?: UserProfileRepository;
   repository: ManualRecordRepository;
 }>;
@@ -202,6 +205,31 @@ export async function updateManualRecord(
   await assertOwnedAccountReferences(actor, section, fields, dependencies);
   await assertOwnedRefundReference(actor, section, fields, dependencies);
   const { repository } = await resolveDependencies(section, dependencies);
+  if (section === "goals") {
+    const existing = await repository.findForActor(actor, recordId);
+    if (existing !== null) {
+      const trackingRepository =
+        dependencies?.goalTrackingRepository ?? (await getGoalRepository());
+      if (await trackingRepository.hasDefinitionForActor(actor, recordId)) {
+        const before = manualSectionDomainSchemas.goals.parse(existing.fields);
+        const after = manualSectionDomainSchemas.goals.parse(fields);
+        const materialChanged =
+          before.type !== after.type ||
+          before.targetDate !== after.targetDate ||
+          before.startingValue.amountMinor !== after.startingValue.amountMinor ||
+          before.startingValue.currency !== after.startingValue.currency ||
+          before.currentValue.amountMinor !== after.currentValue.amountMinor ||
+          before.currentValue.currency !== after.currentValue.currency ||
+          before.targetAmount.amountMinor !== after.targetAmount.amountMinor ||
+          before.targetAmount.currency !== after.targetAmount.currency;
+        if (materialChanged) {
+          throw new ConflictError(
+            "Tracked goal financial fields must change through a new immutable goal definition version.",
+          );
+        }
+      }
+    }
+  }
   if (section === "transactions") {
     const existing = await repository.findForActor(actor, recordId);
     const existingFields = existing?.fields as
@@ -234,5 +262,14 @@ export async function deleteManualRecord(
   dependencies?: ManualRecordDependencies,
 ): Promise<void> {
   const { repository } = await resolveDependencies(section, dependencies);
+  if (section === "goals") {
+    const trackingRepository =
+      dependencies?.goalTrackingRepository ?? (await getGoalRepository());
+    if (await trackingRepository.hasDefinitionForActor(actor, recordId)) {
+      throw new ConflictError(
+        "Tracked goals cannot be deleted because their financial evidence is immutable.",
+      );
+    }
+  }
   await repository.deleteForActor(actor, recordId, expectedVersion);
 }

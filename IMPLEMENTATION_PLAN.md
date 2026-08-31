@@ -96,15 +96,16 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 6 — Goals and measurable progress
 
+- **Approved product policy (2026-08-31):** Versioned deterministic per-type metrics and explicit record scopes; preserved manual versus verified baselines; direction-aware exact progress, regression, over-target values, and immutable milestones; point-in-time versus explicit sustained-success lifecycle with a 30-calendar-day default; material goal versioning; append-only explainable progress evidence; and strict separation of verified progress from scenario/projection outcomes.
 - **Objective:** Make goals financial objects with baselines, targets, deadlines, trends, and actions.
-- **Scope:** Goal types, milestones, progress history, goal dashboard and analytics.
+- **Scope:** Goal definition activation/versioning, deterministic canonical metrics, milestones, immutable progress history, current goal dashboard and analytics. Phase 7 purchase simulation, Phase 12 advanced goal projection, AI guidance, bank/investment integrations, notifications, and gamification remain out of scope.
 - **Dependencies:** Engine metrics, debt/savings/account data, budgets where relevant.
-- **Major tasks:** Goal policy strategies, validation, progress calculation, snapshot linkage, manual/custom goal rules.
-- **Data/model implications:** Goals and append-only progress points keyed by owner and engine version.
+- **Major tasks:** Goal policy strategies, owned-scope validation, Phase 1 goal migration/provenance, direction-aware progress calculation, lifecycle/milestones, material definition versioning, meaningful evaluation orchestration, snapshot/budget linkage, Hebrew/RTL goal management and analytics.
+- **Data/model implications:** Preserve Phase 1 `goals`; add immutable owner-scoped goal definitions/versions and append-only progress evidence keyed by goal/version plus engine/budget provenance. Exact money remains BSON int64 and JSON strings.
 - **Security:** Authorized goal inputs and outputs; audit edits/deletion; avoid sensitive detail in notifications.
 - **Testing:** Each goal strategy, zero/negative targets, deadlines, regressions, completion/reopen semantics.
-- **Acceptance criteria:** Progress is calculated from deterministic records rather than self-reported UI totals where measurable.
-- **Definition of done:** Users can create supported goals and see explainable verified progress.
+- **Acceptance criteria:** Verified. Progress is calculated from deterministic owned records rather than self-reported UI totals where measurable; manual/unverified goals are explicit; history explains baselines, versions, milestones, completion, sustained confirmation, regression, and reopen without scenario contamination.
+- **Definition of done:** Met. Users can activate/version supported goals, trigger meaningful deduplicated evaluations, and see Hebrew/RTL current and historical explainable verified progress; real-Mongo isolation and authenticated production-browser acceptance passed.
 - **Risks/migration:** Goal definitions drifting; historical progress recomputation and baseline changes.
 
 ## Phase 7 — Purchase impact simulation

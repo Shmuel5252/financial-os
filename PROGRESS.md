@@ -1,5 +1,55 @@
 # Financial OS Progress
 
+## Phase 6 — Goals and Measurable Progress
+
+**Status:** Complete — all Phase 6 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.
+
+**Started:** 2026-08-31
+
+**Verified:** 2026-08-31
+
+**Scope boundary:** Versioned deterministic goal definitions, verified/manual baseline provenance, current progress, immutable meaningful evidence, milestones, lifecycle/versioning, and authenticated Hebrew/RTL goal management only. No Phase 7 purchase simulation, Phase 8 AI, Phase 9 banking, Phase 12 advanced scenarios, notifications, households, investments, or gamification.
+
+### Implemented
+
+- Recorded all owner-approved Phase 6 policies in both synchronized Master Plan copies, the implementation plan, architecture, and ADR-035/036 before relying on them. ADR-037 records the verified server-time/idempotency boundary discovered during acceptance.
+- Added a pure exact-money Goal Engine with direction-aware raw and normalized basis-point progress, remaining gap, trend, point-in-time completion, explicit sustained-success durations, pending confirmation, preserved completion dates, regression/reopen semantics, and deterministic one-time 25/50/75/100 milestones.
+- Implemented every approved canonical metric: scoped outstanding liabilities; scoped account balances; Financial Engine-backed credit independence with confirmed coverage and non-increasing dependence; explicit/liquid emergency funds with exact closed-budget essential-expense targets; scoped savings; current profile-timezone monthly spending under Phase 5 refund/correction rules; and explicit custom metrics that remain manual/unverified.
+- Preserved Phase 1 goal values as user-reported evidence. Each tracked version stores that provenance separately from its first engine-derived verified baseline/current value; disagreement is retained rather than silently rewritten.
+- Added owner-scoped `goalDefinitions`, append-only `goalProgress`, and technical `goalCommandReceipts` collections. Definitions/evidence use owner-first indexes, exact BSON `Long` money, bounded reads/exports, optimistic version expectations, evidence hashes, safe retry receipts, and actor-owned source validation.
+- Material metric, target, deadline, scope, basis, or sustained-duration changes create immutable definition versions. Presentation-only Phase 1 goal edits remain allowed; tracked financial fields and deletion are rejected so historical evidence cannot be silently rewritten or removed.
+- Evidence timestamps are derived from the server clock and the profile timezone; clients cannot backdate verified progress. Reads never write. Repeated equivalent evaluations on the same date/source state deduplicate without producing meaningless snapshots, while reused idempotency keys with different payloads fail closed.
+- Added authenticated, trusted-origin, rate-limited, no-store definition/evaluation APIs and a protected Hebrew/RTL `/goals` center. It shows reported versus verified baselines, status, exact current/target/gap, trend, deadline, milestones, versioned history, localized metric inputs, and LTR-isolated source provenance.
+- Added `/financial-data/goals` to the authenticated management surface and linked goals from the dashboard/financial-data navigation. System category identifiers are localized at presentation boundaries; user-authored labels remain unchanged.
+- Extended the owner-only financial export to schema version 3 with serialized goal definitions and immutable progress evidence while excluding `userId`, idempotency hashes/receipts, internal audit fields, Auth.js data, and secrets.
+- Kept verified goal progress separate from Phase 5 scenarios. No purchase simulator, advanced projection, AI, bank/investment integration, notification, gamification, or other future-phase feature was introduced.
+
+### Verification results
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Full automated suite against real MongoDB | Pass | 29 test files and 125 tests passed with no skips using the ignored real local test configuration. |
+| Phase 6 unit/UI suite | Pass | 21 unit files and 105 tests passed. New cases cover increase/decrease formulas, exact over-target values, manual/insufficient states, configurable 30-day stability, completion/regression/reopen, one-time milestones, mixed-currency rejection, Hebrew copy, system-category localization, provenance, and LTR isolation. |
+| Phase 6 real-Mongo integration | Pass | 8 integration files and 20 tests passed. The Phase 6 fixture activates all seven goal strategies and verifies real Phase 3 snapshot/Phase 5 closed-budget linkage, manual-versus-verified baselines, immutable versions/evidence, material edit/delete guards, sustained success, milestones, regression, exact BSON `Long`, bounded safe export, retry/dedup behavior, owner-first indexes, and two-actor isolation. |
+| Real authenticated browser journey | Pass | The production `/goals` page used the retained real Google/Auth.js MongoDB session on port 3001. Through the real UI it activated an existing synthetic debt goal against an owned loan, created a verified 8,000.00 ILS baseline/current value, retained the separate manual values, displayed the zero target and gap, then deduplicated an unchanged explicit reevaluation. History exposed the localized metric input and owned source/version. `/financial-data/goals` loaded successfully. No auth, API, repository, or metric path was mocked. |
+| Hebrew/RTL/accessibility | Pass | The authenticated production DOM reported `lang="he"`, `dir="rtl"`, 16 explicit LTR isolates on the verified goal view, natural Hebrew labels/states/history, LTR money/dates/identifiers, semantic headings/regions/lists/details, and no browser warnings or errors. |
+| Strict type-check | Pass | `npm run typecheck`: exit 0. |
+| Lint | Pass | `npm run lint`: exit 0 with `--max-warnings=0`. |
+| Production build | Pass | `npm run build`: exit 0; `/goals`, both goal APIs, and `/financial-data/[section]` compiled as dynamic server routes. |
+| Dependency audit | Pass | Registry-backed `npm run security:audit`: zero vulnerabilities. |
+| Runtime/security smoke | Pass | The production build served the authenticated goal center on port 3001 with no browser/server warnings or errors; identity remained server-derived, mutations retained origin/rate/body guards, and port 3000 was untouched. |
+| Secret/Git hygiene | Pass | `.env.local` remained ignored and untracked; no secret value was printed, logged, staged, exported, or included in source. |
+
+The authenticated journey added one immutable Phase 6 definition and baseline evidence to the existing synthetic local Financial OS profile. It did not delete or rewrite source records and did not alter another user's data.
+
+### Acceptance conclusion
+
+Phase 6 is fully accepted. Supported goals now have deterministic, versioned, owner-isolated, exact, explainable progress with honest manual/verified separation, immutable evidence, sustained-success and regression semantics, and no contamination from hypothetical scenarios. All Phase 0–5 and Hebrew/RTL guarantees remain intact.
+
+### Exact next milestone
+
+Phase 7 — Purchase Impact Simulation. Under the owner's autonomous progression authorization, Phase 7 may begin only after this verified Phase 6 change is committed and pushed to `origin/main`.
+
 ## Phase 5 — Budgets and Monthly Allocation
 
 **Status:** Complete — all Phase 5 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.
