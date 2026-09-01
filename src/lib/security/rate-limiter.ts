@@ -24,6 +24,11 @@ const mutationPolicy: RateLimitPolicy = {
   windowMs: 60_000,
 };
 
+const aiRequestPolicy: RateLimitPolicy = {
+  limit: 10,
+  windowMs: 60 * 60_000,
+};
+
 export class MongoRateLimiter {
   constructor(
     private readonly collection: Collection<RateLimitDocument>,
@@ -80,4 +85,10 @@ export async function consumeMutationRateLimit(
   const limiter = rateLimiterForDatabase(await getDatabase());
   await limiter.ensureIndexes();
   await limiter.consume(actor, scope);
+}
+
+export async function consumeAiRequestRateLimit(actor: Actor): Promise<void> {
+  const limiter = rateLimiterForDatabase(await getDatabase());
+  await limiter.ensureIndexes();
+  await limiter.consume(actor, "ai-copilot", aiRequestPolicy);
 }

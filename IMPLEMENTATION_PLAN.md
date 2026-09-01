@@ -127,15 +127,17 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 8 — Claude financial copilot
 
+**Approved product/security policy (2026-09-01):** Purpose-specific context minimization; deterministic server-side redaction; strict forbidden-secret/auth/card-data exclusions; identifier minimization; untrusted-text prompt-injection boundaries; owner-scoped and deletable minimal conversation history; metadata-only safe telemetry; redacted failures; server-derived per-user isolation; no hidden financial mutations; and a provider-neutral server-only Anthropic adapter. Deterministic Financial OS services remain the only source of numerical truth.
+
 - **Objective:** Explain structured financial truth conversationally without delegating calculations to AI.
 - **Scope:** Anthropic adapter, schema-validated structured context, chat, Safe to Spend explanation, purchase/goal/monthly guidance, FACT/INSIGHT/RECOMMENDATION separation.
-- **Dependencies:** Engine/simulation snapshots; Anthropic credentials; privacy/redaction policy.
+- **Dependencies:** Engine/simulation snapshots; Anthropic API key and, for an identity-linked multi-workspace key, explicit server-only workspace selection; privacy/redaction policy.
 - **Major tasks:** Prompt contracts, tool calls to deterministic services, context minimization, output schemas, refusal/failure UX, usage controls.
 - **Data/model implications:** Owned conversations/messages, snapshot references, retention controls; never credentials.
 - **Security:** Server-only key, prompt-injection defenses, authorization before context assembly, redaction, rate/cost limiting.
 - **Testing:** Adapter contract and schema failures, hostile prompts, hallucinated-number rejection, privacy and E2E explanations.
-- **Acceptance criteria:** Every significant number traces to a structured snapshot/tool result.
-- **Definition of done:** AI failure cannot corrupt or replace financial truth and outputs are clearly classified.
+- **Acceptance criteria:** Verified. Every displayed financial value traces to cited actor-owned deterministic evidence; provider-generated numerical text and foreign/missing evidence references fail closed.
+- **Definition of done:** Met. Real Anthropic and authenticated Hebrew/RTL production-browser paths passed; provider failure cannot create partial history, corrupt canonical records, or replace financial truth, and outputs remain clearly separated into fact, insight, and recommendation.
 - **Risks/migration:** Privacy, hallucination, token cost, model changes, retention consent.
 
 ## Phase 9 — Open Banking

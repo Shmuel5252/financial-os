@@ -28,6 +28,9 @@ export default async function PurchaseSimulationPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <HomeLink />
         <nav className="flex flex-wrap gap-4" aria-label={messages.purchaseSimulation.eyebrow}>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/copilot">
+            {messages.navigation.copilot}
+          </Link>
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/dashboard">
             {messages.purchaseSimulation.actions.dashboard}
           </Link>

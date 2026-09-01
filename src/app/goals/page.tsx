@@ -25,6 +25,7 @@ export default async function GoalsPage() {
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
       <HomeLink />
       <nav className="mt-6 flex flex-wrap gap-4" aria-label={messages.goalEngine.navigationLabel}>
+        <Link className="font-semibold text-[var(--accent)]" href="/copilot">{messages.navigation.copilot}</Link>
         <Link className="font-semibold text-[var(--accent)]" href="/dashboard">{messages.goalEngine.actions.dashboard}</Link>
         <Link className="font-semibold text-[var(--accent)]" href="/financial-data/goals">{messages.goalEngine.actions.addGoal}</Link>
       </nav>

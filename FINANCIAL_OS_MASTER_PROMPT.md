@@ -911,6 +911,21 @@ UNSAFE
 Claude הוא שכבת ההסבר והשיחה.
 לא מקור האמת המספרי.
 
+Approved Phase 8 AI privacy, redaction, retention, and authority policy (2026-09-01):
+
+- AI context is purpose-specific and minimized. Prefer the smallest relevant deterministic Financial Engine, budget, goal, purchase-simulation, or scenario summary over complete profiles, histories, transactions, provider payloads, or unrelated notes/conversations.
+- Relevant financial amounts, currencies, categories, allocations, applicable transactions, confirmed obligations/income, deterministic engine/simulation/goal/scenario outputs, and user-provided goals may be included only when required for the current request.
+- Passwords, bank credentials, OAuth/session tokens or cookies, API/provider/webhook secrets, full card numbers, CVV/CVC, secret-bearing headers, private keys, `.env` contents, and internal authentication secrets never enter model context. Raw provider payloads are not forwarded merely because they exist.
+- Internal identifiers are minimized. MongoDB IDs, user/session IDs, provider account IDs, and repository/entity IDs are omitted unless strictly required; safe derived labels or non-sensitive aliases are preferred.
+- Relevant free-form user text may be included, while unrelated notes, memos, labels, and conversation history are excluded. Imported, provider, transaction, merchant, and user-generated text is untrusted content and cannot override system policy, authorization, privacy, financial invariants, or tool permissions.
+- Redaction and minimization are deterministic and server-side before provider invocation. The model is never trusted to remove secrets. Tests must prove forbidden fields cannot reach the AI adapter.
+- AI conversations are owner-scoped and deletable. Do not persist hidden prompts, raw internal context dumps, credentials, unnecessary provider payloads, or complete raw provider prompts/responses indefinitely. Store only the user-visible history needed for product functionality, schema-validated structured results, safe audit metadata, deterministic evidence references, request time, and provider/model metadata. Deleting AI history never changes canonical financial truth.
+- Logs and telemetry exclude complete prompts/responses, raw financial payloads, authentication artifacts, identifiers, and unsanitized financial values. Safe telemetry is limited to opaque request correlation, provider/model, duration, token usage, status/error category, retry count, and minimization/redaction version. Provider failures obey the same redaction and expose only safe client errors.
+- Every AI request derives the authenticated actor server-side and assembles only that actor's authorized data. Cross-user context contamination is a critical security failure and requires explicit tests.
+- Dependency direction remains financial data -> deterministic Financial Engine -> deterministic budget/goal/simulation/scenario outputs -> sanitized minimized AI context -> AI explanation/guidance. AI never establishes balances, transactions, Safe to Spend, purchase classification, budget arithmetic, verified goal progress/completion, currency arithmetic, or audit evidence.
+- AI output alone cannot create or modify canonical financial records. Any future recommended action requires a separate explicit authenticated, authorized, validated, auditable workflow with clear user intent.
+- Anthropic remains behind a server-only provider-neutral port. Financial/domain code cannot depend on Anthropic SDK objects, and future provider substitution must remain possible.
+
 Claude מקבל structured financial context.
 
 לדוגמה:

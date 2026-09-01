@@ -1,5 +1,44 @@
 # Financial OS Progress
 
+## Phase 8 — Claude Financial Copilot
+
+**Status:** Complete — all Phase 8 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.
+
+**Started:** 2026-09-01
+
+**Verified:** 2026-09-01
+
+**Scope boundary:** Server-only Anthropic adapter, minimized structured deterministic context, Hebrew chat and Safe-to-Spend/purchase/goal/monthly guidance, closed FACT/INSIGHT/RECOMMENDATION responses, owner-scoped deletable history, safe metadata telemetry, prompt-injection defenses, and usage controls only. No AI calculation or mutation of financial truth, Phase 9 banking, Phase 10 transaction intelligence, or later-phase capability.
+
+### Approved policy checkpoint
+
+- Phase 7 is preserved at pushed commit `7ac23756b8b5c6624e1bf9ec73bed8a612f778f9`; the Phase 8 start check found a clean synchronized `main` and an ignored/untracked `.env.local`.
+- The configured Anthropic capability was confirmed only as present; its value was not printed or logged.
+- The complete Master Plan, architecture, decision log, implementation plan, and progress record were reread before changes.
+- Owner-approved context minimization, forbidden-data redaction, identifier minimization, untrusted-text handling, owner-scoped deletion/retention, provider handling, metadata-only telemetry, safe errors, per-user isolation, deterministic authority, no-hidden-mutation, server-side redaction, and provider-abstraction rules are recorded in both synchronized Master Plan copies, `ARCHITECTURE.md`, `IMPLEMENTATION_PLAN.md`, and ADR-039 before implementation.
+
+### Implemented
+
+- Added a provider-neutral server-only AI port and native Anthropic Messages adapter with schema-constrained output, explicit timeouts, safe provider/configuration error categories, optional private multi-workspace selection, and no Anthropic transport types in financial/domain code.
+- Added deterministic purpose-specific context assembly for Safe to Spend, the latest saved purchase simulation, verified goal progress, and the current monthly budget. Only selected actor-owned engine facts and aliased/versioned evidence enter provider context; internal owner, MongoDB, session, source, and provider identifiers are omitted.
+- Added deterministic server-side redaction and fail-closed validation for credentials, authentication artifacts, card/CVV data, private keys, secret-bearing assignments/URIs, forbidden internal fields, excessive history, non-Hebrew output, generated numerical text, and missing/foreign evidence citations. User/import/provider text remains explicitly untrusted and cannot override system policy or financial authority.
+- Added owner-scoped `aiConversations` persistence with owner-first indexes, bounded twelve-exchange history, optimistic continuation, minimal user-visible messages, schema-validated results, safe provider metadata, internal evidence provenance, explicit last-two-message history opt-in, and hard deletion isolated from canonical financial records. Hidden prompts, raw contexts, provider payloads, secrets, and auth artifacts are not stored.
+- Added metadata-only telemetry with opaque request correlation, provider/model, duration, token usage, status/error category, retry count, and minimization/redaction versions. Logs contain no prompts, responses, raw financial payloads, actors, source IDs, credentials, or unsanitized financial values.
+- Added authenticated trusted-origin, body-bounded, no-store, rate-limited list/send/delete APIs and protected Hebrew/RTL `/copilot`. The UI separates עובדות/תובנות/המלצות, renders cited deterministic evidence independently in natural LTR, explains privacy/authority/history rules, supports focus selection and explicit bounded-history opt-in, and exposes no internal identifiers.
+
+### Verification evidence
+
+- Unit suite: 27 files / 125 tests passed, including minimization, forbidden-field redaction, injection boundaries, evidence-only numerical authority, provider contract/failure handling, workspace configuration, and Hebrew/RTL rendering.
+- Dedicated real-Mongo Phase 8 suite: 1 file / 5 tests passed against an isolated database. It proved owner-scoped sanitized storage, explicit bounded history, two-user read/continue/delete isolation, owner-first indexes, failure with no partial conversation, hard deletion limited to the owned AI conversation, and unchanged canonical account/snapshot evidence.
+- Complete regression with `RUN_REAL_ANTHROPIC_TESTS=1`: 38 files / 156 tests passed. The real Anthropic test returned a schema-validated Hebrew response with valid deterministic evidence citations and provider token usage; no mock substituted for this gate.
+- Authenticated production server journey on port 3001 returned `201` through the real `/api/ai/conversations` route using a real Auth.js session, real actor-owned financial context, real MongoDB persistence, and the real Anthropic workspace. Safe telemetry contained only approved metadata. The response was stored only after provider and evidence validation succeeded.
+- Production browser acceptance verified `lang=he`, `dir=rtl`, computed RTL, Hebrew navigation/form/privacy/authority/history and עובדות/תובנות/המלצות, 15 naturally LTR evidence values, no alert, and no visible `userId`, `sourceId`, `conversationId`, or `_id`.
+- Strict TypeScript passed; zero-warning ESLint passed; the optimized Next.js production build passed with both AI routes and `/copilot`; `npm audit --audit-level=high` reported zero vulnerabilities; `git diff --check` passed. `.env.local` remained ignored and untracked, and no Anthropic credential or workspace value was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 8 is fully accepted. Claude is an authenticated, minimized, owner-isolated explanation layer over deterministic Financial OS evidence; it cannot calculate, redefine, or mutate financial truth. All Phase 0–7 and Hebrew/RTL guarantees remain intact.
+
 ## Phase 7 — Purchase Impact Simulation
 
 **Status:** Complete — all Phase 7 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.

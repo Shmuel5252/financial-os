@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-This document defines the implemented architecture through the fully verified Phase 6 acceptance gate and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
+This document defines the implemented architecture through the fully verified Phase 8 acceptance gate and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
 
 | Status | Meaning |
 | --- | --- |
@@ -15,6 +15,7 @@ This document defines the implemented architecture through the fully verified Ph
 | Implemented and verified in Phase 5 | Exact confirmed-income monthly allocation, stable customizable categories, explicit deficits, signed rollover, actual-period refunds, immutable corrections, and isolated deterministic scenarios passed unit, real-Mongo, authenticated-browser, and regression gates. |
 | Implemented and verified in Phase 6 | Versioned deterministic goal metrics, manual/verified provenance, direction-aware progress, sustained success, immutable milestones/history, and authenticated goal management passed unit, real-Mongo, authenticated-browser, and regression gates. |
 | Implemented and verified in Phase 7 | Deterministic purchase classification, exact installments/charges, 90-day safer-date search, separate freshness, and explicitly saved immutable simulations passed unit, real-Mongo, authenticated-browser, integrity, and regression gates. |
+| Implemented and verified in Phase 8 | Minimized/redacted owner-scoped AI context, provider-neutral Anthropic integration, bounded deletable conversations, metadata-only telemetry, fail-closed evidence authority, and authenticated Hebrew/RTL copilot passed real-provider, real-Mongo, browser, security, and regression gates. |
 | Boundary prepared | An interface, module boundary, convention, or configuration seam exists; no provider capability is claimed. |
 | Planned | The product behavior belongs to a later roadmap phase and does not exist yet. |
 
@@ -84,6 +85,17 @@ Dependency flow is inward. UI code may call server actions or route handlers, bu
 - **Freshness/security:** Phase 4 dashboard freshness logic is one shared server-only evaluator reused unchanged by dashboard and simulation. Snapshot and budget references are revalidated with owner predicates at save time. Evaluation/save routes derive Auth.js identity, enforce exact origin/body/rate limits, return no-store responses, and accept no owner identity. A stale result remains mathematically classified but cannot be presented as unqualified current safety.
 - **Verified non-mutation:** unit and real-Mongo acceptance prove that evaluation writes nothing and explicit save changes only `purchaseSimulations`; it does not create transactions or mutate accounts, budget periods, engine/source snapshots, Safe to Spend, or goals.
 - **Not started:** Claude/AI explanation, bank/card-provider terms, purchase commitment, advanced Phase 12 scenarios, and later-phase behavior.
+
+### Phase 8 implementation map
+
+- **Implemented:** protected Hebrew/RTL `/copilot`; Safe to Spend, purchase, goal, and monthly focus modes; a provider-neutral AI port; server-only Anthropic structured-output adapter; bounded owner-scoped conversations; explicit last-two-message history opt-in; hard deletion; evidence rendering; usage limiting; safe errors; and metadata-only telemetry.
+- **Verified:** deterministic pre-provider redaction/minimization and post-provider Hebrew/evidence/numerical validation; hostile text isolation; two-owner read/continue/delete isolation; no partial persistence on failure; no mutation of account or engine evidence; real Anthropic response; real authenticated server route; production RTL/LTR presentation; complete regressions, build, lint, type-check, and dependency audit.
+
+- **Context and authority:** An authenticated application service selects only the smallest relevant owned deterministic Financial Engine, budget, goal, or purchase-simulation view for the explicit request. Domain engines do not call AI. Anthropic receives a provider-neutral, schema-validated, server-redacted context and may explain or guide; it cannot calculate or mutate financial truth.
+- **Forbidden data:** Secrets, credentials, tokens, cookies, private keys, full card data, secret-bearing headers, `.env` content, raw provider payloads, and unnecessary user/repository/provider identifiers cannot enter model context. Relevant financial values are permitted only inside the selected structured evidence. User/import/provider text is always marked untrusted and cannot alter instructions, authorization, privacy, tools, or financial invariants.
+- **Persistence and deletion:** AI conversation storage is owner-scoped, bounded, and deletable. It retains only user-visible messages, closed structured AI results, safe provider metadata, and aliased deterministic evidence references needed for product history. Hidden prompts, raw context dumps, credentials, and unnecessary provider payloads are not stored. Deleting a conversation never deletes or mutates financial records or evidence.
+- **Telemetry and failures:** Operational events contain opaque correlation metadata, provider/model, duration, token usage, status/error class, retries, and redaction/minimization version only. Complete prompts/responses and raw financial payloads are never logged. Provider failures map to safe public errors without serializing request context.
+- **Provider seam:** A server-only AI port accepts and returns provider-neutral contracts. Anthropic request/response details terminate in its adapter. Identity-linked multi-workspace keys select their workspace through optional server-only `ANTHROPIC_WORKSPACE_ID`; the adapter sends that provider identifier only as the required transport header and maps missing/rejected selection to a safe configuration error. Single-workspace keys need no extra setting. The real-provider path, deterministic preflight filters, output-number evidence validation, hostile-text isolation, two-owner isolation, and fail-closed behavior passed before Phase 8 acceptance.
 
 ## Phase 1 profile and onboarding architecture
 
@@ -200,7 +212,7 @@ Repositories:
 - attach canonical timestamps and source metadata at persistence boundaries;
 - translate duplicate-key and unavailable-database failures into typed application errors without leaking connection details.
 
-Phase 1 created its profile/manual capability collections and the four explicitly namespaced Auth.js collections. Phase 2 added only `transactions`, `recurringTransactions`, `savings`, and `financialSnapshots`. Phase 3 adds no collection; it adds an explicitly discriminated `engine_result` kind and owner-prefixed indexes to `financialSnapshots`. Phase 5 adds budget collections, Phase 6 adds goal definition/progress/receipt collections, and Phase 7 adds only immutable `purchaseSimulations`. Auth.js and financial account documents never share a collection.
+Phase 1 created its profile/manual capability collections and the four explicitly namespaced Auth.js collections. Phase 2 added only `transactions`, `recurringTransactions`, `savings`, and `financialSnapshots`. Phase 3 adds no collection; it adds an explicitly discriminated `engine_result` kind and owner-prefixed indexes to `financialSnapshots`. Phase 5 adds budget collections, Phase 6 adds goal definition/progress/receipt collections, and Phase 7 adds only immutable `purchaseSimulations`. Phase 8 adds owner-scoped `aiConversations` with bounded embedded user-visible messages under ADR-039; it stores neither hidden prompts nor raw structured context. Auth.js and financial account documents never share a collection.
 
 ## Validation strategy
 
@@ -293,12 +305,12 @@ Required for operational Google sign-in and persistence:
 - `MONGODB_DB_NAME`
 - `AUTH_URL` in hosted environments and an exact trusted-host policy
 
-Future server-only placeholders are documented for Anthropic and Open Banking, but their adapters are not initialized in Phase 0. Vercel stores production secrets; no `.env` file is committed. Secret rotation and provider token encryption are operational requirements before those providers go live.
+The Phase 8 Anthropic adapter is initialized lazily behind its server-only configuration boundary; Open Banking remains a future server-only placeholder. Vercel stores production secrets; no `.env` file is committed. Secret rotation and provider token encryption are operational requirements before external providers go live in hosted environments.
 
 ## External adapter boundaries
 
 - **Open Banking (planned):** provider consent and tokens stay server-side. A provider adapter maps accounts, balances, cards, and transactions into provider-neutral normalized records. Manual data uses the same domain model and remains first-class. Username/password banking credentials are never collected or stored.
-- **Claude (planned):** an AI port accepts a redacted, structured financial snapshot and returns a schema-validated explanation separated into fact, insight, and recommendation. It has no repository or credential access and cannot commit financial mutations.
+- **Claude (implemented and verified):** the provider-neutral AI port accepts only minimized/redacted actor-owned deterministic evidence and returns a schema-validated Hebrew explanation separated into fact, insight, and recommendation. Anthropic transport and credentials terminate in the server-only adapter; Claude has no repository or credential access and cannot commit financial mutations.
 - **Notifications (planned):** application events are mapped to provider-neutral notification commands; provider delivery identifiers remain in the adapter.
 - **Monitoring/analytics (planned):** operational telemetry excludes raw financial details and sensitive identity data by default.
 

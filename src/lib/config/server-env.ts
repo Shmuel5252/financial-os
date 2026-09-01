@@ -78,6 +78,14 @@ export const serverEnvSchema = z
       z.string().regex(/^[A-Za-z0-9_-]+$/).optional(),
     ),
     ANTHROPIC_API_KEY: optionalSecret,
+    ANTHROPIC_WORKSPACE_ID: z.preprocess(
+      emptyStringToUndefined,
+      z.string().regex(/^wrkspc_[A-Za-z0-9]+$/).optional(),
+    ),
+    ANTHROPIC_MODEL: z.preprocess(
+      emptyStringToUndefined,
+      z.string().regex(/^claude-[a-z0-9-]+$/).optional(),
+    ),
     OPEN_BANKING_PROVIDER: optionalNonEmptyString,
     OPEN_BANKING_CLIENT_ID: optionalNonEmptyString,
     OPEN_BANKING_CLIENT_SECRET: optionalSecret,
@@ -174,5 +182,25 @@ export function requireDatabaseEnv(): Readonly<{
   return {
     databaseName: env.MONGODB_DB_NAME,
     uri: env.MONGODB_URI,
+  };
+}
+
+export function requireAnthropicEnv(): Readonly<{
+  apiKey: string;
+  model: string;
+  workspaceId?: string;
+}> {
+  const env = getServerEnv();
+
+  if (env.ANTHROPIC_API_KEY === undefined) {
+    throw new ConfigurationError("Anthropic is not configured.");
+  }
+
+  return {
+    apiKey: env.ANTHROPIC_API_KEY,
+    model: env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
+    ...(env.ANTHROPIC_WORKSPACE_ID === undefined
+      ? {}
+      : { workspaceId: env.ANTHROPIC_WORKSPACE_ID }),
   };
 }
