@@ -28,6 +28,7 @@ import {
   type TransactionIntelligenceCalculation,
   type TransactionIntelligenceMerchantGroup,
   type TransactionIntelligenceReview,
+  type TransactionIntelligenceReviewDecision,
   type TransactionIntelligenceRun,
   type TransactionIntelligenceSignal,
 } from "@/lib/transaction-intelligence/transaction-intelligence";
@@ -476,6 +477,23 @@ export class TransactionIntelligenceRepository {
       );
     }
     return documents.map(mapReview);
+  }
+
+  async latestReviewDecisionsForActor(
+    actor: Actor,
+  ): Promise<ReadonlyMap<string, TransactionIntelligenceReviewDecision>> {
+    const documents = await this.reviews.aggregate<{
+      _id: string;
+      decision: string;
+    }>([
+      { $match: { userId: objectId(actor.userId, "actor.userId") } },
+      { $sort: { at: 1, _id: 1 } },
+      { $group: { _id: "$signalId", decision: { $last: "$decision" } } },
+    ]).toArray();
+    return new Map(documents.map((document) => [
+      document._id,
+      transactionIntelligenceReviewDecisionSchema.parse(document.decision),
+    ]));
   }
 
   async findReviewByIdempotencyForActor(

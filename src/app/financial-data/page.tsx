@@ -50,6 +50,9 @@ export default async function FinancialDataPage() {
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/purchase-simulation">
             {messages.navigation.purchaseSimulation}
           </Link>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/forecasts">
+            {messages.navigation.forecasts}
+          </Link>
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/goals">
             {messages.navigation.goals}
           </Link>

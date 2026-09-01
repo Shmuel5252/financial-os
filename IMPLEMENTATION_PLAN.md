@@ -194,16 +194,18 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 12 — Advanced forecast and scenarios
 
-- **Objective:** Provide 30/60/90-day forecasts, scenario analysis, uncertain income, estimates, and trends.
-- **Scope:** Forecast ranges/confidence and what-if income, expense, loan, card, and savings changes.
+- **Approved product policy (2026-09-01):** Deterministic 7/30/60/90-day operational forecasts (30-day default); explicit confirmed/estimated events; categorical versioned confidence without fake probabilities; Phase 10 review/correction precedence; duplicate prevention; exact projected minima/margin/zero crossings; strict actual/forecast/scenario separation; actor-only household privacy; and deterministic AI authority boundaries.
+- **Objective:** Provide 7/30/60/90-day operational forecasts, scenario analysis, uncertain income, estimates, and trends.
+- **Scope:** Forecast ranges/confidence and separately persisted what-if income, expense, loan, card, and savings changes. Projections beyond 90 days, if needed later, are labelled planning/scenario outputs rather than operational forecasts.
 - **Dependencies:** Timeline engine, history, recurrence/intelligence signals.
 - **Major tasks:** Versioned assumptions, confidence models, scenario comparison, explicit as-of state, trend detection.
-- **Data/model implications:** Owned forecast/scenario snapshots with assumption and engine versions.
-- **Security:** Authorized inputs, safe cached views, no AI-calculated truth.
-- **Testing:** Uncertainty bounds, missing history, seasonal/month/DST boundaries, reproducibility, stress fixtures.
+- **Data/model implications:** Immutable owned forecast/scenario snapshots with assumption, confidence-policy, source, engine, and calculation versions; exact BSON int64 money; no duplicated raw history.
+- **Security:** Server-derived actor, actor-only source loading despite household membership, safe bounded views, no client owner selection, and no AI-calculated truth.
+- **Testing:** Four horizons, confidence thresholds/degradation, confirmed/estimated separation, duplicate prevention, corrected/dismissed Phase 10 evidence, missing/stale history, month/DST boundaries, exact crossings, same currency/BSON int64, scenario non-mutation, household/two-user isolation, reproducibility, and stress fixtures.
 - **Acceptance criteria:** Forecasts disclose assumptions/confidence and scenarios cannot mutate actual data.
 - **Definition of done:** Results are deterministic for a given assumption set and reconcile to baseline timeline.
 - **Risks/migration:** False precision, data sparsity, expensive recomputation.
+- **Verified result (2026-09-01):** Accepted under the execution-order exception. The dedicated Phase 12 suite passed 3 files / 19 tests and the complete final-state suite passed 47 files / 203 tests with real MongoDB and the real Anthropic regression gate. Authenticated Hebrew/RTL production acceptance, exact BSON int64 provenance, owner/household isolation, duplicate/confidence/crossing boundaries, scenario non-mutation, type-check, zero-warning lint, optimized build, and zero-vulnerability registry audit passed. Phase 9 remains blocked and no provider provenance exists.
 
 ## Phase 13 — Debt strategies
 
@@ -217,6 +219,7 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 - **Acceptance criteria:** Schedules reconcile at every payment and total conserved amounts are exact to minor units.
 - **Definition of done:** Strategies are explainable, reproducible, and do not alter debt truth until explicitly applied.
 - **Risks/migration:** Lender-specific rules, regulatory presentation, rate changes.
+- **Current gate:** Not started. Product policy must define accrual/day-count/compounding, payment allocation/order, minimum-payment and rate-change behavior, explicit fees, early payoff, and custom-strategy semantics before financially correct implementation can begin.
 
 ## Phase 14 — Savings and net worth
 

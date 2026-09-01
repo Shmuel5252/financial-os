@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-This document defines the implemented architecture through the fully verified Phase 10 acceptance gate, with Phase 9 still explicitly blocked under the approved execution-order exception, and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
+This document defines the implemented architecture through the fully verified Phase 12 acceptance gate, with Phase 9 still explicitly blocked under the approved execution-order exception, and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
 
 | Status | Meaning |
 | --- | --- |
@@ -19,6 +19,7 @@ This document defines the implemented architecture through the fully verified Ph
 | Blocked at Phase 9 | Open Banking is unimplemented and unaccepted pending provider/legal/consent/KMS decisions plus official Integration/Sandbox access. Phase 10's execution-order exception does not change this status. |
 | Implemented and verified in Phase 10 | Deterministic merchant/category/recurrence/subscription/duplicate/anomaly evidence, immutable runs, append-only reviews, explicit auditable category confirmation, and authenticated Hebrew/RTL review passed labelled fixtures, real-Mongo, browser, integrity, security, and regression gates. Phase 9 remains blocked. |
 | Implemented and verified in Phase 11 | Private-by-default household authorization preserves individual ownership, uses owner/member roles, explicit audited shares, secure invitations, membership-epoch revocation, and shared-only derived views. Unit, real-Mongo, authenticated-browser, security, build, and regression gates passed. Phase 9 remains blocked. |
+| Implemented and verified in Phase 12 | Deterministic 7/30/60/90-day forecasts preserve confirmed/estimated truth, categorical evidence confidence, exact crossings, immutable provenance, durable Phase 10 review precedence, and separate non-mutating scenarios. Unit, real-Mongo, authenticated-browser, real-Anthropic regression, security, build, and integrity gates passed. Phase 9 remains blocked. |
 | Boundary prepared | An interface, module boundary, convention, or configuration seam exists; no provider capability is claimed. |
 | Planned | The product behavior belongs to a later roadmap phase and does not exist yet. |
 
@@ -320,6 +321,20 @@ The user-entered amount is total purchase price. One-time or monthly-installment
 Freshness reuses Phase 4's owner-scoped manifest/profile/calendar comparison. A stale snapshot remains mathematically usable and keeps its deterministic classification, but the result and Hebrew UI disclose `STALE`; stale `SAFE` is never an unqualified current recommendation. Simulations remain ephemeral until an authenticated user explicitly saves one. Saved records are immutable owner-scoped evidence with input/schedule/charge provenance, snapshot and budget references where applicable, margin/minimum result, classification, freshness, safer date, engine/policy versions, and creation time. Saving never mutates source records, accounts, budgets, Safe to Spend, or verified goals.
 
 Dependency direction remains: confirmed financial data -> deterministic Financial Engine -> deterministic purchase simulation -> classification/projection -> optional AI explanation. Phase 7 does not add Claude, bank/card-provider integration, purchase commitment, or Phase 12 advanced scenarios.
+
+## Phase 12 approved forecast and scenario boundaries
+
+The operational forecast is a pure deterministic projection over one immutable actor-owned Phase 3 snapshot plus the latest actor-owned Phase 10 intelligence evidence. Its only authoritative horizons are 7, 30, 60, and 90 user-timezone calendar days; 30 is the UI default. Each output event is explicitly `confirmed` or `estimated`. Confirmed balance follows only Phase 3 confirmed events, while projected balance additionally applies estimated events. Uncertain Phase 3 income remains estimated and cannot become confirmed merely by appearing in a forecast. No implicit FX is allowed.
+
+Forecast confidence uses `forecast-confidence-v1`, not numeric probability. A recurring estimate is `LOW` when it has fewer than three observations, its latest evidence is older than `max(45, 2 * periodDays + 14)` calendar days, timing varies by more than seven days from the inferred cadence, or amount varies by more than ten percent from the median. It is `HIGH` only with at least five observations, latest evidence within `periodDays + 7`, maximum timing deviation of three days, maximum amount deviation of five percent, and either an explicit confirmed Phase 10 review or at least six observations. Other eligible estimates are `MEDIUM`. Dismissed signals are excluded; reopened signals are unreviewed. Snapshot/source staleness, stale intelligence, no usable recurring evidence, or any included `LOW` estimate makes overall confidence `LOW`; all included estimates must be `HIGH` for overall `HIGH`, otherwise it is `MEDIUM`. These categories express evidence sufficiency, not certainty about future outcomes, and Claude cannot assign or alter them.
+
+The timeline uses conservative Phase 3 event ordering, preserves exact bigint money, adds margin boundaries, and prevents duplicate estimates by suppressing any inferred event with the same date, direction, currency, and amount as an already-confirmed event. Outputs retain baseline, source snapshot/run references, calculation/policy versions, event provenance, projected minimum/date, first below-margin date, first below-zero date, and bounded contributing confirmed obligations. Current Phase 3 Safe to Spend remains a separately labelled current fact.
+
+`forecastSnapshots` and `forecastScenarios` are append-only owner-scoped evidence created only by explicit authenticated commands; reads never calculate or write. A scenario references one owned operational forecast and applies explicit future adjustments without modifying the forecast or any transaction, account, budget, Safe to Spend, goal, or provider record. Forecast reads remain actor-only in Phase 12: Phase 11 account/goal grants do not authorize another member's private timeline, transaction intelligence, or derived forecast.
+
+Dependency direction is confirmed owned data -> deterministic Financial Engine -> deterministic operational forecast -> deterministic scenario comparison -> minimized AI explanation. Phase 8 may explain cited sanitized outputs later, but it cannot invent events, amounts or dates, assign confidence, or mutate financial truth. Phase 9 remains blocked; manual/provider-neutral sources remain valid forecast inputs.
+
+Phase 12 persists confidence-policy provenance once on the immutable operational forecast. A scenario retains its owned forecast reference plus its own engine/policy and exact adjustment evidence; it does not duplicate the forecast confidence version. This keeps previously valid immutable scenarios readable while preserving a complete reproducibility chain through their referenced forecast.
 
 ## Error handling and auditability
 

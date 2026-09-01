@@ -738,6 +738,18 @@ Approved Phase 11 Household policy (2026-09-01):
 - Household-related Copilot context remains subject to Phase 8 minimization, redaction, authority, and owner-isolation policies. Private data from another member cannot enter prompts, responses, telemetry, or logs.
 - Security-sensitive household creation, invitation, acceptance/revocation/expiry, membership removal/leave, resource share/unshare, role-sensitive change, and dissolution events retain immutable actor, target/resource, timestamp, and safe provenance evidence without retaining invitation secrets.
 
+Approved Phase 12 Forecast and Confidence policy (2026-09-01):
+
+- The operational forecast supports explicit 7, 30, 60, and 90 calendar-day horizons, with 30 days as the product default. Calendar boundaries use the user's configured IANA timezone. Anything beyond 90 days is a separately labelled planning/scenario projection, never an authoritative near-term forecast.
+- Every projected event is explicitly `confirmed` or `estimated`, retains exact same-currency money, expected calendar timing, source provenance, confidence where applicable, and calculation/policy versions. Estimated evidence never silently becomes confirmed, and no implicit FX is permitted.
+- Forecast confidence is deterministic and categorical (`HIGH`, `MEDIUM`, `LOW`), never a probability. The versioned policy uses history count, recency, timing/amount stability, review state, assumptions, and freshness. Insufficient or materially stale evidence degrades confidence; Claude cannot assign or override it.
+- The operational timeline keeps confirmed balance and estimated projected balance separate, prevents double-counting between confirmed truth and inferred recurrence, and records the projected minimum, first Safety Margin crossing, first zero crossing, and relevant confirmed obligations. Current Safe to Spend remains Phase 3 truth and is never redefined by Phase 12.
+- Actual/confirmed truth, operational forecast, and hypothetical scenarios are separate contracts. Scenario income, spending, debt/card payments, savings transfers, or gains never mutate transactions, balances, budgets, Safe to Spend, goals, or the operational forecast.
+- Phase 10 reviewed/corrected evidence takes precedence over unreviewed inference; dismissed patterns are excluded. Manual/provider-neutral data remains first-class while Phase 9 stays blocked, and missing predictive history still permits confirmed-event forecasts with explicit `LOW` predictive confidence.
+- Forecast snapshots and explicit scenario evidence are immutable, actor-owned, versioned, reproducible from referenced Phase 3/Phase 10 inputs, and contain no unnecessary duplicate raw history. Household access remains actor-only unless a future policy explicitly authorizes a shared forecast projection.
+- Dependency direction remains confirmed owned data -> deterministic Financial Engine -> deterministic operational forecast -> deterministic scenario comparison -> minimized AI explanation. AI may explain only and cannot invent amounts/events/dates, assign confidence, or mutate truth.
+- Verified Phase 12 implementation preserves this boundary with immutable actor-owned forecast/scenario evidence, exact BSON int64 money, durable Phase 10 review precedence, authenticated Hebrew/RTL access, and no Phase 9 provider provenance. Scenario evidence references its immutable operational forecast for confidence-policy provenance rather than duplicating mutable or redundant truth.
+
 אפשרות ליצור תקציב.
 Categories:
 - אוכל

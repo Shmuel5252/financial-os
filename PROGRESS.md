@@ -1,5 +1,42 @@
 # Financial OS Progress
 
+## Phase 12 — Advanced Forecast and Scenarios
+
+**Status:** Complete — all Phase 12 acceptance criteria objectively verified and accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
+
+**Started:** 2026-09-01
+
+**Verified:** 2026-09-01
+
+**Scope boundary:** Deterministic 7/30/60/90-day operational forecasts, categorical evidence confidence, confirmed-versus-estimated timelines, immutable snapshots, and separate exact what-if comparisons only. No Open Banking, fabricated provider provenance, AI-calculated forecast truth, canonical financial mutation, Phase 13 debt strategy, or later-phase feature.
+
+### Implemented
+
+- The complete synchronized Master Plan, architecture, decision log, implementation plan, and progress history were reread before changes; the working tree began clean at accepted Phase 11 commit `844df0690634d0fbc4cb89ddd725f7989939b58e`.
+- The owner-approved 7/30/60/90-day horizons, confirmed/estimated truth model, categorical confidence rules, duplicate prevention, current-versus-forecast truth, scenario separation, Phase 10 review precedence, provider-neutral/manual operation, household privacy, deterministic AI boundary, provenance, and verification requirements are now recorded in both synchronized Master Plan copies, ADR-045/046, architecture, and the implementation plan.
+- Added a pure versioned operational-forecast engine over immutable Phase 3 evidence. It keeps confirmed balance separate from projected balance, carries uncertain income only as estimated, uses conservative same-day ordering and user-timezone dates, prevents exact confirmed/estimated duplicates, rejects implicit FX, and calculates exact projected minima plus first Safety Margin/zero crossings and contributing obligations.
+- Added deterministic `forecast-confidence-v1` thresholds for `HIGH`/`MEDIUM`/`LOW`, including observation count, recency, cadence stability, amount stability, freshness, and durable Phase 10 review precedence. Reviewed signals keep their stable decision across later identical intelligence runs; dismissed patterns are excluded and reopened patterns remain unreviewed.
+- Added append-only actor-owned `forecastSnapshots` and `forecastScenarios` with exact BSON `Long` money, immutable Phase 3/10 provenance, calculation/policy versions, idempotency/concurrency protection, owner-first indexes, and bounded safe views. Explicit scenarios cover income, expense, reduction, loan/card payment, and savings-transfer adjustments without writing canonical truth.
+- Added authenticated, trusted-origin, body-bounded, rate-limited, no-store APIs and protected Hebrew/RTL `/forecasts`. Navigation, horizons, confidence/freshness disclosure, current-versus-projected labels, timelines, empty/failure states, and what-if forms are natural Hebrew with explicit LTR isolation.
+- Phase 9 remains blocked and no Open Banking collection, synchronization state, provider identifier, or bank provenance was introduced. Manual/provider-neutral records remain first-class inputs.
+
+### Verification evidence
+
+- Dedicated Phase 12 unit/UI/real-Mongo run passed 3 files / 19 tests. Coverage includes all four horizons, timezone boundaries, confirmed/estimated separation, every confidence boundary and degradation rule, reviewed/dismissed Phase 10 evidence, duplicate suppression, exact crossings, implicit-FX rejection, bigint arithmetic, scenario isolation, reproducibility, BSON int64 persistence, direct-ID/two-user/household denial, idempotency, and canonical non-mutation.
+- The complete final-state regression with `RUN_REAL_ANTHROPIC_TESTS=1` passed 47 files / 203 tests using one worker. Real MongoDB isolation/integrity and the real Anthropic provider gate both passed; no mock replaced either required boundary.
+- Authenticated production-browser acceptance on port 3001 used the retained real Auth.js session. It calculated and reloaded a 90-day deterministic forecast, honestly reported `LOW` confidence for insufficient predictive history while retaining confirmed events, and loaded exactly one explicit `123.45 ILS` hypothetical-income comparison without treating it as financial truth.
+- Browser checks passed with `lang=he`, `dir=rtl`, computed RTL, 45 explicit LTR isolates, one `main`, one `h1`, no horizontal overflow, no visible internal IDs, one retained scenario, and no new warning/error logs. A production-only backward-compatibility failure for an earlier valid scenario was detected during acceptance and fixed by keeping confidence-version provenance on the referenced immutable forecast rather than duplicating it in scenario schema.
+- Read-only real-Mongo acceptance confirmed the scenario owner matched an active Auth.js database session, its forecast/Phase 3/Phase 10 sources had the same owner, exact forecast/scenario money remained BSON `Long`, and accounts, transactions, budgets, and Goal Engine evidence received zero writes. Phase 9 collection count remained zero.
+- Strict type-check, zero-warning ESLint, optimized Next.js production build, `git diff --check`, synchronized Master Plan hashes, tracked-secret/configuration checks, and the registry-backed high-severity audit passed; the audit reported zero vulnerabilities. `.env.local` remained ignored and untracked, port 3000 retained its original process, and no credential was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 12 is fully accepted under the execution-order exception. Operational forecast, scenario projection, and confirmed financial truth are distinct reproducible contracts; confidence remains deterministic evidence quality and AI remains explanation-only. Phase 9 remains visibly blocked and unaccepted.
+
+### Exact next gate
+
+Phase 13 is not started. Its roadmap requires financially consequential debt-term policies that are not yet resolved: interest accrual/day-count and compounding conventions, payment allocation/order, minimum-payment and changing-rate behavior, explicit fee treatment, early-payoff handling, and custom-strategy semantics. Autonomous progression stops at this genuine product/financial-correctness gate rather than guessing lender rules.
+
 ## Phase 11 — Households and Permissions
 
 **Status:** Complete — all Phase 11 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
