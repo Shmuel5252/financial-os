@@ -39,6 +39,7 @@ import {
 } from "@/lib/profiles/profile-repository";
 import { saveProfile } from "@/lib/profiles/profile-service";
 import { purchaseSimulationRepositoryForDatabase } from "@/lib/purchase-simulations/purchase-simulation-repository";
+import { transactionIntelligenceRepositoryForDatabase } from "@/lib/transaction-intelligence/transaction-intelligence-repository";
 
 const testUri = process.env.MONGODB_TEST_URI;
 const describeWithMongo = testUri === undefined ? describe.skip : describe;
@@ -566,8 +567,10 @@ describeWithMongo("Phase 6 deterministic Goal Engine persistence", () => {
       purchaseSimulationRepository:
         purchaseSimulationRepositoryForDatabase(database),
       repositories: { ...engineSources, goals: goalsRepository },
+      transactionIntelligenceRepository:
+        transactionIntelligenceRepositoryForDatabase(database),
     });
-    expect(exported.schemaVersion).toBe(4);
+    expect(exported.schemaVersion).toBe(5);
     expect(exported.goalEngine.definitions.length).toBeGreaterThanOrEqual(7);
     expect(exported.goalEngine.progressEvidence.length).toBeGreaterThanOrEqual(7);
     expect(JSON.stringify(exported.goalEngine)).not.toContain("userId");

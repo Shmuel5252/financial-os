@@ -1,5 +1,44 @@
 # Financial OS Progress
 
+## Phase 10 — Transaction Intelligence
+
+**Status:** Complete — all Phase 10 acceptance criteria objectively verified and accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
+
+**Started:** 2026-09-01
+
+**Verified:** 2026-09-01
+
+**Scope boundary:** Deterministic merchant normalization, category suggestions, recurring/subscription, duplicate, unusual-amount, increase, and unusual-merchant review signals over bounded provider-neutral manual history. Predictions and reviews remain separate from confirmed transaction facts. No Open Banking provenance, bank sync, automatic categorization, transaction mutation, recurring-obligation creation, AI financial authority, or later-phase capability.
+
+### Approved checkpoint
+
+- Phase 8 remains preserved at pushed commit `a8e0471dbde75e65b3b9b1eaf7865de4eb7dd93d`; the Phase 10 start inspection found clean synchronized `main`/`origin/main` and an ignored/untracked `.env.local`.
+- The complete Master Plan, architecture, decision log, implementation plan, and progress record were reread before changes.
+- ADR-041 records the execution-order exception only. Phase 9 remains blocked on provider, jurisdiction/legal, consent, encryption/KMS, and official Integration/Sandbox access; no Phase 9 code or acceptance is implied.
+- ADR-042 records the deterministic, immutable, owner-scoped, review-only intelligence boundary. There is no unresolved Phase 10 product/security gate requiring unsafe assumptions before implementation.
+
+### Implemented
+
+- Added a pure deterministic, versioned transaction-intelligence engine with bounded inputs/signals, Unicode-safe merchant normalization, curated merchant rules, user-confirmed-history precedence, exact duplicate matching, recurring cadence detection, subscription and price-increase signals, same-currency amount anomalies, unusual-merchant signals, integer-basis-point confidence, closed explanation codes, and stable evidence identifiers. The engine has no provider or AI dependency.
+- Added immutable actor-owned `transactionIntelligenceRuns` and append-only `transactionIntelligenceReviews` repositories with owner-first indexes, BSON `Long` money, canonical input hashes, version/provenance evidence, idempotent run commands, concurrency-safe review sequences, and no update/delete path.
+- Added an authenticated service and trusted-origin, body-bounded, rate-limited, no-store APIs. Reads are side-effect free; analysis is explicit. Client contracts cannot select an owner. An explicit category confirmation appends the existing Phase 5 correction evidence and leaves the source transaction unchanged; all other reviews remain reversible append-only evidence.
+- Added protected Hebrew/RTL `/transaction-intelligence` review UX with natural LTR isolation for money, dates, confidence, and versions. The page distinguishes detected evidence from confirmed financial truth, exposes empty/failure/review states, and never presents a prediction as an applied transaction/category/recurrence.
+- Extended the bounded owner-only financial export to schema version 5 with public intelligence runs and review evidence while omitting ownership, internal transaction/repository identifiers, idempotency material, and audit internals.
+- Extracted the shared effective-category projection used by budgets and transaction intelligence, preserving Phase 5 refund/correction semantics and keeping immutable transaction facts authoritative.
+
+### Verification evidence
+
+- Unit suite: 29 files / 134 tests passed. Coverage includes known merchants, correction-history precedence/conflicts, low-confidence omission, duplicate/recurring/subscription/increase/anomaly signals, currency separation, strict no-owner command schemas, deterministic quality fixtures, Hebrew/RTL rendering, and absence of internal identifiers.
+- Dedicated real-Mongo Phase 10 suite: 1 file / 6 tests passed. It proved BSON int64 evidence, immutable runs, two-user isolation, explicit correction linkage without source mutation, run idempotency/conflict handling, append-only dismiss/reopen review history, owner-first indexes, and safe analyzer failure with unchanged canonical finance.
+- Complete regression with real Anthropic acceptance enabled: 41 files / 172 tests passed. The full real-Mongo integration set, prior phase regressions, and the real Phase 8 provider path remained green.
+- Authenticated production browser acceptance on port 3001 passed with a real Auth.js session: explicit analysis persisted, a known merchant produced an 85% category suggestion, explicit confirmation persisted immutable review/correction evidence, reload preserved the accepted state, and the source transaction category/version remained unchanged. DOM checks confirmed `lang=he`, `dir=rtl`, computed RTL, natural LTR isolates, one review card, no horizontal overflow, and no error alert.
+- A read-only database acceptance check confirmed the active session owner matched all new records, exact money was BSON int64, review/correction linkage was correct, the original transaction remained unchanged, and no Phase 9/Open Banking collection was created.
+- Strict TypeScript, zero-warning ESLint, optimized production build, `git diff --check`, and the high-severity dependency audit passed; the audit reported zero vulnerabilities. `.env.local` remained ignored and untracked, and no secret was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 10 is fully accepted under the execution-order exception. Transaction intelligence is deterministic review evidence over provider-neutral manual history and cannot silently rewrite confirmed financial truth. Phase 9 remains blocked and unaccepted. Autonomous progression stops before Phase 11 because its private/shared resource semantics and permission lifecycle remain a genuine unresolved product-policy gate; no Phase 11 code has started.
+
 ## Phase 8 — Claude Financial Copilot
 
 **Status:** Complete — all Phase 8 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule.

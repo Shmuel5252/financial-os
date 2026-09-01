@@ -42,6 +42,16 @@ import {
   getPurchaseSimulationRepository,
   type PurchaseSimulationRepository,
 } from "@/lib/purchase-simulations/purchase-simulation-repository";
+import {
+  toTransactionIntelligenceReviewView,
+  toTransactionIntelligenceRunView,
+  type TransactionIntelligenceReviewView,
+  type TransactionIntelligenceRunView,
+} from "@/lib/transaction-intelligence/transaction-intelligence";
+import {
+  getTransactionIntelligenceRepository,
+  type TransactionIntelligenceRepository,
+} from "@/lib/transaction-intelligence/transaction-intelligence-repository";
 
 export type FinancialDataExport = Readonly<{
   budgets: Readonly<{
@@ -64,7 +74,11 @@ export type FinancialDataExport = Readonly<{
   profile: UserProfileView | null;
   purchaseSimulations: readonly SavedPurchaseSimulationView[];
   records: Readonly<Record<ManualSection, readonly ManualRecordView[]>>;
-  schemaVersion: 4;
+  schemaVersion: 5;
+  transactionIntelligence: Readonly<{
+    reviewEvidence: readonly TransactionIntelligenceReviewView[];
+    runs: readonly TransactionIntelligenceRunView[];
+  }>;
 }>;
 
 export type FinancialDataExportDependencies = Readonly<{
@@ -74,6 +88,7 @@ export type FinancialDataExportDependencies = Readonly<{
   profileRepository?: UserProfileRepository;
   purchaseSimulationRepository?: PurchaseSimulationRepository;
   repositories?: Readonly<Partial<Record<ManualSection, ManualRecordRepository>>>;
+  transactionIntelligenceRepository?: TransactionIntelligenceRepository;
 }>;
 
 export async function buildFinancialDataExport(
@@ -114,6 +129,19 @@ export async function buildFinancialDataExport(
     (await getPurchaseSimulationRepository());
   const purchaseSimulations =
     await purchaseSimulationRepository.listAllForActor(actor);
+  const transactionIntelligenceRepository =
+    dependencies?.transactionIntelligenceRepository ??
+    (await getTransactionIntelligenceRepository());
+  const [intelligenceRuns, intelligenceReviews] = await Promise.all([
+    transactionIntelligenceRepository.listAllRunsForActor(actor),
+    transactionIntelligenceRepository.listAllReviewsForActor(actor),
+  ]);
+  const reviewsByRun = new Map(
+    intelligenceRuns.map((run) => [
+      run.id,
+      intelligenceReviews.filter((review) => review.runId === run.id),
+    ]),
+  );
 
   return {
     budgets: {
@@ -149,6 +177,17 @@ export async function buildFinancialDataExport(
     records: Object.fromEntries(entries) as unknown as Readonly<
       Record<ManualSection, readonly ManualRecordView[]>
     >,
-    schemaVersion: 4,
+    schemaVersion: 5,
+    transactionIntelligence: {
+      reviewEvidence: intelligenceReviews.map(
+        toTransactionIntelligenceReviewView,
+      ),
+      runs: intelligenceRuns.map((run) =>
+        toTransactionIntelligenceRunView(
+          run,
+          reviewsByRun.get(run.id) ?? [],
+        ),
+      ),
+    },
   };
 }

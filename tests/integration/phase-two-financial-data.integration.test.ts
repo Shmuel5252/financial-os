@@ -34,6 +34,7 @@ import {
 } from "@/lib/profiles/profile-repository";
 import { saveProfile } from "@/lib/profiles/profile-service";
 import { purchaseSimulationRepositoryForDatabase } from "@/lib/purchase-simulations/purchase-simulation-repository";
+import { transactionIntelligenceRepositoryForDatabase } from "@/lib/transaction-intelligence/transaction-intelligence-repository";
 
 const testUri = process.env.MONGODB_TEST_URI;
 const describeWithMongo = testUri === undefined ? describe.skip : describe;
@@ -350,6 +351,8 @@ describeWithMongo("Phase 2 financial data foundation", () => {
       purchaseSimulationRepository:
         purchaseSimulationRepositoryForDatabase(database),
       repositories,
+      transactionIntelligenceRepository:
+        transactionIntelligenceRepositoryForDatabase(database),
     });
     const serialized = JSON.stringify(exported);
 

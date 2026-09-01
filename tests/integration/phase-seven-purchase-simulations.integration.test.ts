@@ -32,6 +32,7 @@ import {
 } from "@/lib/profiles/profile-repository";
 import { saveProfile } from "@/lib/profiles/profile-service";
 import { purchaseSimulationRepositoryForDatabase } from "@/lib/purchase-simulations/purchase-simulation-repository";
+import { transactionIntelligenceRepositoryForDatabase } from "@/lib/transaction-intelligence/transaction-intelligence-repository";
 import {
   evaluatePurchaseSimulation,
   loadPurchaseSimulationCenter,
@@ -338,9 +339,11 @@ describeWithMongo("Phase 7 purchase simulation persistence and isolation", () =>
       profileRepository,
       purchaseSimulationRepository: simulationRepository,
       repositories: { ...sourceRepositories, goals: goalsRepository },
+      transactionIntelligenceRepository:
+        transactionIntelligenceRepositoryForDatabase(database),
     });
     const serialized = JSON.stringify(exported.purchaseSimulations);
-    expect(exported.schemaVersion).toBe(4);
+    expect(exported.schemaVersion).toBe(5);
     expect(exported.purchaseSimulations).toHaveLength(1);
     expect(serialized).not.toContain("userId");
     expect(serialized).not.toContain("idempotencyKeyHash");

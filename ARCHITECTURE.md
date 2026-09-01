@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-This document defines the implemented architecture through the fully verified Phase 8 acceptance gate and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
+This document defines the implemented architecture through the fully verified Phase 10 acceptance gate, with Phase 9 still explicitly blocked under the approved execution-order exception, and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
 
 | Status | Meaning |
 | --- | --- |
@@ -16,6 +16,8 @@ This document defines the implemented architecture through the fully verified Ph
 | Implemented and verified in Phase 6 | Versioned deterministic goal metrics, manual/verified provenance, direction-aware progress, sustained success, immutable milestones/history, and authenticated goal management passed unit, real-Mongo, authenticated-browser, and regression gates. |
 | Implemented and verified in Phase 7 | Deterministic purchase classification, exact installments/charges, 90-day safer-date search, separate freshness, and explicitly saved immutable simulations passed unit, real-Mongo, authenticated-browser, integrity, and regression gates. |
 | Implemented and verified in Phase 8 | Minimized/redacted owner-scoped AI context, provider-neutral Anthropic integration, bounded deletable conversations, metadata-only telemetry, fail-closed evidence authority, and authenticated Hebrew/RTL copilot passed real-provider, real-Mongo, browser, security, and regression gates. |
+| Blocked at Phase 9 | Open Banking is unimplemented and unaccepted pending provider/legal/consent/KMS decisions plus official Integration/Sandbox access. Phase 10's execution-order exception does not change this status. |
+| Implemented and verified in Phase 10 | Deterministic merchant/category/recurrence/subscription/duplicate/anomaly evidence, immutable runs, append-only reviews, explicit auditable category confirmation, and authenticated Hebrew/RTL review passed labelled fixtures, real-Mongo, browser, integrity, security, and regression gates. Phase 9 remains blocked. |
 | Boundary prepared | An interface, module boundary, convention, or configuration seam exists; no provider capability is claimed. |
 | Planned | The product behavior belongs to a later roadmap phase and does not exist yet. |
 
@@ -96,6 +98,24 @@ Dependency flow is inward. UI code may call server actions or route handlers, bu
 - **Persistence and deletion:** AI conversation storage is owner-scoped, bounded, and deletable. It retains only user-visible messages, closed structured AI results, safe provider metadata, and aliased deterministic evidence references needed for product history. Hidden prompts, raw context dumps, credentials, and unnecessary provider payloads are not stored. Deleting a conversation never deletes or mutates financial records or evidence.
 - **Telemetry and failures:** Operational events contain opaque correlation metadata, provider/model, duration, token usage, status/error class, retries, and redaction/minimization version only. Complete prompts/responses and raw financial payloads are never logged. Provider failures map to safe public errors without serializing request context.
 - **Provider seam:** A server-only AI port accepts and returns provider-neutral contracts. Anthropic request/response details terminate in its adapter. Identity-linked multi-workspace keys select their workspace through optional server-only `ANTHROPIC_WORKSPACE_ID`; the adapter sends that provider identifier only as the required transport header and maps missing/rejected selection to a safe configuration error. Single-workspace keys need no extra setting. The real-provider path, deterministic preflight filters, output-number evidence validation, hostile-text isolation, two-owner isolation, and fail-closed behavior passed before Phase 8 acceptance.
+
+### Phase 9 blocked boundary and Phase 10 execution exception
+
+Phase 9 remains unimplemented and unaccepted. No bank connection, consent, token, webhook, sync run, provider account, or bank-sourced transaction exists. A provider name or source label cannot establish Open Banking provenance. Official provider Integration/Sandbox verification remains mandatory.
+
+Phase 10 may execute independently over the existing manual/provider-neutral transaction model. Its pure intelligence engine receives bounded typed transaction facts and returns derived review evidence only. Raw merchant/category/source records remain unchanged. Normalized merchants, suggested categories, recurring/subscription/duplicate/anomaly signals, confidence basis points, evidence, and rule versions are not financial truth. An explicit user confirmation may append the existing immutable Phase 5 category correction; it cannot rewrite the source transaction. Other signal reviews never create a transaction, recurrence, balance, budget, Financial Engine result, goal progress, or bank record.
+
+Analysis is an explicit server-authenticated command; reads are side-effect free. Immutable owner-scoped runs retain canonical input hashes and versions, while append-only review events preserve reversibility and explainability. Future AI/statistical classifiers remain behind the same provider-neutral contract and Phase 8 minimization/authority boundary. No external context is required by the initial deterministic rules implementation.
+
+### Phase 10 implementation map
+
+- **Deterministic engine:** A pure provider-neutral engine normalizes merchant text, applies curated rules and non-conflicting user-confirmed history, groups only same-currency values, and emits bounded versioned review signals for category suggestions, exact duplicates, recurring candidates, subscriptions, subscription increases, amount anomalies, and unusual merchants. Confidence uses integer basis points and closed explanation codes. No signal is financial truth.
+- **Persistence and review:** `transactionIntelligenceRuns` is immutable and records canonical input hash, exact evidence, confidence, and engine/rule/policy versions. `transactionIntelligenceReviews` is append-only and concurrency-safe. Confirming a category suggestion creates existing Phase 5 correction evidence; the raw transaction remains immutable. Dismissed signals can be reopened without deleting history.
+- **Ownership and payload:** The service derives the actor from Auth.js and loads only bounded owned transactions/corrections. Repositories begin every query/index with owner scope. Routes enforce exact origin, bounded JSON, rate controls, and no-store responses. Public signal/export views omit owner, MongoDB, source-transaction, idempotency, and audit identifiers while retaining enough non-sensitive evidence to explain the rule result.
+- **Failure and authority:** Page reads do not analyze or persist. Analyzer failure leaves no partial run and cannot mutate transactions, accounts, budgets, engine snapshots, Safe to Spend, goals, AI history, or any Phase 9 state. The initial classifier makes no external request; a future provider must preserve the same evidence, privacy, and no-mutation contract.
+- **Verified:** Labelled deterministic fixtures measured 100% precision and recall for the deliberately bounded curated merchant set without claiming population accuracy. Unit, full regression, real-Mongo two-owner/isolation/integrity, authenticated production Hebrew/RTL browser, TypeScript, lint, build, and dependency-audit gates passed. Read-only database verification confirmed BSON int64 evidence, active-session ownership, correction linkage, unchanged source facts, and zero Phase 9 collections.
+
+Phase 11 remains blocked before implementation until product-approved private/shared resource semantics define a complete permission and lifecycle matrix. The existing household ownership shape is still non-operational and grants no access.
 
 ## Phase 1 profile and onboarding architecture
 
@@ -212,7 +232,7 @@ Repositories:
 - attach canonical timestamps and source metadata at persistence boundaries;
 - translate duplicate-key and unavailable-database failures into typed application errors without leaking connection details.
 
-Phase 1 created its profile/manual capability collections and the four explicitly namespaced Auth.js collections. Phase 2 added only `transactions`, `recurringTransactions`, `savings`, and `financialSnapshots`. Phase 3 adds no collection; it adds an explicitly discriminated `engine_result` kind and owner-prefixed indexes to `financialSnapshots`. Phase 5 adds budget collections, Phase 6 adds goal definition/progress/receipt collections, and Phase 7 adds only immutable `purchaseSimulations`. Phase 8 adds owner-scoped `aiConversations` with bounded embedded user-visible messages under ADR-039; it stores neither hidden prompts nor raw structured context. Auth.js and financial account documents never share a collection.
+Phase 1 created its profile/manual capability collections and the four explicitly namespaced Auth.js collections. Phase 2 added only `transactions`, `recurringTransactions`, `savings`, and `financialSnapshots`. Phase 3 adds no collection; it adds an explicitly discriminated `engine_result` kind and owner-prefixed indexes to `financialSnapshots`. Phase 5 adds budget collections, Phase 6 adds goal definition/progress/receipt collections, and Phase 7 adds only immutable `purchaseSimulations`. Phase 8 adds owner-scoped `aiConversations` with bounded embedded user-visible messages under ADR-039; it stores neither hidden prompts nor raw structured context. Phase 9 adds nothing while blocked. Phase 10 may add only immutable owner-scoped intelligence runs and append-only review evidence; confirmed categories continue to use Phase 5 correction evidence. Auth.js and financial account documents never share a collection.
 
 ## Validation strategy
 

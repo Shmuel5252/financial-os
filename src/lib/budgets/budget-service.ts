@@ -2,7 +2,6 @@ import "server-only";
 
 import type { Actor } from "@/lib/auth/actor";
 import {
-  systemBudgetCategoryKeys,
   systemCategoryId,
   toBudgetAllocationView,
   toBudgetCalculationView,
@@ -17,8 +16,12 @@ import {
   type BudgetScenarioView,
   type BudgetView,
   type RolloverPolicy,
-  type SystemBudgetCategoryKey,
 } from "@/lib/budgets/budget";
+import {
+  budgetCorrectionState,
+  effectiveTransactionCategory,
+  sourceBudgetCategoryId,
+} from "@/lib/budgets/category-projection";
 import {
   getBudgetRepository,
   type BudgetRepository,
@@ -165,12 +168,6 @@ function nextMonth(value: string): string {
   return `${date.getUTCFullYear().toString().padStart(4, "0")}-${(date.getUTCMonth() + 1).toString().padStart(2, "0")}`;
 }
 
-function sourceCategoryId(value: string): string | null {
-  return systemBudgetCategoryKeys.includes(value as SystemBudgetCategoryKey)
-    ? systemCategoryId(value as SystemBudgetCategoryKey)
-    : null;
-}
-
 async function resolveDependencies(
   dependencies?: BudgetDependencies,
 ): Promise<Required<Pick<BudgetDependencies, "budgetRepository">> &
@@ -226,54 +223,13 @@ function recurrenceDates(
   );
 }
 
-function correctionState(
-  corrections: readonly BudgetCorrection[],
-): ReadonlyMap<string, readonly BudgetCorrection[]> {
-  const result = new Map<string, BudgetCorrection[]>();
-  for (const correction of corrections) {
-    const current = result.get(correction.transactionId) ?? [];
-    current.push(correction);
-    result.set(correction.transactionId, current);
-  }
-  return result;
-}
-
-function effectiveTransactionCategory(
-  record: ManualRecord,
-  recordsById: ReadonlyMap<string, ManualRecord>,
-  corrections: ReadonlyMap<string, readonly BudgetCorrection[]>,
-  visited = new Set<string>(),
-): string | null {
-  if (visited.has(record.id)) {
-    return null;
-  }
-  visited.add(record.id);
-  const transaction = fields<TransactionFields>(record);
-  const ownCorrection = corrections.get(record.id)?.at(-1);
-  if (ownCorrection !== undefined) {
-    return ownCorrection.toCategoryId;
-  }
-  if (transaction.type === "refund" && transaction.refundOfTransactionId !== null) {
-    const original = recordsById.get(transaction.refundOfTransactionId);
-    if (original !== undefined) {
-      return effectiveTransactionCategory(
-        original,
-        recordsById,
-        corrections,
-        visited,
-      );
-    }
-  }
-  return sourceCategoryId(transaction.category);
-}
-
 function buildActivities(
   transactions: readonly ManualRecord[],
   corrections: readonly BudgetCorrection[],
   selectedMonth: string,
 ): readonly ActivityDetail[] {
   const byId = new Map(transactions.map((record) => [record.id, record]));
-  const correctionMap = correctionState(corrections);
+  const correctionMap = budgetCorrectionState(corrections);
 
   return transactions.flatMap((record) => {
     const transaction = fields<TransactionFields>(record);
@@ -296,7 +252,7 @@ function buildActivities(
         id: record.id,
         kind: transaction.type,
         merchant: transaction.merchant,
-        sourceCategoryId: sourceCategoryId(transaction.category),
+        sourceCategoryId: sourceBudgetCategoryId(transaction.category),
       } as const,
     ];
   });
@@ -392,7 +348,7 @@ function plannedOutflows(
       if (shouldForecastDate(date, selectedMonth, currentMonth, currentDate)) {
         result.push({
           amount: expense.amount,
-          categoryId: sourceCategoryId(expense.category),
+          categoryId: sourceBudgetCategoryId(expense.category),
           date,
           id: `expense:${record.id}:${date}`,
         });
@@ -415,7 +371,7 @@ function plannedOutflows(
       if (shouldForecastDate(date, selectedMonth, currentMonth, currentDate)) {
         result.push({
           amount: recurring.amount,
-          categoryId: sourceCategoryId(recurring.category),
+          categoryId: sourceBudgetCategoryId(recurring.category),
           date,
           id: `recurring:${record.id}:${date}`,
         });
@@ -875,7 +831,7 @@ export async function createBudgetCorrection(
   const fromCategoryId = effectiveTransactionCategory(
     transaction,
     records,
-    correctionState(corrections),
+    budgetCorrectionState(corrections),
   );
   if (fromCategoryId === input.toCategoryId) {
     throw new InputValidationError([

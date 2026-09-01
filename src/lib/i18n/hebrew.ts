@@ -657,6 +657,96 @@ export const hebrewMessages = {
     },
     title: "הנתונים הפיננסיים שלי",
   },
+  transactionIntelligence: {
+    actions: {
+      analyze: "ניתוח העסקאות הקיימות",
+      analyzing: "מנתח בצורה דטרמיניסטית…",
+      confirm: "אישור האות",
+      dismiss: "דחיית האות",
+      reopen: "פתיחה מחדש לבדיקה",
+      reviewing: "שומר החלטת בדיקה…",
+    },
+    categorySuggestion: "קטגוריה מוצעת",
+    confidence: (basisPoints: number) =>
+      `רמת ביטחון: ${(basisPoints / 100).toFixed(2)}%`,
+    description:
+      "מנוע כללים גרסאי בוחן רק את היסטוריית העסקאות שבבעלותך. הוא מציע נרמול, סיווג ואותות לבדיקה, אך לעולם אינו משנה עסקה או אמת פיננסית ללא אישור מפורש.",
+    empty:
+      "עדיין לא בוצע ניתוח. טעינת העמוד אינה יוצרת ראיה; הניתוח מתחיל רק בלחיצה מפורשת.",
+    evidence: "למה האות הופיע?",
+    explanations: {
+      AMOUNT_DEVIATES_FROM_MERCHANT_MEDIAN:
+        "הסכום האחרון שונה באופן משמעותי מהחציון המאומת אצל אותו בית עסק.",
+      CATEGORY_CONFIRMED_HISTORY:
+        "אותו בית עסק סווג בעבר באופן עקבי בקטגוריה הזאת.",
+      CATEGORY_CURATED_MERCHANT:
+        "כלל בית עסק גרסאי מציע את הקטגוריה הזאת לבדיקה.",
+      DUPLICATE_EXACT_MATCH:
+        "נמצאו עסקאות נפרדות עם אותו חשבון, תאריך, בית עסק, כיוון וסכום מדויק.",
+      NEW_MERCHANT_HIGH_AMOUNT:
+        "זהו בית עסק חדש בהיסטוריה שנבדקה והסכום גבוה משמעותית מהחציון הקודם.",
+      RECURRING_CALENDAR_PATTERN:
+        "לפחות שלוש עסקאות מציגות מרווחי זמן וסכומים עקביים.",
+      SUBSCRIPTION_CALENDAR_PATTERN:
+        "לפחות שלושה חיובים מציגים דפוס מנוי עקבי.",
+      SUBSCRIPTION_PRICE_INCREASE:
+        "החיוב האחרון גבוה ב־10% לפחות מהחציון של החיובים הקודמים.",
+    },
+    eyebrow: "מודיעין עסקאות דטרמיניסטי",
+    failure:
+      "לא הצלחנו להשלים את הפעולה. נתוני העסקאות והחישובים הפיננסיים לא השתנו.",
+    kinds: {
+      amount_anomaly: "סכום חריג",
+      category_suggestion: "הצעת סיווג",
+      possible_duplicate: "כפילות אפשרית",
+      recurring_candidate: "דפוס קבוע אפשרי",
+      subscription_candidate: "מנוי אפשרי",
+      subscription_increase: "עליית מחיר במנוי",
+      unusual_merchant: "בית עסק חדש וחריג",
+    },
+    merchantGroups: {
+      description:
+        "השם המנורמל הוא ראיה נגזרת בלבד. הטקסט המקורי של העסקה נשמר ללא שינוי.",
+      empty: "לא נמצאו שמות בתי עסק לנרמול.",
+      occurrenceCount: (count: number) => `${count} מופעים`,
+      original: "שם אחרון במקור",
+      title: "בתי עסק מנורמלים",
+    },
+    period: (days: number) => `מרווח טיפוסי של ${days} ימים`,
+    privacy:
+      "הניתוח הראשוני פועל מקומית בצד השרת ואינו שולח היסטוריית עסקאות לספק AI. מזהי משתמש, אסימוני התחברות וסודות אינם חלק מהקלט.",
+    review: {
+      confirmed:
+        "אושר במפורש. אם זו הצעת קטגוריה, נשמר תיקון סיווג מתועד בלי לשנות את העסקה המקורית.",
+      dismissed: "נדחה. אפשר לפתוח את האות מחדש לבדיקה.",
+      pending: "ממתין לבדיקה שלך.",
+      reopened: "נפתח מחדש וממתין להחלטה.",
+    },
+    separation:
+      "אות אינו עסקה, חיוב, מנוי או קטגוריה מאושרת. ניתוח ואישור אות אינם משנים יתרות, תקציב, Safe to Spend, תחזית או התקדמות יעד.",
+    signals: {
+      empty: "לא נמצאו אותות שעברו את סף הבדיקה השמרני.",
+      omitted: (count: number) =>
+        `${count} מועמדים בעלי ביטחון נמוך או היסטוריה סותרת לא הוצגו כעובדה.`,
+      title: "תור בדיקה",
+      truncated: (count: number) =>
+        `${count} אותות נוספים לא נשלחו לתצוגה המוגבלת.`,
+    },
+    status: {
+      analyzed: "הניתוח נשמר כראיה בלתי־משתנה.",
+      reviewed: "החלטת הבדיקה נשמרה כראיה נוספת.",
+    },
+    summary: {
+      analyzedAt: "נותח בתאריך",
+      engineVersion: "גרסת מנוע",
+      inputCount: (count: number) => `${count} עסקאות נבדקו`,
+      policyVersion: "גרסת מדיניות",
+      reviewThreshold: "סף הצגה לבדיקה",
+      rulesetVersion: "גרסת כללים",
+      through: "העסקה המאוחרת שנבדקה",
+    },
+    title: "הצעות ודפוסים בעסקאות",
+  },
   home: {
     badge: "תשתית מאובטחת",
     description:
@@ -680,6 +770,7 @@ export const hebrewMessages = {
     goals: "מעבר ליעדים",
     home: "חזרה לדף הבית",
     purchaseSimulation: "מעבר לבדיקת רכישה",
+    transactionIntelligence: "מעבר למודיעין עסקאות",
   },
   onboarding: {
     eyebrow: (section: string) => `קליטה ראשונית · ${section}`,

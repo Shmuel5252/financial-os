@@ -714,6 +714,18 @@ Confirmed Category
 
 כדי שהמשתמש יוכל לתקן.
 
+Approved Phase 10 Transaction Intelligence policy (2026-09-01):
+
+- Phase 10 may execute before Phase 9 under an execution-order exception only. Phase 9 remains blocked and unaccepted until an official licensed-provider Integration/Sandbox boundary is verified. Phase 10 uses existing provider-neutral manual transaction history and never fabricates bank provenance.
+- The initial intelligence implementation is a deterministic, versioned rules engine. Future statistical/AI classifiers may implement the same provider-neutral prediction contract, but no external model is required for deterministic financial truth or core usability.
+- Raw merchant text, source category, amount, date, source provenance, and other transaction facts remain unchanged. Merchant normalization, suggested category, confidence, and detected signals are separate derived evidence.
+- A category suggestion never becomes confirmed truth automatically. Only an explicit authenticated user confirmation may append the existing immutable category-correction evidence. Dismissal, later review, and further corrections remain auditable; no transaction fact is silently overwritten.
+- Recurring, subscription, possible-duplicate, unusual-amount, subscription-increase, and unusual-merchant results are review signals only. They never create/delete transactions, create recurring obligations, change balances, budgets, Safe to Spend, forecasts, goals, or other canonical financial truth.
+- Every emitted result records the deterministic engine/rule/policy version, confidence in integer basis points, explanation code, bounded source evidence, input hash, and evaluation timestamp. Low-confidence candidates are not presented as facts or auto-applied.
+- Analyses are explicit authenticated commands over a bounded owner-scoped history. Page reads never create intelligence evidence. Runs and review decisions are immutable/append-only, retry-safe, and owner-isolated.
+- Exact money comparisons use integer minor units and same-currency rules only. Provider/AI context minimization, secrets policy, Hebrew/RTL behavior, and all existing authority boundaries continue to apply.
+- Quality gates use deterministic labelled fixtures and conservative review thresholds. Financial OS reports measured fixture results and coverage honestly; it does not claim population accuracy without representative validated data.
+
 אפשרות ליצור תקציב.
 Categories:
 - אוכל

@@ -142,6 +142,8 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 9 — Open Banking
 
+**Status (2026-09-01): BLOCKED and unaccepted.** No Phase 9 implementation exists. The licensed provider, jurisdiction/legal review, consent policy, token-encryption/KMS design, and official Integration/Sandbox access are unresolved. The approved Phase 10 execution-order exception does not waive, mock, redefine, or partially accept any Phase 9 criterion.
+
 - **Objective:** Synchronize consented bank data through a licensed provider while preserving manual mode.
 - **Scope:** Consent, connections, accounts/balances/transactions/cards, normalization, deduplication, pending/modified events, sync status/errors/expiry.
 - **Dependencies:** Selected licensed provider, legal/security review, normalized Phase 2 domain, token encryption/key management.
@@ -155,18 +157,26 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 10 — Transaction intelligence
 
+**Status (2026-09-01): Complete and verified.** The deterministic engine, immutable runs/reviews, explicit correction path, owner isolation, labelled quality fixture, authenticated Hebrew/RTL review journey, complete regression, production build, and security gates passed. This acceptance does not change Phase 9's blocked status or imply Open Banking provenance.
+
+**Execution-order exception approved (2026-09-01):** Phase 10 may be implemented and accepted over the existing provider-neutral manual transaction history while Phase 9 remains visibly blocked. This is not a roadmap redesign and cannot be represented as Open Banking progress.
+
+**Approved implementation policy (2026-09-01):** A deterministic versioned rules engine is the first prediction implementation. Raw transaction facts remain immutable; normalized merchants, category suggestions, confidence, and recurring/subscription/duplicate/anomaly signals are separate evidence. Nothing is auto-applied. Category confirmation is an explicit authenticated action through existing immutable correction evidence; other review decisions remain append-only. Runs are explicit, bounded, owner-scoped, retry-safe, and do not mutate core financial truth. Quality claims are limited to measured deterministic fixtures and conservative thresholds.
+
 - **Objective:** Normalize merchants, suggest categories, detect recurring/subscriptions and anomalies while preserving user confirmation.
 - **Scope:** AI/rule predictions, confirmed categories, recurring detection, subscriptions, duplicate/unusual/increase signals.
 - **Dependencies:** Sufficient transaction history and provider-neutral records.
 - **Major tasks:** Prediction interfaces, confidence/versioning, correction feedback, deterministic fallbacks, review queue.
-- **Data/model implications:** Predictions remain separate from confirmed facts; model/rule version and evidence recorded.
+- **Data/model implications:** Immutable owner-scoped analysis runs and append-only review evidence remain separate from confirmed transaction facts; engine/rule/policy version, exact input hash, confidence basis points, and bounded evidence are recorded.
 - **Security:** Minimize external context, authorize all data, protect merchant details, abuse/cost controls.
 - **Testing:** Known merchants, corrections, low confidence, false positives, duplicate signals, model outage.
-- **Acceptance criteria:** Suggestions never silently overwrite confirmed user truth and are reversible/explainable.
-- **Definition of done:** Quality thresholds measured and failure leaves core finance usable.
+- **Acceptance criteria:** Suggestions never silently overwrite confirmed user truth, explicit category confirmation appends auditable correction evidence, review decisions are reversible/explainable, and analysis cannot mutate balances, transactions, budgets, engine snapshots, Safe to Spend, goals, or Open Banking state.
+- **Definition of done:** Conservative deterministic quality thresholds are measured against labelled fixtures; real-Mongo ownership/isolation and authenticated Hebrew/RTL review behavior pass; failure leaves core finance usable.
 - **Risks/migration:** Biased/unstable classifications and feedback-data privacy.
 
 ## Phase 11 — Households and permissions
+
+**Status (2026-09-01): BLOCKED before implementation.** The roadmap dependency on product-approved private/shared visibility semantics is unresolved, including the permission matrix, pre-existing-data sharing, invitation/revocation behavior, and ownership after membership changes. No Phase 11 code may begin by guessing these rules.
 
 - **Objective:** Support owner/member/viewer collaboration with explicitly shared and private resources.
 - **Scope:** Household creation/invites/membership/revocation, roles, shared accounts/goals, partner UX.

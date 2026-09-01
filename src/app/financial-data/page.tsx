@@ -38,6 +38,9 @@ export default async function FinancialDataPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <HomeLink />
         <nav className="flex flex-wrap gap-4" aria-label={messages.financialData.title}>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/transaction-intelligence">
+            {messages.navigation.transactionIntelligence}
+          </Link>
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/copilot">
             {messages.navigation.copilot}
           </Link>
