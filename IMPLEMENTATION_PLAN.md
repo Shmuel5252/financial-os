@@ -176,18 +176,21 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 11 — Households and permissions
 
-**Status (2026-09-01): BLOCKED before implementation.** The roadmap dependency on product-approved private/shared visibility semantics is unresolved, including the permission matrix, pre-existing-data sharing, invitation/revocation behavior, and ownership after membership changes. No Phase 11 code may begin by guessing these rules.
+**Status (2026-09-01): Complete and accepted.** Individual ownership remains immutable, all resources are private by default, and sharing is an explicit per-household authorization grant. The initial roles are owner/member only. Invitation, removal/leave, dissolution, audit, derived-data, direct-ID, and Copilot-isolation rules are resolved by ADR-043/044 and verified by unit, real-Mongo, authenticated-browser, security, and regression gates.
 
-- **Objective:** Support owner/member/viewer collaboration with explicitly shared and private resources.
-- **Scope:** Household creation/invites/membership/revocation, roles, shared accounts/goals, partner UX.
+**Initial implementation boundary:** Phase 11 implements households, owner/member membership, secure seven-day single-use email-bound invitations, audited lifecycle, and explicit sharing of existing individually owned accounts and verified goal definitions. It provides shared-only exact account totals and verified-goal views. It does not create household-owned financial truth, household Safe to Spend, a second budget/goal engine, Open Banking provenance, or AI-computed household values. Future true household-owned budgets/goals require an explicit lifecycle/versioning policy before introduction.
+
+- **Objective:** Support owner/member collaboration with explicitly shared and private resources. A viewer role remains deferred.
+- **Scope:** Household creation/invites/membership/revocation, owner/member roles, explicit shared accounts/verified goals, shared-only derived summary, partner UX.
 - **Dependencies:** Product-approved visibility semantics and mature user-scoped repositories.
 - **Major tasks:** Central policy evaluator, invitation lifecycle, resource scope migration, access review, revocation propagation.
-- **Data/model implications:** Households/memberships and scoped ownership; uniqueness/indexes include household where relevant.
+- **Data/model implications:** `households`, member-only `householdMemberships`, expiring hashed-token `householdInvitations`, and versioned `householdResourceShares`; original resources retain `userId` ownership and private default. Entity-local append-only audit evidence preserves standalone-Mongo atomicity.
 - **Security:** Deny-by-default role/resource policies, invite token hygiene, immediate revocation, comprehensive audit.
 - **Testing:** Permission matrix, private/shared cases, revoked/expired membership, concurrent role change, anti-enumeration.
 - **Acceptance criteria:** Every operation passes a documented permission matrix and cross-household isolation tests.
 - **Definition of done:** Sharing is explicit, reversible, audited, and cannot expose pre-existing private data.
 - **Risks/migration:** Retrofitting ownership and ambiguous data after a member leaves.
+- **Verified result (2026-09-01):** Complete permission-matrix and strict-command unit tests, six real-Mongo lifecycle/isolation tests, actor-only Copilot context verification, retained-session Hebrew/RTL production-browser acceptance, full real-provider regression, type-check, lint, optimized build, and zero-vulnerability registry audit passed. Removal/leave/dissolution revoke immediately, rejoin cannot revive an old share epoch, original records survive, and no Phase 9 collection or provenance was introduced.
 
 ## Phase 12 — Advanced forecast and scenarios
 

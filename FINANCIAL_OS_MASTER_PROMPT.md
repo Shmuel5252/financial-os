@@ -726,6 +726,18 @@ Approved Phase 10 Transaction Intelligence policy (2026-09-01):
 - Exact money comparisons use integer minor units and same-currency rules only. Provider/AI context minimization, secrets policy, Hebrew/RTL behavior, and all existing authority boundaries continue to apply.
 - Quality gates use deterministic labelled fixtures and conservative review thresholds. Financial OS reports measured fixture results and coverage honestly; it does not claim population accuracy without representative validated data.
 
+Approved Phase 11 Household policy (2026-09-01):
+
+- Household membership never replaces individual ownership. Every financial source remains owned by its original authenticated user. Existing and future resources are private by default; joining or creating a household never bulk-shares data.
+- The initial role model contains only `owner` and `member`. The creator is the owner. Owners manage invitations, membership, household settings, and dissolution. Members manage their own resources and may explicitly share or stop sharing eligible resources they own. Neither role may mutate, delete, disconnect, or transfer another user's individually owned financial source.
+- Eligible user-owned resources have an explicit `private` or `household_shared` authorization state per household. Sharing and unsharing require an authenticated owner action and immutable audit evidence. Pre-existing and newly created resources remain private until that action.
+- Household-derived views and calculations may consume only currently authorized shared resources. Private data never affects another member's household-visible balances, budgets, Safe to Spend, forecasts, goals, reports, or Copilot context. Derived evidence retains provenance for every authorized contribution.
+- Invitations are explicit, single-use, expiring, securely generated, intended-household-bound, authenticated-user-bound, replay-resistant, and anti-enumerating. Self-invitation, duplicate active membership, duplicate pending invitation, repeated acceptance, and token reuse are rejected. No financial information is exposed before authenticated acceptance.
+- Leaving, removal, and dissolution revoke household access immediately without deleting, transferring, duplicating, or orphaning individually owned financial truth. Historical immutable/audit evidence is preserved minimally, while inactive/former members receive no continuing interactive access to data they are no longer authorized to see.
+- Authorization is derived server-side. Client user IDs, household IDs, role/ownership/visibility claims, and direct resource IDs never prove access. Repository/query paths require both ownership and current household authorization; cross-user and cross-household isolation require real-Mongo verification.
+- Household-related Copilot context remains subject to Phase 8 minimization, redaction, authority, and owner-isolation policies. Private data from another member cannot enter prompts, responses, telemetry, or logs.
+- Security-sensitive household creation, invitation, acceptance/revocation/expiry, membership removal/leave, resource share/unshare, role-sensitive change, and dissolution events retain immutable actor, target/resource, timestamp, and safe provenance evidence without retaining invitation secrets.
+
 אפשרות ליצור תקציב.
 Categories:
 - אוכל

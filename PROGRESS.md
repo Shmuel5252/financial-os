@@ -1,5 +1,42 @@
 # Financial OS Progress
 
+## Phase 11 — Households and Permissions
+
+**Status:** Complete — all Phase 11 acceptance criteria objectively verified and accepted under the authorized autonomous progression rule. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
+
+**Started:** 2026-09-01
+
+**Verified:** 2026-09-01
+
+**Scope boundary:** Owner/member households, secure invitations, explicit account/verified-goal sharing, shared-only exact summary, membership lifecycle, immutable audit, and authenticated Hebrew/RTL partner UX only. Individual ownership remains unchanged. No household-owned financial truth, household Safe to Spend, duplicated budget/goal engine, Open Banking, provider provenance, or unrelated later-phase feature.
+
+### Implemented
+
+- Phase 10 is preserved at synchronized clean commit `a67aeef88c2bdc127c367fc103708e1827de9ede`; `.env.local` is ignored and untracked.
+- The attached owner policy, complete Master Plan, architecture, decision log, implementation plan, and progress record were read in full before changes.
+- The previously unresolved private/shared, role, invitation, removal/leave, dissolution, derived-data, direct-ID, audit, and AI-isolation gates are resolved and recorded in both synchronized Master Plan copies, ADR-043/044, architecture, and the implementation plan.
+- Added a deny-by-default owner/member policy evaluator and strict owner-free client commands. Every request derives its actor from Auth.js; household IDs, membership IDs, invitation IDs, resource IDs, roles, ownership, and visibility claims never prove authorization.
+- Added `households`, member-only `householdMemberships`, hash-only/email-bound `householdInvitations`, and versioned `householdResourceShares` repositories with owner/current-state indexes, optimistic versions, idempotent creation, unique active membership/invitation/resource constraints, membership epochs, and entity-local append-only audit evidence.
+- Added a secure seven-day invitation lifecycle with 256-bit server randomness, one-time fragment links, normalized intended-email hashing, safe hints, self/duplicate/replay rejection, expiry/revocation, and a convergent accept-before-activation sequence. No plaintext token, email, Auth.js identifier, or secret is persisted in invitation evidence.
+- Added explicit owner-controlled sharing/unsharing of individually owned accounts and latest Goal Engine definitions. Source ownership and records never change. Other members receive read-only shared views and can share only their own eligible resources. Existing and newly created resources remain private until an explicit grant.
+- Added a deterministic shared-only projection with exact currency-grouped account totals and safe contribution provenance plus authorized latest-goal definition/progress views. Full owner engine snapshots, budgets, Safe to Spend, forecasts, provider data, AI history, and private sources never enter the household view.
+- Added removal, leave, rejoin, and dissolution semantics that revoke access from current state rather than cleanup. Membership epochs prevent stale grants from reviving after rejoin; a new explicit share action is required. Individually owned financial records and historical audit evidence remain intact.
+- Added authenticated, trusted-origin, body-bounded, rate-limited, no-store APIs and a protected Hebrew/RTL `/households` UX for creation, acceptance, owner/member review, explicit resources, invitations, audit, settings, leave/removal, and dissolution. Email, tokens, timestamps, money, currencies, and safe provenance use natural LTR isolation.
+- The initial implementation remains intentionally limited to explicit sharing of existing individually owned accounts and verified goals. Current full-user engine/budget/Copilot evidence is not a safe household projection because it may contain private inputs.
+
+### Verification evidence
+
+- Unit/UI suite: 31 files / 141 tests passed. Phase 11 coverage includes the complete role matrix, rejection of client ownership/role/visibility claims, seven-day opaque invitation contracts, deterministic email normalization/hashing/masking, private-by-default states, natural Hebrew copy, and LTR value isolation.
+- Dedicated real-Mongo Phase 11 suite: 1 file / 6 lifecycle tests passed. It proved pre-existing/future-resource privacy, idempotent creation, hash-only expiring/revocable/single-use email-bound invitations, cross-user/cross-household/direct-ID denial, explicit owner-only resource grants, exact BSON `Long` source money and same-currency totals, goal views, immutable audit, optimistic concurrent removal, immediate removal/leave/dissolution revocation, source preservation, membership-epoch rejoin protection, and no Open Banking collections.
+- Copilot-isolation acceptance proved that an active household and explicitly shared account cannot change another member's actor-owned provider context; household IDs, both internal user IDs, and the other owner's unique private balance were absent from minimized provider input.
+- Complete environment-loaded regression with the real Anthropic gate enabled passed 44 files / 184 tests. An initial parallel attempt caused seven MongoDB setup hooks to exceed their 10-second shared-infrastructure timeout; rerunning the unchanged suite with one worker passed every test. All prior real-Mongo, exact-money, deterministic-engine, budgeting, goals, simulation, AI, and transaction-intelligence guarantees remained green.
+- Authenticated production-browser acceptance on port 3001 used the retained real Auth.js session to create a private household. The page exposed three existing resources only as explicit share candidates while both shared-account and shared-goal summaries remained empty. DOM checks confirmed `lang=he`, `dir=rtl`, LTR email/token/date isolation, natural Hebrew controls and empty states, and no browser/server errors.
+- Strict TypeScript, zero-warning ESLint, optimized Next.js production build, `git diff --check`, tracked-secret/configuration checks, and the registry-backed high-severity dependency audit passed; the audit reported zero vulnerabilities. `.env.local` remained ignored and untracked, and no credential was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 11 is fully accepted. Household membership is now a reversible audited authorization layer over immutable individual ownership; it never creates household-owned financial truth or grants implicit access. Phase 9 remains visibly blocked and unaccepted. Autonomous progression reaches the Phase 12 policy gate, whose forecast range/confidence presentation requires an explicit product decision before implementation.
+
 ## Phase 10 — Transaction Intelligence
 
 **Status:** Complete — all Phase 10 acceptance criteria objectively verified and accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
@@ -574,7 +611,7 @@ See `DECISIONS.md`, ADR-001 through ADR-015. The central decisions are bigint in
 - Supported currencies and their input precision need product definition before onboarding accepts money.
 - Safe to Spend horizon, uncertainty, event-ordering, and safety policies require Phase 3 product/engineering approval and fixtures.
 - Audit retention versus complete account deletion requires legal/privacy input.
-- Household private/shared semantics and the licensed Open Banking provider remain undecided.
+- Household private/shared semantics are resolved and verified in Phase 11. The licensed Open Banking provider remains undecided and Phase 9 remains blocked.
 - Auth.js beta and ESLint 9 compatibility exceptions must be revisited when patched stable/compatible upstream releases exist.
 
 ### Deferred work
