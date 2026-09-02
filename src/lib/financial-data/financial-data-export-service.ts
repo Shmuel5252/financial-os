@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { Actor } from "@/lib/auth/actor";
+import { toSavedDebtStrategyView, type SavedDebtStrategyView } from "@/lib/debt-strategies/debt-strategy";
+import { getDebtStrategyRepository, type DebtStrategyRepository } from "@/lib/debt-strategies/debt-strategy-repository";
 import {
   toBudgetAllocationView,
   toBudgetCalculationView,
@@ -67,6 +69,7 @@ export type FinancialDataExport = Readonly<{
     periods: readonly BudgetPeriodView[];
   }>;
   generatedAt: string;
+  debtStrategies: readonly SavedDebtStrategyView[];
   goalEngine: Readonly<{
     definitions: readonly GoalDefinitionView[];
     progressEvidence: readonly GoalProgressEvidenceView[];
@@ -74,7 +77,7 @@ export type FinancialDataExport = Readonly<{
   profile: UserProfileView | null;
   purchaseSimulations: readonly SavedPurchaseSimulationView[];
   records: Readonly<Record<ManualSection, readonly ManualRecordView[]>>;
-  schemaVersion: 5;
+  schemaVersion: 6;
   transactionIntelligence: Readonly<{
     reviewEvidence: readonly TransactionIntelligenceReviewView[];
     runs: readonly TransactionIntelligenceRunView[];
@@ -83,6 +86,7 @@ export type FinancialDataExport = Readonly<{
 
 export type FinancialDataExportDependencies = Readonly<{
   budgetRepository?: BudgetRepository;
+  debtStrategyRepository?: DebtStrategyRepository;
   goalRepository?: GoalRepository;
   now?: () => Date;
   profileRepository?: UserProfileRepository;
@@ -129,6 +133,8 @@ export async function buildFinancialDataExport(
     (await getPurchaseSimulationRepository());
   const purchaseSimulations =
     await purchaseSimulationRepository.listAllForActor(actor);
+  const debtStrategyRepository = dependencies?.debtStrategyRepository ?? await getDebtStrategyRepository();
+  const debtStrategies = await debtStrategyRepository.listAllForActor(actor);
   const transactionIntelligenceRepository =
     dependencies?.transactionIntelligenceRepository ??
     (await getTransactionIntelligenceRepository());
@@ -166,6 +172,7 @@ export async function buildFinancialDataExport(
       })),
     },
     generatedAt: (dependencies?.now?.() ?? new Date()).toISOString(),
+    debtStrategies: debtStrategies.map(toSavedDebtStrategyView),
     goalEngine: {
       definitions: goalDefinitions.map(toGoalDefinitionView),
       progressEvidence: goalProgress.map(toGoalProgressEvidenceView),
@@ -177,7 +184,7 @@ export async function buildFinancialDataExport(
     records: Object.fromEntries(entries) as unknown as Readonly<
       Record<ManualSection, readonly ManualRecordView[]>
     >,
-    schemaVersion: 5,
+    schemaVersion: 6,
     transactionIntelligence: {
       reviewEvidence: intelligenceReviews.map(
         toTransactionIntelligenceReviewView,

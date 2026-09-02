@@ -1,5 +1,42 @@
 # Financial OS Progress
 
+## Phase 13 — Debt Strategies
+
+**Status:** Complete — all Phase 13 acceptance criteria objectively verified and accepted under the owner-approved autonomous progression rule. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
+
+**Started:** 2026-09-01
+
+**Verified:** 2026-09-02
+
+**Scope boundary:** Deterministic provider-neutral debt-term assessment, exact amortization schedules, baseline/Avalanche/Snowball/custom comparisons, explicit extra-payment budgets, immutable optional saves, and authenticated Hebrew/RTL presentation only. No lender/Open Banking sync, payment execution, canonical debt mutation, AI calculation, Phase 14 asset/net-worth work, or fabricated provider provenance.
+
+### Implemented
+
+- The complete attachment, synchronized Master Plan, architecture, decision log, implementation plan, and progress record were reread before changes. The working tree began clean and synchronized at accepted Phase 12 commit `8e582c16b9c853ceeb57ddd9ca535408f66a14b5`.
+- Contract/evidence-first terms, explicit completeness states, no hidden day-count/compounding/allocation/minimum/rate/fee/prepayment defaults, deterministic baseline/Avalanche/Snowball/custom rules, explicit extra budget, strict truth/scenario/AI separation, actor-only household privacy, immutable reproducibility, provider-neutral manual operation, and the full verification matrix are recorded in both synchronized Master Plan copies, ADR-047/048, architecture, and the implementation plan before engine implementation.
+- Added pure versioned `debt-strategy/1.0.0` calculation over explicit owned debt revisions. Supported evidence includes no-interest, fixed and known effective-dated variable rates; monthly, Actual/365, and Actual/360 accrual; payment-date or period-start rate application; exact fixed/formula minimums; provenance-bearing allocation order; known fees; and explicit free/fixed/percentage prepayment terms. Unknown material terms remain `insufficient_information`; explicit assumptions remain `assumption_based`; only sufficient evidenced terms are `verified`.
+- Added exact baseline, Avalanche, Snowball, and explicit custom-priority schedules with one same-currency monthly extra-payment budget. Required minimums run before extra allocation, globally ordered calendar events prevent anchor-date inversion, half-even rounding is used for fractional minor units, dated fees/rates remain auditable, and exact current monthly debt load, payoff dates/order, interest, fees, repayment, time/cost comparison, exclusions, and bounded UI timelines are exposed.
+- Added ephemeral authenticated evaluation and explicit append-only `debtStrategyScenarios` saves. Each record preserves current owned loan ID/version, explicit terms/provenance, exact BSON `Long` input/result money, engine/policy versions, full schedule, audit event, idempotency hash, and optional user name/note. Save revalidates every owner/version reference and the financial-data export schema now includes actor-scoped debt-strategy evidence.
+- Added trusted-origin, bounded-body, rate-limited, no-store APIs plus protected `/debt-strategies`. Natural Hebrew copy distinguishes contractual evidence, user reports, assumptions, incomplete terms, non-comparable Avalanche cost claims, and hypothetical/non-mutating saves; dates, money, engine versions, and technical values use LTR isolation. Dashboard navigation exposes the page without an unrelated visual redesign.
+- Phase 9 remains blocked and no Open Banking/lender collection, sync state, external identifier, or provider provenance was introduced. Manual `loans` remain canonical and provider-neutral.
+
+### Verification evidence
+
+- Dedicated Phase 13 unit/UI/real-Mongo coverage passed 3 files / 23 tests. It covers verified/assumption/incomplete boundaries, fixed/effective-dated variable and negative rates, all three approved accrual conventions, explicit rate-application compatibility, stable same-day ordering, payment allocation, minimum rules, known/unknown fees and prepayment, all four strategies, global event chronology, exact half-even rounding, ISO currency precision, no implicit FX, partial-result honesty, AI independence, owner/household/two-user denial, stale-revision conflict, idempotency, BSON int64, exportable immutable evidence, and canonical non-mutation.
+- Every schedule test reconciles principal + interest + fees before payment against the exact component balances after payment, proves payment sums equal total repayment, and proves fully paid schedules end at exact zero. Identical input reproduction passed.
+- The complete final-state regression with `RUN_REAL_ANTHROPIC_TESTS=1` passed 50 files / 226 tests using one worker. Real MongoDB and the real Anthropic provider path passed; no mock substituted either required boundary.
+- Authenticated production-browser acceptance on port 3001 used the retained real Google/Auth.js MongoDB session. It evaluated a real owned synthetic loan using explicit contract provenance, a `250.00 ILS` extra budget and verified terms, displayed exact baseline/Avalanche/Snowball/custom results, saved one immutable Hebrew-named scenario, and loaded it after reload. The page passed `lang=he`, `dir=rtl`, computed RTL, four LTR isolates in the reloaded compact state, one `main`, one `h1`, no horizontal overflow, no visible internal IDs, and no browser warning/error logs.
+- Read-only real-Mongo acceptance confirmed the saved scenario owner matched an active `authSessions` database session, the referenced live loan owner/version matched, exact extra-payment/balance/repayment fields remained BSON `Long`, the loan predates and was not rewritten by the save, the append-only audit action is `saved`, and Phase 9 collections remain absent.
+- Type-check, zero-warning ESLint, optimized Next.js production build, `git diff --check`, synchronized Master Plan hashes, ignored/untracked `.env.local`, isolated ports 3000/3001, and the registry-backed high-severity audit passed; the audit reported zero vulnerabilities. No secret value was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 13 is fully accepted under the autonomous progression rule. Debt schedules are exact, explainable, reproducible, contract/evidence qualified, owner-isolated, and non-mutating. Phase 9 remains visibly blocked and unaccepted.
+
+### Exact next gate
+
+Phase 14 is the next architecturally independent roadmap phase under the execution-order exception. No Phase 14 implementation has begun in this commit; its scope and any unresolved valuation/currency/history policies must be reviewed before code changes.
+
 ## Phase 12 — Advanced Forecast and Scenarios
 
 **Status:** Complete — all Phase 12 acceptance criteria objectively verified and accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
@@ -35,7 +72,7 @@ Phase 12 is fully accepted under the execution-order exception. Operational fore
 
 ### Exact next gate
 
-Phase 13 is not started. Its roadmap requires financially consequential debt-term policies that are not yet resolved: interest accrual/day-count and compounding conventions, payment allocation/order, minimum-payment and changing-rate behavior, explicit fee treatment, early-payoff handling, and custom-strategy semantics. Autonomous progression stops at this genuine product/financial-correctness gate rather than guessing lender rules.
+At the Phase 12 acceptance checkpoint, Phase 13 had not started and its debt-term policies were still unresolved. Those policies were subsequently approved by the owner and Phase 13 is now completed in the newer section above.
 
 ## Phase 11 — Households and Permissions
 

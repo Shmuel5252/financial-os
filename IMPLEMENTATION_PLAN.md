@@ -209,17 +209,18 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 13 — Debt strategies
 
+- **Approved product policy (2026-09-01):** Contract/evidence-first debt terms; no APR-only hidden assumptions; explicit day-count/compounding, allocation, minimum, rate schedule, fees, and prepayment terms where material; `verified`/`assumption_based`/`insufficient_information` status; deterministic baseline/Avalanche/Snowball/custom comparisons with an explicit extra-payment budget; exact same-currency money; immutable explicit saves; actor-only household privacy; and AI explanation-only authority.
 - **Objective:** Calculate debt-free dates and compare snowball, avalanche, and custom payoff scenarios.
-- **Scope:** Interest/payment schedules, monthly debt load, progress, extra-payment simulations.
+- **Scope:** Explicit verified/assumption-based debt terms, interest/payment schedules, monthly debt load, baseline/Avalanche/Snowball/custom comparisons, extra-payment simulations, completeness disclosure, and immutable explicit saves. No lender sync, payment execution, debt mutation, AI calculation, or Phase 14 capability.
 - **Dependencies:** Accurate debt models, timeline engine, rate/fee conventions.
 - **Major tasks:** Amortization engine, strategy planner, scenario comparison, payoff milestone integration.
-- **Data/model implications:** Debt terms and strategy snapshots retain effective dates and calculation versions.
+- **Data/model implications:** Existing loans remain canonical. Immutable actor-owned strategy snapshots retain debt revisions, explicit terms/effective dates, provenance, assumptions, extra budget, exact results, and calculation versions.
 - **Security:** Owned debt detail, safe exports/logging, clear non-advisory presentation.
-- **Testing:** Interest/rounding, zero/negative rates, fees, early payoff, multiple debts, minimum-payment changes.
+- **Testing:** Fixed and effective-dated variable rates, explicit monthly/Actual-365/Actual-360 conventions, incomplete/assumption-based status, allocation/minimum rules, known/unknown fees and prepayment, all four strategies, extra allocation, payoff order/baseline comparisons, rounding/int64/same-currency boundaries, no mutation, reproducibility, actor/household/two-user isolation, AI authority, Hebrew/RTL, and Phases 0–12 regression.
 - **Acceptance criteria:** Schedules reconcile at every payment and total conserved amounts are exact to minor units.
 - **Definition of done:** Strategies are explainable, reproducible, and do not alter debt truth until explicitly applied.
 - **Risks/migration:** Lender-specific rules, regulatory presentation, rate changes.
-- **Current gate:** Not started. Product policy must define accrual/day-count/compounding, payment allocation/order, minimum-payment and rate-change behavior, explicit fees, early payoff, and custom-strategy semantics before financially correct implementation can begin.
+- **Verified result (2026-09-02):** Accepted under the execution-order exception. The dedicated Phase 13 suite passed 3 files / 23 tests and the complete final-state suite passed 50 files / 226 tests with real MongoDB and the real Anthropic regression gate. Per-payment conservation, global same-day chronology, all explicit rate/application/accrual/allocation/minimum/fee/prepayment boundaries, ISO currency precision, exact BSON int64 persistence, actor/household/two-user isolation, stale-revision/idempotency integrity, canonical non-mutation, authenticated Hebrew/RTL production acceptance, type-check, zero-warning lint, optimized build, and a zero-vulnerability registry audit passed. Phase 9 remains blocked and no provider provenance exists.
 
 ## Phase 14 — Savings and net worth
 

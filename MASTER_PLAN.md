@@ -750,6 +750,17 @@ Approved Phase 12 Forecast and Confidence policy (2026-09-01):
 - Dependency direction remains confirmed owned data -> deterministic Financial Engine -> deterministic operational forecast -> deterministic scenario comparison -> minimized AI explanation. AI may explain only and cannot invent amounts/events/dates, assign confidence, or mutate truth.
 - Verified Phase 12 implementation preserves this boundary with immutable actor-owned forecast/scenario evidence, exact BSON int64 money, durable Phase 10 review precedence, authenticated Hebrew/RTL access, and no Phase 9 provider provenance. Scenario evidence references its immutable operational forecast for confidence-policy provenance rather than duplicating mutable or redundant truth.
 
+Approved Phase 13 Debt Calculation and Strategy policy (2026-09-01):
+
+- Financial OS models debt only from explicit contractual or user-reported evidence. APR alone never silently defines accrual, compounding, allocation, minimum payment, fees, or settlement. Every result is explicitly `verified`, `assumption_based`, or `insufficient_information`, with provenance and versioned assumptions.
+- Day-count, accrual/compounding, payment-allocation order, minimum-payment rule, fixed/variable rate terms, known fees, and early-repayment terms are explicit whenever material. Unknown terms remain unknown. Future rate changes affect verified projections only when rate, effective date, and applicability are known.
+- Deterministic strategies include contractual/minimum baseline, Avalanche, Snowball, and explicit custom priority when sufficient comparable evidence exists. Avalanche targets the highest comparable verified borrowing cost; Snowball targets the smallest eligible remaining balance; both preserve required minimum payments. The UI must not call Avalanche mathematically cheapest when costs are incomplete or incomparable.
+- Every comparison uses an explicit same-currency extra-payment budget. It never draws silently from Safety Margin, obligations, expenses, goals, or accounts and never changes Safe to Spend or canonical debt truth. Mixed currencies are never combined or ranked through implicit FX.
+- Deterministic outputs may include exact payoff dates, interest, known fees, total repayment, time/cost saved, payoff order, timelines, assumptions, and completeness. Early-settlement cost is exact only when supported by explicit evidence; unknown prepayment terms remain visibly qualified.
+- Evaluations and custom priorities are hypothetical. Saving is an explicit authenticated action that appends immutable owner-scoped evidence with debt/source references, terms, provenance, extra budget, strategy, assumptions, policy versions, result, and creation time. Evaluation/save never marks a debt paid, creates a transaction, changes a balance, budget, Safe to Spend, goal, or history.
+- Phase 13 remains useful with provider-neutral manual debts while Phase 9 is blocked and introduces no lender/Open-Banking provenance. Household access remains deny-by-default: only debts and facts authorized for the authenticated actor may enter a strategy, total, AI context, log, or telemetry.
+- Dependency direction remains canonical owned debt evidence -> deterministic debt engine -> verified or assumption-based strategy comparison -> minimized AI explanation. Claude may explain trade-offs, missing facts, and deterministic results, but cannot invent terms, calculate debt truth, or mutate records.
+
 אפשרות ליצור תקציב.
 Categories:
 - אוכל

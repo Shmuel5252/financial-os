@@ -570,7 +570,7 @@ describeWithMongo("Phase 6 deterministic Goal Engine persistence", () => {
       transactionIntelligenceRepository:
         transactionIntelligenceRepositoryForDatabase(database),
     });
-    expect(exported.schemaVersion).toBe(5);
+    expect(exported.schemaVersion).toBe(6);
     expect(exported.goalEngine.definitions.length).toBeGreaterThanOrEqual(7);
     expect(exported.goalEngine.progressEvidence.length).toBeGreaterThanOrEqual(7);
     expect(JSON.stringify(exported.goalEngine)).not.toContain("userId");

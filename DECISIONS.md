@@ -339,6 +339,27 @@ This log records durable product and architecture decisions. Status is `accepted
 - A retained real Auth.js session drove the protected Hebrew/RTL production journey on port 3001. A 90-day confirmed timeline, honest `LOW` predictive confidence, one separate exact saved scenario, no visible internal IDs, no overflow, and clean fresh browser logs passed. Read-only Mongo evidence confirmed one owner chain, BSON `Long`, zero canonical financial writes, and no Phase 9 collection.
 - Type-check, zero-warning lint, optimized build, synchronized Master Plan hashes, `git diff --check`, ignored/untracked `.env.local`, port isolation, and the registry-backed high-severity audit passed with zero vulnerabilities. Phase 12 is accepted; Phase 9 remains blocked and unaccepted.
 
+## ADR-047 — Debt calculations require explicit terms and completeness provenance
+
+- **Decision:** Treat the existing owned loan/debt record as canonical identity/current balance only, not as a complete amortization contract. A Phase 13 calculation must receive explicit provenance-bearing interest/accrual, day-count/compounding, allocation order, minimum-payment, known-fee, variable-rate, and prepayment terms whenever material. Emit one of `verified`, `assumption_based`, or `insufficient_information`; never upgrade an assumption or incomplete APR-only record into contractual truth.
+- **Reasoning:** Lenders differ in accrual, allocation, fee, rate-change, and settlement behavior. A precise-looking schedule from guessed conventions is financially less honest than an explicit incomplete result. Keeping calculation terms beside immutable scenario evidence avoids corrupting the existing manually entered debt fact.
+- **Alternatives:** Universal monthly APR amortization, common credit-card minimum formulas, hidden Actual/365, automatically free prepayment, estimated future benchmark rates, and silently ignoring fees were rejected.
+- **Consequences:** Supported conventions are closed, versioned engine inputs. Unknown material terms remain user-visible. Known effective-dated changes may be projected; unknown future changes remain scenarios. Exact money, half-even rounding where fractions arise, explicit calendars, same-currency enforcement, and evidence-version tests are mandatory.
+
+## ADR-048 — Debt strategies are explicit non-mutating comparisons with actor-only evidence
+
+- **Decision:** Compare contractual/minimum baseline, Avalanche, Snowball, and explicit custom priority only over eligible actor-owned debts and one explicit same-currency extra-payment budget. Preserve required minimum payments first. Avalanche requires comparable verified borrowing-cost evidence; Snowball ranks exact eligible balances; custom priority is user intent, not canonical debt truth. Evaluations are ephemeral and explicit saves append immutable `debtStrategyScenarios` evidence.
+- **Reasoning:** Strategy usefulness does not authorize spending Safety Margin, rewriting debts, or claiming a behavior preference is mathematically optimal. Immutable references and exact inputs make a past comparison reproducible without duplicating canonical debt history.
+- **Alternatives:** Automatic extra-payment amounts, cross-currency ranking, AI-selected truth, mutable strategy records, applying simulated payments to debts, and household-wide private debt aggregation were rejected.
+- **Consequences:** Saved evidence includes debt revisions, terms/provenance, assumptions, extra budget, strategy, results, versions, and creation time. It cannot create payments or mutate accounts, balances, budgets, Safe to Spend, goals, forecasts, or providers. Phase 11 exposes no shared-debt grant, so strategy data is actor-only. AI may explain only minimized cited deterministic outputs.
+
+## Phase 13 verification addendum — 2026-09-02
+
+- The implementation uses one globally chronological deterministic event stream, exact bigint/BSON int64 money, half-even fractional rounding, and per-component payment evidence. Dedicated tests reconcile every payment and total, cover all approved accrual/rate/minimum/allocation/fee/prepayment/completeness boundaries, and reject implicit FX.
+- The existing `loans` document remains canonical identity/current balance. Evaluation derives balance, label, owner, and version server-side; only an explicit save appends `debtStrategyScenarios`, after revalidating every current owned revision. Stale and foreign revisions fail closed, idempotent retries reproduce one immutable record, and actor export includes only owned serialized evidence.
+- Phase 11 household membership was established in real MongoDB during isolation testing and still did not authorize either member's private loan or scenario to the other. No debt share kind exists. Production acceptance tied the saved evidence to an active Auth.js database session and the exact owned loan revision.
+- The protected Hebrew/RTL production journey, complete 50-file / 226-test regression, real MongoDB, real Anthropic regression, type-check, zero-warning lint, optimized build, and zero-vulnerability dependency audit passed. Phase 13 is accepted; Phase 9 remains blocked and unaccepted.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.

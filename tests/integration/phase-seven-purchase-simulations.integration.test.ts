@@ -343,7 +343,7 @@ describeWithMongo("Phase 7 purchase simulation persistence and isolation", () =>
         transactionIntelligenceRepositoryForDatabase(database),
     });
     const serialized = JSON.stringify(exported.purchaseSimulations);
-    expect(exported.schemaVersion).toBe(5);
+    expect(exported.schemaVersion).toBe(6);
     expect(exported.purchaseSimulations).toHaveLength(1);
     expect(serialized).not.toContain("userId");
     expect(serialized).not.toContain("idempotencyKeyHash");
