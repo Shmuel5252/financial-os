@@ -19,6 +19,7 @@ import { financialSnapshotRepositoryForDatabase } from "@/lib/financial-snapshot
 import type { GoalDefinitionConfiguration } from "@/lib/goals/goal";
 import { goalRepositoryForDatabase, type GoalRepository } from "@/lib/goals/goal-repository";
 import { netWorthRepositoryForDatabase } from "@/lib/net-worth/net-worth-repository";
+import { notificationRepositoryForDatabase } from "@/lib/notifications/notification-repository";
 import {
   createGoalDefinition,
   evaluateGoal,
@@ -564,6 +565,7 @@ describeWithMongo("Phase 6 deterministic Goal Engine persistence", () => {
       budgetRepository,
       goalRepository,
       netWorthRepository: netWorthRepositoryForDatabase(database),
+      notificationRepository: notificationRepositoryForDatabase(database),
       now: () => new Date("2026-10-05T09:00:00.000Z"),
       profileRepository,
       purchaseSimulationRepository:
@@ -572,7 +574,7 @@ describeWithMongo("Phase 6 deterministic Goal Engine persistence", () => {
       transactionIntelligenceRepository:
         transactionIntelligenceRepositoryForDatabase(database),
     });
-    expect(exported.schemaVersion).toBe(7);
+    expect(exported.schemaVersion).toBe(8);
     expect(exported.goalEngine.definitions.length).toBeGreaterThanOrEqual(7);
     expect(exported.goalEngine.progressEvidence.length).toBeGreaterThanOrEqual(7);
     expect(JSON.stringify(exported.goalEngine)).not.toContain("userId");

@@ -1,5 +1,44 @@
 # Financial OS Progress
 
+## Phase 15 — Notifications
+
+**Status:** Complete — all Phase 15 acceptance criteria objectively verified and accepted under the owner-approved autonomous progression rule. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
+
+**Started:** 2026-09-02
+
+**Verified:** 2026-09-02
+
+**Scope boundary:** Deterministic owner-scoped in-app alerts plus explicit-opt-in, generic privacy-minimized email through a server-only provider-neutral Resend adapter. Web Push, marketing, fabricated Open Banking events, detailed financial email, AI-originated alerts, and any canonical financial mutation are excluded.
+
+### Implemented
+
+- The repository began Phase 15 clean and synchronized at accepted Phase 14 commit `305a990a4dcaaae93b08b43fb40b50f6b6b6091c`. ADR-051 through ADR-053 and both synchronized Master Plan copies record the deterministic trigger/severity, owner evidence, consent, quiet-hour, idempotency, lifecycle, minimization, recipient-identity, and Phase 9 boundaries before implementation relies on them.
+- Added versioned deterministic notification evaluation for confirmed forecast shortfall, Safety Margin crossing, material confirmed-obligation risk, budget deficit, deterministic goal milestones, and source freshness. Exact boundaries classify confirmed below-zero/uncovable obligations as critical, confirmed non-negative margin crossings as warning, and stale or milestone evidence as informational; AI and providers cannot originate or reclassify an alert.
+- Added owner-scoped `notifications` and `notificationPreferences` repositories with owner-first indexes, optimistic versions, append-only lifecycle/preference audit, stable logical deduplication, 24-hour external cooldown, three-attempt retry state, revocation, and direct-ID owner filtering. Reads never create alerts and notification activity cannot mutate canonical financial truth.
+- Added in-app delivery default-on and email default-off. Email requires explicit revocable consent; non-critical sends defer during deterministic 22:00–08:00 profile-timezone quiet hours, while only an objective confirmed-shortfall critical event bypasses. DST and exact boundary behavior are versioned and tested.
+- Added a provider-neutral server-only email port and real Resend adapter. The delivery command is reconstructed from a fixed generic Hebrew template and authenticated application URL, recipient email derives server-side from the Auth.js user, retries reuse one idempotency key, telemetry excludes recipient/content/financial values, and provider acceptance remains `sent` until independent provider evidence establishes `delivered`.
+- Added authenticated, trusted-origin, bounded, rate-limited, no-store APIs for center reads, explicit deterministic evaluation, read/dismiss, and preferences. Source loading tolerates only expected domain-unavailable projections and continues over other eligible sources; infrastructure failures remain visible.
+- Added the protected Hebrew/RTL notification center and dashboard navigation with localized states, consent and quiet-hour controls, explicit privacy disclosure, LTR-isolated timestamps/hours, and a visible statement that Phase 9 provider alerts are unavailable. Financial-data export schema version 8 includes safe actor-owned views/preferences while excluding ownership/authentication/source/provider internals.
+- Official Resend test mode operationally verifies the real provider path. Production delivery to arbitrary user addresses remains fail-closed until a verified sender domain and `RESEND_FROM_EMAIL` are configured; no production-domain readiness is claimed.
+
+### Verification evidence
+
+- Dedicated Phase 15 coverage passed 5 files / 20 tests: 12 pure/UI/provider tests, 6 real-Mongo notification tests, and 2 real-Resend acceptance tests. Coverage includes every severity boundary, exact zero/margin rules, insufficient/stale sources, stable fingerprints, DST/quiet hours, consent/revocation, logical/provider idempotency, retry and accepted-versus-delivered lifecycle, injection/minimization rejection, safe telemetry, canonical non-mutation, household/two-user/direct-ID isolation, partial source availability, and Phase 9 absence.
+- The real Resend gate sent an official test-mode message through the adapter and a second message through the actual Financial OS service/repository path. Identical retries returned one provider message identity and one logical notification. No credential, recipient, financial value, or content entered telemetry. The configured send-scoped key did not authorize status reads, so acceptance is truthfully recorded as `sent`, not `delivered`.
+- The complete final-state regression passed 58 files / 266 tests with `RUN_REAL_ANTHROPIC_TESTS=1`, `RUN_REAL_RESEND_TESTS=1`, one worker, real MongoDB, the real Anthropic provider, and the real Resend provider. A preceding Anthropic call received transient `PROVIDER_CAPACITY`; the unchanged focused retry and subsequent complete clean run passed, so no gate was bypassed or mocked.
+- Authenticated production-browser acceptance used the retained real Google/Auth.js MongoDB session on port 3001. The Hebrew notification center rendered and reloaded with email opt-out, in-app and quiet-hours enabled, deterministic evaluation completed successfully despite an independently unavailable current budget projection, and no alert was fabricated because current evidence contained no eligible condition.
+- Browser checks passed at 375x812 with `lang=he`, `dir=rtl`, computed RTL, two LTR isolates, one main/heading landmark, no horizontal overflow, the privacy/Phase 9 disclosures visible, and no console warning/error logs. Preference consent was not changed and no personal-address email was sent during browser verification.
+- Read-only production MongoDB checks confirmed active Auth.js session evidence, four notification owner-first indexes plus the owner-first unique preference index, safe sampled fields, zero Phase 9 provider collections, and no fabricated notification/preference records. The dedicated isolated-database tests verified BSON ownership, concurrency, mutation denial, and lifecycle persistence.
+- Type-check, zero-warning ESLint, optimized Next.js build, `git diff --check`, synchronized Master Plan hashes, ignored/untracked `.env.local`, tracked-file secret review, and the registry-backed high-severity audit passed; the audit reported zero vulnerabilities. No secret value was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 15 is fully accepted under the autonomous progression rule. Every notification traces to deterministic actor-owned evidence; delivery is consented, minimized, idempotent, lifecycle-truthful, and unable to alter financial truth. The operational real Resend test-mode path is verified, while arbitrary production-address delivery remains explicitly qualified. Phase 9 remains visibly blocked and unaccepted.
+
+### Exact next gate
+
+Phase 16 is next under the approved execution-order exception. Its current roadmap scope does not define the material review-finalization, report-period/versioning, search-index freshness/authorization, export-format/CSV, AI-summary persistence, or target-volume/performance policies needed to implement and objectively accept reports and global search. Phase 16 remains unstarted pending those owner product/security decisions; no Phase 16 code is included in the Phase 15 acceptance.
+
 ## Phase 14 — Savings, Assets, and Net Worth
 
 **Status:** Complete — all Phase 14 acceptance criteria objectively verified and accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.

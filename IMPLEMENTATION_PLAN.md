@@ -241,15 +241,16 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 ## Phase 15 — Notifications
 
 - **Objective:** Deliver actionable, consented alerts for large charges, low Safe to Spend, goals, budgets, bank state, and forecast overdrafts.
-- **Scope:** In-app plus selected email/push channels, preferences, deduplication, scheduling, delivery status.
-- **Dependencies:** Domain events from engines/features and selected providers.
-- **Major tasks:** Notification port/adapters, preference policy, idempotent jobs, quiet hours/timezone, retry/dead-letter behavior.
-- **Data/model implications:** Owned notifications/preferences and provider delivery metadata without excess payload.
-- **Security:** Opt-in/opt-out, content minimization, signed links, provider secret protection.
-- **Testing:** Trigger thresholds, duplicates, timezone/quiet hours, retries/provider failure, preference/revocation.
+- **Scope:** Authenticated in-app delivery plus explicit-opt-in generic email through the server-only provider-neutral Resend adapter; preferences, deterministic severity, deduplication/cooldown, quiet-hour scheduling, retries, and truthful delivery status. Web Push and Phase 9 bank-state alerts are excluded.
+- **Dependencies:** Existing actor-owned forecast, budget, goal, debt-plan, and freshness evidence; Auth.js user email; profile IANA timezone; configured Resend key and approved sender boundary. Phase 9 is not a dependency for provider-neutral alerts and remains blocked.
+- **Major tasks:** Pure notification candidate/severity/quiet-hour policy, owner-scoped audited preferences/notifications, stable logical and provider idempotency, minimized email command, real Resend adapter/status check, safe telemetry/errors, authenticated APIs, Hebrew/RTL notification center, read/dismiss/consent controls, and explicit evaluation/delivery orchestration.
+- **Data/model implications:** One owner-scoped preference row plus append-only/lifecycle-audited notification records containing source fingerprints and safe provider metadata but no raw financial values. No notification operation mutates source truth.
+- **Security:** Email defaults off, destination derives from Auth.js server identity, opt-out blocks future sends, generic email contains no financial/private data, direct-ID reads/mutations are owner-filtered, quiet hours use profile timezone, secrets remain server-only, and provider telemetry excludes recipient/content.
+- **Testing:** Default-off opt-in/out, in-app/email independence, minimized content, deterministic severity and trigger boundaries, quiet hours and DST, critical bypass, dedupe/cooldown, concurrent/retry/provider failure, accepted-versus-delivered lifecycle, canonical non-mutation, household/two-user/direct-ID isolation, AI separation, Phase 9 absence, real Resend acceptance, and Hebrew/RTL production browser.
 - **Acceptance criteria:** Alerts trace to a domain fact and are not duplicated or sent after access revocation.
-- **Definition of done:** At least one real channel and in-app delivery are operationally verified.
+- **Definition of done:** In-app delivery and the real Resend test-mode path are operationally verified; every lifecycle/security/regression gate passes. Production user-address delivery remains qualified until a verified sender domain is configured.
 - **Risks/migration:** Notification fatigue, leaked financial details, delivery reliability.
+- **Verified result (2026-09-02):** Accepted under the execution-order exception. Dedicated Phase 15 coverage passed 5 files / 20 tests, including real-Mongo ownership/lifecycle and real-Resend direct plus Financial OS service-path acceptance; the complete final suite passed 58 files / 266 tests with real MongoDB, Anthropic, and Resend. Deterministic trigger/severity boundaries, stale/insufficient evidence, exact quiet-hour/DST behavior, default-off consent/revocation, stable deduplication/cooldown, retry and truthful `sent`/`delivered` semantics, fixed generic Hebrew minimization, injection rejection, safe telemetry, canonical non-mutation, household/two-user/direct-ID isolation, authenticated Hebrew/RTL production acceptance, type-check, zero-warning lint, optimized build, and a zero-vulnerability registry audit passed. Official Resend test mode establishes the real provider path but not arbitrary production-address readiness; Phase 9 remains blocked and no bank alert is fabricated.
 
 ## Phase 16 — Reviews, reports, and search
 

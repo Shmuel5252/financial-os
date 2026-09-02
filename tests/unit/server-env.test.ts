@@ -82,5 +82,17 @@ describe("server environment configuration", () => {
 
     expect(JSON.stringify(status)).not.toContain(secret);
     expect(status.futureAdapters.anthropicConfigured).toBe(true);
+    expect(status.futureAdapters.resendConfigured).toBe(false);
+  });
+
+  it("requires both a server-only Resend key and an approved sender for readiness", () => {
+    const status = getConfigurationStatus(parseServerEnv({
+      NODE_ENV: "test",
+      RESEND_API_KEY: "test-key",
+      RESEND_FROM_EMAIL: "Financial OS <notifications@example.com>",
+    }));
+    expect(status.futureAdapters.resendConfigured).toBe(true);
+    expect(JSON.stringify(status)).not.toContain("test-key");
+    expect(() => parseServerEnv({ NODE_ENV: "test", RESEND_FROM_EMAIL: "not-an-email" })).toThrow(/RESEND_FROM_EMAIL/);
   });
 });

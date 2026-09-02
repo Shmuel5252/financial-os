@@ -32,6 +32,16 @@ import {
   type NetWorthRepository,
 } from "@/lib/net-worth/net-worth-repository";
 import {
+  toNotificationPreferenceView,
+  toNotificationView,
+  type NotificationPreferenceView,
+  type NotificationView,
+} from "@/lib/notifications/notification";
+import {
+  getNotificationRepository,
+  type NotificationRepository,
+} from "@/lib/notifications/notification-repository";
+import {
   manualSectionSchema,
   toManualRecordView,
   type ManualRecordView,
@@ -86,10 +96,14 @@ export type FinancialDataExport = Readonly<{
     items: readonly ReturnType<typeof toNetWorthItemView>[];
     snapshots: readonly ReturnType<typeof toNetWorthSnapshotView>[];
   }>;
+  notifications: Readonly<{
+    items: readonly NotificationView[];
+    preferences: NotificationPreferenceView;
+  }>;
   profile: UserProfileView | null;
   purchaseSimulations: readonly SavedPurchaseSimulationView[];
   records: Readonly<Record<ManualSection, readonly ManualRecordView[]>>;
-  schemaVersion: 7;
+  schemaVersion: 8;
   transactionIntelligence: Readonly<{
     reviewEvidence: readonly TransactionIntelligenceReviewView[];
     runs: readonly TransactionIntelligenceRunView[];
@@ -101,6 +115,7 @@ export type FinancialDataExportDependencies = Readonly<{
   debtStrategyRepository?: DebtStrategyRepository;
   goalRepository?: GoalRepository;
   netWorthRepository?: NetWorthRepository;
+  notificationRepository?: NotificationRepository;
   now?: () => Date;
   profileRepository?: UserProfileRepository;
   purchaseSimulationRepository?: PurchaseSimulationRepository;
@@ -153,6 +168,11 @@ export async function buildFinancialDataExport(
   ]);
   const debtStrategyRepository = dependencies?.debtStrategyRepository ?? await getDebtStrategyRepository();
   const debtStrategies = await debtStrategyRepository.listAllForActor(actor);
+  const notificationRepository = dependencies?.notificationRepository ?? await getNotificationRepository();
+  const [notifications, notificationPreferences] = await Promise.all([
+    notificationRepository.listForActor(actor, 5_000),
+    notificationRepository.findPreferencesForActor(actor),
+  ]);
   const transactionIntelligenceRepository =
     dependencies?.transactionIntelligenceRepository ??
     (await getTransactionIntelligenceRepository());
@@ -199,6 +219,10 @@ export async function buildFinancialDataExport(
       items: netWorthItems.map(toNetWorthItemView),
       snapshots: netWorthSnapshots.map(toNetWorthSnapshotView),
     },
+    notifications: {
+      items: notifications.map(toNotificationView),
+      preferences: toNotificationPreferenceView(notificationPreferences),
+    },
     profile: profile === null ? null : toUserProfileView(profile),
     purchaseSimulations: purchaseSimulations.map(
       toSavedPurchaseSimulationView,
@@ -206,7 +230,7 @@ export async function buildFinancialDataExport(
     records: Object.fromEntries(entries) as unknown as Readonly<
       Record<ManualSection, readonly ManualRecordView[]>
     >,
-    schemaVersion: 7,
+    schemaVersion: 8,
     transactionIntelligence: {
       reviewEvidence: intelligenceReviews.map(
         toTransactionIntelligenceReviewView,

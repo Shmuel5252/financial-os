@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-This document defines the implemented architecture through the fully verified Phase 13 acceptance gate, with Phase 9 still explicitly blocked under the approved execution-order exception, and the constraints that future phases must preserve. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
+This document defines the implemented architecture through the fully verified Phase 15 acceptance gate, with Phase 9 still explicitly blocked under the approved execution-order exception. It distinguishes verified code from product capabilities that are only planned. `MASTER_PLAN.md` remains the product source of truth.
 
 | Status | Meaning |
 | --- | --- |
@@ -22,6 +22,7 @@ This document defines the implemented architecture through the fully verified Ph
 | Implemented and verified in Phase 12 | Deterministic 7/30/60/90-day forecasts preserve confirmed/estimated truth, categorical evidence confidence, exact crossings, immutable provenance, durable Phase 10 review precedence, and separate non-mutating scenarios. Unit, real-Mongo, authenticated-browser, real-Anthropic regression, security, build, and integrity gates passed. Phase 9 remains blocked. |
 | Implemented and verified in Phase 13 | Evidence-qualified exact debt amortization and baseline/Avalanche/Snowball/custom comparisons preserve contractual uncertainty, same-currency arithmetic, immutable optional saves, actor-only access, and canonical non-mutation. Unit, real-Mongo, authenticated-browser, real-Anthropic regression, security, build, and integrity gates passed. Phase 9 remains blocked. |
 | Implemented and verified in Phase 14 | Net worth is a deterministic currency-grouped point-in-time statement over explicit provenance-bearing valuations, canonical deduplication, source-specific freshness, and immutable snapshots. Unit, real-Mongo, authenticated-browser, real-Anthropic regression, security, build, and integrity gates passed; no live market or FX provider is claimed. |
+| Implemented and verified in Phase 15 | Deterministic owner-scoped in-app notifications plus explicit-opt-in privacy-minimized email, owner-first audited persistence, quiet hours, deduplication/cooldown/retry, truthful lifecycle, a real server-only Resend path, and authenticated Hebrew/RTL browser acceptance passed unit, real-Mongo, real-provider, security, build, and regression gates. Test-mode acceptance does not claim production-domain readiness. |
 | Boundary prepared | An interface, module boundary, convention, or configuration seam exists; no provider capability is claimed. |
 | Planned | The product behavior belongs to a later roadmap phase and does not exist yet. |
 
@@ -374,6 +375,22 @@ Current net worth, historical net-worth evidence, valuation freshness, goal prog
 
 Production verification confirms the retained Auth.js database-session actor can add and reload an owned unrealized-market asset while its exact amount remains BSON int64, the resulting automatic snapshot is owner-scoped and immutable, and an explicit same-state retry does not duplicate evidence. The browser-visible statement remains Hebrew/RTL and separates the value from cash. The real Anthropic regression gate confirms the provider remains downstream of deterministic truth; Phase 14 adds no AI dependency and Phase 9 remains blocked.
 
+## Phase 15 notification boundaries
+
+Notification policy is a deterministic application/domain boundary over immutable or versioned actor-owned facts. The supported source projection may emit forecast-below-zero, forecast-margin-crossing, material confirmed-obligation risk, budget-deficit, goal-milestone, and stale-data candidates. The candidate contains source kind/reference/version, non-financial reason codes, severity, policy version, a stable condition fingerprint, and a cooldown class. Page reads never create a notification. Explicit authenticated evaluation creates at most one logical notification for unchanged evidence. Phase 9 bank-sync and consent events do not exist and cannot be inferred.
+
+`notificationPreferences` is one optimistic, audited record per owner. In-app operational notifications default enabled. Email defaults disabled, is explicitly revocable, and is independent from in-app delivery. Quiet hours default to 22:00–08:00 in the profile IANA timezone; configuration uses local wall-clock hours and existing calendar semantics. Non-critical external sends defer until the next quiet-period boundary. Only the approved objective confirmed-shortfall critical trigger may bypass.
+
+`notifications` stores the owner scope, immutable trigger/evidence identity, deterministic policy/severity versions, generic localized presentation key, in-app state, external email state, attempt metadata, safe provider message identifier, deferral/retry times, and append-only lifecycle audit. It does not duplicate raw financial values or merchant/private household text. A unique owner/deduplication-key index is the logical authority. Cooldown suppresses another external send for an unchanged source class while retaining a visible in-app record. Provider retries reuse the same application and Resend idempotency key.
+
+The provider-neutral `NotificationEmailProvider` accepts only a minimized generic delivery command: recipient, approved sender, fixed Hebrew subject/body, authenticated application URL, opaque request/idempotency key, and no financial payload. The server resolves recipient email from the current Auth.js identity; clients cannot supply `userId`, email address, evidence, severity, or provider identifiers. Resend credentials, sender configuration, HTTP details, and response validation terminate inside the server-only adapter. Telemetry contains duration/status/category/version only and excludes recipient, body, financial amounts, provider payloads, and secrets.
+
+Provider HTTP acceptance advances email to `sent`, never `delivered`. Only a provider status read or future verified webhook may append `delivered`. Revocation before send cancels external eligibility without deleting in-app evidence. Failure appends a safe error category and leaves canonical data unchanged. CTAs contain no identifiers or financial query parameters and lead to the authenticated `/notifications` route.
+
+Dependency direction is authorized deterministic financial evidence -> deterministic notification policy -> owner-scoped notification evidence -> minimized provider-neutral delivery command -> Resend. AI may later explain a notification from minimized cited inputs but cannot originate it, change severity, bypass policy, or mutate lifecycle. Saving/reading/dismissing/sending cannot alter transactions, balances, budgets, forecasts, Safe to Spend, goals, debt, net worth, AI history, or Phase 9 state.
+
+Production verification confirms the retained Auth.js database-session actor can load and explicitly evaluate the Hebrew/RTL center without creating an alert when no eligible deterministic condition exists. Read-only MongoDB evidence confirms active-session infrastructure, owner-first notification/preference indexes, safe persistence shape, and no Phase 9 provider collection. Isolated real-Mongo tests prove creation, concurrency, revocation, lifecycle, direct-ID denial, household privacy, and two-user separation. The real Resend adapter and full Financial OS service path are operationally verified with official test-mode addresses and application/provider idempotency; provider acceptance is retained as `sent`, never mislabeled `delivered`. Production user-address delivery remains fail-closed until an approved sender domain and sender configuration exist.
+
 ## Error handling and auditability
 
 Typed application errors separate public status/code/message from private causes. Unknown errors return a generic response and are logged server-side with a correlation ID. Secrets, OAuth tokens, raw financial payloads, and MongoDB URIs must be redacted. Expected validation/auth/not-found/conflict errors are not silently swallowed.
@@ -399,7 +416,7 @@ The Phase 8 Anthropic adapter is initialized lazily behind its server-only confi
 
 - **Open Banking (planned):** provider consent and tokens stay server-side. A provider adapter maps accounts, balances, cards, and transactions into provider-neutral normalized records. Manual data uses the same domain model and remains first-class. Username/password banking credentials are never collected or stored.
 - **Claude (implemented and verified):** the provider-neutral AI port accepts only minimized/redacted actor-owned deterministic evidence and returns a schema-validated Hebrew explanation separated into fact, insight, and recommendation. Anthropic transport and credentials terminate in the server-only adapter; Claude has no repository or credential access and cannot commit financial mutations.
-- **Notifications (planned):** application events are mapped to provider-neutral notification commands; provider delivery identifiers remain in the adapter.
+- **Notifications (implemented and verified):** deterministic actor-owned evidence is mapped to privacy-minimized provider-neutral commands. Resend is the first server-only email adapter; its real official test-mode path and the Financial OS orchestration path are verified. Provider delivery identifiers remain at the persistence/adapter boundary, API acceptance is never called delivery, and production user-address readiness requires separate verified sender configuration.
 - **Monitoring/analytics (planned):** operational telemetry excludes raw financial details and sensitive identity data by default.
 
 ## Testing architecture

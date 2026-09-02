@@ -8,6 +8,7 @@ import { budgetRepositoryForDatabase } from "@/lib/budgets/budget-repository";
 import { buildFinancialDataExport } from "@/lib/financial-data/financial-data-export-service";
 import { goalRepositoryForDatabase } from "@/lib/goals/goal-repository";
 import { netWorthRepositoryForDatabase } from "@/lib/net-worth/net-worth-repository";
+import { notificationRepositoryForDatabase } from "@/lib/notifications/notification-repository";
 import {
   captureFinancialSnapshot,
   listFinancialSnapshots,
@@ -348,6 +349,7 @@ describeWithMongo("Phase 2 financial data foundation", () => {
       budgetRepository: budgetRepositoryForDatabase(database),
       goalRepository: goalRepositoryForDatabase(database),
       netWorthRepository: netWorthRepositoryForDatabase(database),
+      notificationRepository: notificationRepositoryForDatabase(database),
       now: () => new Date("2026-08-31T12:00:00.000Z"),
       profileRepository,
       purchaseSimulationRepository:

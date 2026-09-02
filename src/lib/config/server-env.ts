@@ -86,6 +86,14 @@ export const serverEnvSchema = z
       emptyStringToUndefined,
       z.string().regex(/^claude-[a-z0-9-]+$/).optional(),
     ),
+    RESEND_API_KEY: optionalSecret,
+    RESEND_FROM_EMAIL: z.preprocess(
+      emptyStringToUndefined,
+      z.string().trim().min(3).max(320).refine(
+        (value) => /^(?:[^<>]{1,100}\s<)?[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>?$/.test(value),
+        "RESEND_FROM_EMAIL must be an email address with an optional display name.",
+      ).optional(),
+    ),
     OPEN_BANKING_PROVIDER: optionalNonEmptyString,
     OPEN_BANKING_CLIENT_ID: optionalNonEmptyString,
     OPEN_BANKING_CLIENT_SECRET: optionalSecret,
@@ -118,6 +126,7 @@ export type ConfigurationStatus = Readonly<{
   futureAdapters: Readonly<{
     anthropicConfigured: boolean;
     openBankingConfigured: boolean;
+    resendConfigured: boolean;
   }>;
 }>;
 
@@ -165,6 +174,8 @@ export function getConfigurationStatus(env = getServerEnv()): ConfigurationStatu
     futureAdapters: {
       anthropicConfigured: env.ANTHROPIC_API_KEY !== undefined,
       openBankingConfigured: openBankingMissing.length === 0,
+      resendConfigured:
+        env.RESEND_API_KEY !== undefined && env.RESEND_FROM_EMAIL !== undefined,
     },
   };
 }
@@ -203,4 +214,15 @@ export function requireAnthropicEnv(): Readonly<{
       ? {}
       : { workspaceId: env.ANTHROPIC_WORKSPACE_ID }),
   };
+}
+
+export function requireResendEnv(): Readonly<{
+  apiKey: string;
+  fromEmail: string;
+}> {
+  const env = getServerEnv();
+  if (env.RESEND_API_KEY === undefined || env.RESEND_FROM_EMAIL === undefined) {
+    throw new ConfigurationError("Resend email delivery is not configured.");
+  }
+  return { apiKey: env.RESEND_API_KEY, fromEmail: env.RESEND_FROM_EMAIL };
 }

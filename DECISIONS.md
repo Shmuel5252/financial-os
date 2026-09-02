@@ -382,6 +382,34 @@ This log records durable product and architecture decisions. Status is `accepted
 - Read-only MongoDB evidence confirmed active-session ownership, BSON int64 money, one owner-scoped immutable snapshot with valid state fingerprint, and no Phase 9 bank connection. Type-check, zero-warning lint, optimized build, integrity checks, ignored/untracked `.env.local`, and the registry audit with zero vulnerabilities passed.
 - Phase 14 is accepted under the execution-order exception. Phase 9 remains blocked and unaccepted. Phase 15 remains unstarted pending the real notification-channel and notification-policy gate recorded in the progress report.
 
+## ADR-051 — Notifications are deterministic owner-scoped evidence, not financial truth
+
+- **Decision:** Derive eligible Phase 15 alerts only from actor-owned, versioned deterministic evidence already supported by Financial OS. Severity, trigger eligibility, quiet-hour bypass, deduplication identity, cooldown, and retry scheduling are versioned application policies. Notification creation or delivery cannot mutate any financial source or engine result. AI is downstream explanation only.
+- **Reasoning:** An alert must be reproducible and explainable without giving a provider or model authority over financial state. Stable evidence fingerprints prevent repeated evaluation and retries from becoming notification spam.
+- **Alternatives:** AI-selected alerts, client-provided ownership/destinations, page-load notifications, hidden thresholds, and Phase 9 bank-state fabrication were rejected.
+- **Consequences:** Phase 15 can operate over manual/provider-neutral forecast, budget, goal, debt, and freshness evidence while Phase 9 remains blocked. Bank synchronization, consent, disconnect, and webhook alerts remain explicitly unavailable.
+
+## ADR-052 — Email is explicit opt-in and privacy-minimized through Resend
+
+- **Decision:** In-app operational delivery defaults enabled; email defaults disabled and requires revocable per-user consent. The first external adapter is server-only Resend. Email contains a fixed generic Hebrew notice and authenticated application link only—never financial values, merchants, identifiers, household-private data, credentials, or secrets. Recipient email is resolved server-side from the authenticated Auth.js user.
+- **Reasoning:** Email is a lower-trust surface than the authenticated application. Useful attention can be delivered without exporting sensitive financial context.
+- **Alternatives:** Detailed balance/transaction email, email enabled by default, arbitrary client destination, marketing-consent inference, provider-specific domain coupling, and Web Push in Phase 15 were rejected.
+- **Consequences:** Official Resend test mode may verify the real adapter. Production delivery to user addresses additionally requires a verified sender domain/configuration and cannot be claimed from test-mode acceptance alone.
+
+## ADR-053 — Delivery lifecycle distinguishes provider acceptance from delivery
+
+- **Decision:** Store separate in-app (`unread`, `read`, `dismissed`) and external email (`not_requested`, `deferred`, `pending`, `sent`, `delivered`, `failed`) states with append-only safe audit evidence. `sent` means Resend accepted the idempotent request; only later provider evidence may establish `delivered`. Default quiet hours are 22:00–08:00 in profile timezone. Non-critical email defers; only policy-approved critical confirmed-shortfall alerts bypass. A 24-hour source-class cooldown supplements stable logical deduplication.
+- **Reasoning:** Transport acceptance is not inbox delivery, retries are not new alerts, and local-calendar quiet periods—including DST—must be deterministic.
+- **Alternatives:** Treating HTTP success as delivery, provider-only idempotency, repeating unchanged conditions, silently dropping deferred work, or letting all critical labels bypass quiet hours were rejected.
+- **Consequences:** Resend idempotency reinforces but never replaces the application dedupe key. Failures are safely categorized, retryable without duplicate logical records, and unable to corrupt financial truth.
+
+### Phase 15 verification addendum (2026-09-02)
+
+- ADR-051 through ADR-053 are implemented by the versioned deterministic notification policy, owner-first audited repositories, authenticated APIs, Hebrew/RTL center, provider-neutral delivery port, and server-only Resend adapter. Expected unavailable domain projections are isolated without hiding infrastructure failures; no notification source, delivery, read, dismissal, or preference operation mutates financial truth.
+- Dedicated Phase 15 coverage passed 5 files / 20 tests, including 6 real-Mongo lifecycle/isolation tests and 2 real-Resend tests. The real provider accepted an official test-mode delivery both directly and through the Financial OS service/repository path, and identical retries preserved one provider identity and logical record. Acceptance is recorded as `sent`; no unverified inbox delivery is claimed.
+- The final complete suite passed 58 files / 266 tests with real MongoDB, Anthropic, and Resend. Authenticated production-browser acceptance passed in Hebrew/RTL with a real Auth.js database session, deterministic evaluation, no fabricated alert, no overflow, and no console warning/error output. Type-check, zero-warning lint, optimized build, owner-first index and isolation checks, secret/configuration checks, and a zero-vulnerability registry audit passed.
+- Phase 15 is accepted under the execution-order exception. Phase 9 remains blocked and unaccepted. Phase 16 remains unstarted at its unresolved product/security-policy gate.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.
