@@ -18,6 +18,7 @@ import { financialEngineSnapshotRepositoryForDatabase } from "@/lib/financial-en
 import { calculateFinancialEngineSnapshot } from "@/lib/financial-engine/financial-engine-snapshot-service";
 import { financialSnapshotRepositoryForDatabase } from "@/lib/financial-snapshots/financial-snapshot-repository";
 import { goalRepositoryForDatabase } from "@/lib/goals/goal-repository";
+import { netWorthRepositoryForDatabase } from "@/lib/net-worth/net-worth-repository";
 import {
   manualRecordRepositoryForDatabase,
   type ManualRecordRepository,
@@ -336,6 +337,7 @@ describeWithMongo("Phase 7 purchase simulation persistence and isolation", () =>
     const exported = await buildFinancialDataExport(firstActor, {
       budgetRepository,
       goalRepository,
+      netWorthRepository: netWorthRepositoryForDatabase(database),
       profileRepository,
       purchaseSimulationRepository: simulationRepository,
       repositories: { ...sourceRepositories, goals: goalsRepository },
@@ -343,7 +345,7 @@ describeWithMongo("Phase 7 purchase simulation persistence and isolation", () =>
         transactionIntelligenceRepositoryForDatabase(database),
     });
     const serialized = JSON.stringify(exported.purchaseSimulations);
-    expect(exported.schemaVersion).toBe(6);
+    expect(exported.schemaVersion).toBe(7);
     expect(exported.purchaseSimulations).toHaveLength(1);
     expect(serialized).not.toContain("userId");
     expect(serialized).not.toContain("idempotencyKeyHash");

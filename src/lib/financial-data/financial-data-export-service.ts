@@ -24,6 +24,14 @@ import {
   type GoalRepository,
 } from "@/lib/goals/goal-repository";
 import {
+  toNetWorthItemView,
+  toNetWorthSnapshotView,
+} from "@/lib/net-worth/net-worth";
+import {
+  getNetWorthRepository,
+  type NetWorthRepository,
+} from "@/lib/net-worth/net-worth-repository";
+import {
   manualSectionSchema,
   toManualRecordView,
   type ManualRecordView,
@@ -74,10 +82,14 @@ export type FinancialDataExport = Readonly<{
     definitions: readonly GoalDefinitionView[];
     progressEvidence: readonly GoalProgressEvidenceView[];
   }>;
+  netWorth: Readonly<{
+    items: readonly ReturnType<typeof toNetWorthItemView>[];
+    snapshots: readonly ReturnType<typeof toNetWorthSnapshotView>[];
+  }>;
   profile: UserProfileView | null;
   purchaseSimulations: readonly SavedPurchaseSimulationView[];
   records: Readonly<Record<ManualSection, readonly ManualRecordView[]>>;
-  schemaVersion: 6;
+  schemaVersion: 7;
   transactionIntelligence: Readonly<{
     reviewEvidence: readonly TransactionIntelligenceReviewView[];
     runs: readonly TransactionIntelligenceRunView[];
@@ -88,6 +100,7 @@ export type FinancialDataExportDependencies = Readonly<{
   budgetRepository?: BudgetRepository;
   debtStrategyRepository?: DebtStrategyRepository;
   goalRepository?: GoalRepository;
+  netWorthRepository?: NetWorthRepository;
   now?: () => Date;
   profileRepository?: UserProfileRepository;
   purchaseSimulationRepository?: PurchaseSimulationRepository;
@@ -133,6 +146,11 @@ export async function buildFinancialDataExport(
     (await getPurchaseSimulationRepository());
   const purchaseSimulations =
     await purchaseSimulationRepository.listAllForActor(actor);
+  const netWorthRepository = dependencies?.netWorthRepository ?? await getNetWorthRepository();
+  const [netWorthItems, netWorthSnapshots] = await Promise.all([
+    netWorthRepository.listItemsForActor(actor),
+    netWorthRepository.listAllSnapshotsForActor(actor),
+  ]);
   const debtStrategyRepository = dependencies?.debtStrategyRepository ?? await getDebtStrategyRepository();
   const debtStrategies = await debtStrategyRepository.listAllForActor(actor);
   const transactionIntelligenceRepository =
@@ -177,6 +195,10 @@ export async function buildFinancialDataExport(
       definitions: goalDefinitions.map(toGoalDefinitionView),
       progressEvidence: goalProgress.map(toGoalProgressEvidenceView),
     },
+    netWorth: {
+      items: netWorthItems.map(toNetWorthItemView),
+      snapshots: netWorthSnapshots.map(toNetWorthSnapshotView),
+    },
     profile: profile === null ? null : toUserProfileView(profile),
     purchaseSimulations: purchaseSimulations.map(
       toSavedPurchaseSimulationView,
@@ -184,7 +206,7 @@ export async function buildFinancialDataExport(
     records: Object.fromEntries(entries) as unknown as Readonly<
       Record<ManualSection, readonly ManualRecordView[]>
     >,
-    schemaVersion: 6,
+    schemaVersion: 7,
     transactionIntelligence: {
       reviewEvidence: intelligenceReviews.map(
         toTransactionIntelligenceReviewView,

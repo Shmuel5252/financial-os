@@ -157,6 +157,9 @@ export default async function DashboardPage() {
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/debt-strategies">
             {messages.navigation.debtStrategies}
           </Link>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/net-worth">
+            {messages.navigation.netWorth}
+          </Link>
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/goals">
             {messages.navigation.goals}
           </Link>

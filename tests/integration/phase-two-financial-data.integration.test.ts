@@ -7,6 +7,7 @@ import type { Actor } from "@/lib/auth/actor";
 import { budgetRepositoryForDatabase } from "@/lib/budgets/budget-repository";
 import { buildFinancialDataExport } from "@/lib/financial-data/financial-data-export-service";
 import { goalRepositoryForDatabase } from "@/lib/goals/goal-repository";
+import { netWorthRepositoryForDatabase } from "@/lib/net-worth/net-worth-repository";
 import {
   captureFinancialSnapshot,
   listFinancialSnapshots,
@@ -346,6 +347,7 @@ describeWithMongo("Phase 2 financial data foundation", () => {
     const exported = await buildFinancialDataExport(firstActor, {
       budgetRepository: budgetRepositoryForDatabase(database),
       goalRepository: goalRepositoryForDatabase(database),
+      netWorthRepository: netWorthRepositoryForDatabase(database),
       now: () => new Date("2026-08-31T12:00:00.000Z"),
       profileRepository,
       purchaseSimulationRepository:

@@ -1,5 +1,45 @@
 # Financial OS Progress
 
+## Phase 14 — Savings, Assets, and Net Worth
+
+**Status:** Complete — all Phase 14 acceptance criteria objectively verified and accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
+
+**Started:** 2026-09-02
+
+**Verified:** 2026-09-02
+
+**Scope boundary:** Deterministic provider-neutral current net worth by currency, explicit asset/liability valuation evidence, canonical double-count prevention, source-specific freshness, immutable snapshots/history, goal-reference projection without duplicated value, and authenticated Hebrew/RTL presentation only. No implicit FX, live market/brokerage/bank provenance, scenario valuation, canonical payment mutation, or AI-calculated value.
+
+### Implemented
+
+- The complete attached Phase 14 policy, both synchronized Master Plan copies, architecture, decision log, implementation plan, and progress history were read before implementation changes.
+- The working tree began clean and synchronized at accepted Phase 13 commit `71b8b57f767570015554eb3bf94a52432e2335c5`.
+- ADR-049/050 record the exact valuation aggregation, source/type freshness, liability priority, immutable snapshot, deletion/correction, household isolation, provider-neutral, and AI-authority decisions. No unresolved product or security gate remains for the bounded Phase 14 implementation.
+- Added pure versioned `net-worth/1.0.0` aggregation over actor-owned accounts, detailed savings, loans, cards, and explicit `netWorthItems`. Exact assets, liabilities, net worth, cash, and non-cash assets remain grouped by currency. Negative accounts become overdraft liabilities; future-effective evidence is excluded; stale evidence remains visible; and no implicit FX exists.
+- Added explicit canonical aggregation relationships for standalone assets, parent-account versus holding authority, and higher-quality loan/card evidence. Detailed savings replace account fallback, goal references add no value, and fresh settlement/outstanding/derived/user-reported liability evidence follows the approved deterministic priority without inventing payoff charges.
+- Added deterministic `net-worth-freshness-v1` source/type thresholds in the profile IANA timezone, explicit provenance and source revisions, stable input/state fingerprints, and precise inclusion/exclusion reason evidence.
+- Added audited, optimistic-versioned, soft-deletable `netWorthItems` and append-only `netWorthSnapshots`. Current mutations may produce at most one automatic material-change snapshot per actor/calendar day; explicit identical-state retries are idempotent; page reads never write; and historical copies retain complete exact evidence after current correction/deletion.
+- Added trusted-origin, bounded-body, rate-limited, no-store APIs and protected Hebrew/RTL `/net-worth`. The current statement, valuation freshness, included/excluded evidence, non-cash warning, explicit capture, synthetic asset form, immutable per-currency history chart, and savings-goal references are localized with LTR isolation for exact money, dates, currencies, and versions.
+- Financial-data export schema version 7 includes bounded actor-owned net-worth items and snapshots while omitting internal ownership/authentication fields. Dashboard and debt-strategy navigation expose the center without unrelated visual redesign.
+- Phase 9 remains blocked; no Open Banking, market-data, brokerage, FX, payment, canonical transaction, budget, Safe to Spend, or verified-goal mutation was introduced.
+
+### Verification evidence
+
+- Dedicated Phase 14 unit/UI/real-Mongo coverage passed 3 files / 19 tests. It covers sign/classification, exact currency grouping, market-versus-cash separation, every source/type freshness threshold, future/stale evidence, savings/account/holding/goal/card/debt deduplication, liability priority, no implicit FX, bigint/BSON int64 boundaries, deterministic reproduction, snapshot daily/idempotency/immutability, correction/deletion history, export, canonical non-mutation, and actor/household/two-user denial.
+- The complete final-state regression with `RUN_REAL_ANTHROPIC_TESTS=1` passed 53 files / 245 tests using one worker. Real MongoDB and the real Anthropic provider regression gate passed without mocks or skipped acceptance checks.
+- Authenticated production-browser acceptance on port 3001 used the retained real Google/Auth.js MongoDB session. It loaded the Hebrew net-worth center, added one clearly labelled synthetic `123.45 ILS` unrealized-market asset, classified it as non-cash, generated one material-change snapshot, deduplicated an explicit same-state capture, and retained current/history state after reload.
+- Browser checks passed with `lang=he`, `dir=rtl`, computed RTL, 26 explicit LTR isolates after reload, one history SVG, no horizontal overflow, and no browser warning/error logs.
+- Read-only real-Mongo acceptance confirmed the synthetic current item belongs to an owner with an active Auth.js database session, exact money is stored as BSON `int64`, the owner-scoped immutable snapshot exists with a valid SHA-256 state fingerprint, the automatic snapshot is unique for the state/day, and Phase 9 `bankConnections` remain absent.
+- Type-check, zero-warning ESLint, optimized Next.js production build, `git diff --check`, synchronized Master Plan hashes, ignored/untracked `.env.local`, isolated port-3001 production runtime, and the registry-backed high-severity audit passed; the audit reported zero vulnerabilities. No secret value was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 14 is fully accepted under the autonomous progression rule. Present and historical net worth are exact, currency-separated, provenance/freshness-qualified, canonically deduplicated, immutable where required, owner-isolated, provider-neutral, and independent of AI authority. Phase 9 remains visibly blocked and unaccepted.
+
+### Exact next gate
+
+Phase 15 is next in roadmap order, but implementation has not begun. Its definition of done requires in-app delivery plus at least one operationally verified real email or push channel. The source of truth does not yet select that external channel/provider or define its concrete preference, quiet-hour, and delivery policy; those decisions and matching provider access are a genuine gate before Phase 15 code changes.
+
 ## Phase 13 — Debt Strategies
 
 **Status:** Complete — all Phase 13 acceptance criteria objectively verified and accepted under the owner-approved autonomous progression rule. Phase 9 remains BLOCKED, unimplemented, and unaccepted.

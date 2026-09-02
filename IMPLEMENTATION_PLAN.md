@@ -224,16 +224,19 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 14 — Savings and net worth
 
+**Approved product policy (2026-09-02):** Reproducible point-in-time assets-minus-liabilities statements; explicit valuation amount/type/time/provenance/freshness; unrealized-value versus cash separation; canonical account/savings/holding/goal/card/debt deduplication; evidence-prioritized liabilities; separate currency totals with no implicit FX; immutable fingerprinted snapshots; daily-at-most automatic history plus explicit snapshots; correction/deletion history preservation; private-by-default household isolation; AI explanation-only authority; and complete provider-neutral operation while Phase 9 remains blocked.
+
 - **Objective:** Track emergency funds, savings goals, assets, liabilities, net worth, and history.
-- **Scope:** Cash/savings/investments/other assets minus loans/credit/debts, progress and historical charts.
+- **Scope:** Cash/savings/investments/other valued assets minus loans/cards/overdraft/other liabilities, exact currency-grouped current statements, explicit freshness/provenance/deduplication, savings-goal references without duplication, and immutable historical charts. No FX conversion, live market/provider values, scenario valuation, payment action, or AI calculation.
 - **Dependencies:** Accounts/debts/goals, currency policy, snapshots.
-- **Major tasks:** Asset/liability classification, valuation-date/source rules, net-worth snapshot service, goal links.
-- **Data/model implications:** Asset records and versioned net-worth snapshots; multi-currency amounts remain explicit.
-- **Security:** Sensitive holdings are owner-scoped and minimized in client/logs.
-- **Testing:** Sign/classification, missing/stale valuations, history, currency grouping, deletions.
+- **Major tasks:** Pure versioned aggregation/freshness engine; standalone/holding/liability-evidence items; canonical source mapper; source/type freshness; exact liability priority; explicit/material snapshot orchestration; goal-link projection; Hebrew/RTL current/history UI.
+- **Data/model implications:** Mutable audited/soft-deletable `netWorthItems` for explicit current valuations and append-only fingerprinted `netWorthSnapshots` containing complete point-in-time evidence; exact multi-currency BSON int64 amounts remain separate.
+- **Security:** Sensitive holdings and snapshots are actor-owned, direct-ID owner-scoped, bounded/minimized in client/export/logs, and never expanded by household membership alone.
+- **Testing:** Sign/classification, market-versus-cash, source/freshness thresholds, missing/stale values, every deduplication boundary, liability priority/fees, currency grouping/no FX, goal non-duplication, snapshot idempotency/immutability, corrections/deletions, bigint/BSON int64, household/two-user isolation, AI separation, Hebrew/RTL, and Phases 0–13 regression.
 - **Acceptance criteria:** Net worth reconciles to included records with visible valuation freshness.
 - **Definition of done:** Savings and liabilities show accurate present and historical progress.
 - **Risks/migration:** Market valuation sources and cross-currency aggregation.
+- **Verified result (2026-09-02):** Accepted under the execution-order exception. Dedicated Phase 14 coverage passed 3 files / 19 tests and the complete final-state suite passed 53 files / 245 tests with real MongoDB and the real Anthropic regression gate. Exact currency-grouped reconciliation, market-versus-cash separation, all source/type freshness and deduplication boundaries, liability evidence priority, no implicit FX, immutable/idempotent history, correction/deletion preservation, BSON int64, actor/household/two-user isolation, export safety, canonical non-mutation, authenticated Hebrew/RTL production acceptance, type-check, zero-warning lint, optimized build, and a zero-vulnerability registry audit passed. Phase 9 remains blocked and no provider provenance exists.
 
 ## Phase 15 — Notifications
 
