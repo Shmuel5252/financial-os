@@ -254,16 +254,18 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 16 — Reviews, reports, and search
 
+- **Approved product/security policy (2026-09-02):** Explicit monthly/yearly timezone periods; immutable close and linked restatement versions; current truth remains correctable; personal/authorized-household scope; private-member exclusion; exact separate-currency totals and no implicit FX; versioned UTF-8 injection-safe streaming CSV plus structured JSON; reproducible closed exports; minimized versioned/deletable AI summaries; provider-neutral MongoDB search with query-time canonical reauthorization/freshness; bounded cursors; and measured 10,000-transaction p95 targets (reports <=2 seconds, search <=500 milliseconds).
 - **Objective:** Provide monthly/yearly reviews, core financial reports, subscriptions view, and authorized global search.
-- **Scope:** Cash flow, categories, income vs expenses, debt, savings, net worth, budget, goals, AI summary, merchant/transaction/category/account/goal search.
+- **Scope:** Current/closed/restated cash flow, categories, income vs expenses, debt, savings, net worth, budget, goals, subscriptions, optional AI summaries, CSV/JSON report exports, and authorized global search. No PDF, external search provider, Open Banking, or report-driven financial mutation.
 - **Dependencies:** Stable snapshots/history and applicable AI boundary.
-- **Major tasks:** Versioned report queries, export formats, search indexes, locale/RTL presentation, review finalization.
-- **Data/model implications:** Derived report snapshots/indexes; source IDs and periods preserve reconciliation.
-- **Security:** Owner-scoped search/indexing, export authorization, CSV injection protection, AI summary traceability.
-- **Testing:** Reconciliation, date filters/timezones, pagination/search isolation, export safety, review fixtures.
+- **Major tasks:** Pure report projection, immutable close/restatement lifecycle, safe streaming exports, bounded materialized search/reindex with canonical revalidation, minimized AI report context/versioned summaries, locale/RTL presentation, and measured representative performance.
+- **Data/model implications:** Append-only/visibility-audited `financialReports`, owner-scoped `authorizedSearchDocuments`, and versioned/deletable `reportAiSummaries`; source IDs/revisions, scope, period, currency groups, fingerprints, and policy versions preserve reconciliation.
+- **Security:** Server-derived personal/household scope, current-share checks, owner-first personal indexes, direct-ID denial, no private counts, export authorization and formula-injection protection, AI minimization/evidence validation, bounded cursors/streams, and no raw prompt/provider/auth material.
+- **Testing:** Open/closed/restate/correction immutability, reconciliation, date/timezone/currency boundaries, household/two-user/direct-ID isolation, search freshness/unshare/deletion, cursor tampering, CSV/JSON stability and injection safety, AI save/delete/regenerate/authority, 10,000-transaction p95 measurements, real MongoDB/Anthropic, and full regression.
 - **Acceptance criteria:** Every report total traces to owned source data and search never crosses scope.
-- **Definition of done:** Reports/reviews/export/search are accurate, accessible, and performant at target data volumes.
+- **Definition of done:** Reports/reviews/export/search/summary are accurate, accessible, reproducible, bounded, and meet the approved development performance targets with manual/provider-neutral data.
 - **Risks/migration:** Stale derived data, index privacy, large export cost.
+- **Verified result (2026-09-02):** Accepted under the execution-order exception. Unit/UI coverage passed 42 files / 211 tests; the sequential real-Mongo integration suite passed 17 files / 66 tests; separate live-provider regression passed 2 Anthropic and 2 Resend tests. The 10,000-transaction fixture met report p95 <=2 seconds and indexed search p95 <=500 milliseconds over 20 iterations. Exact BSON int64/currency separation, immutable close/restatement/export reproduction, current household-share reauthorization, owner/two-user isolation, summary authority/delete/versioning, authenticated monthly/yearly Hebrew/RTL production journeys, type-check, zero-warning lint, optimized build, and the zero-vulnerability audit passed. Phase 9 remains blocked; Phase 17 awaits its roadmap-required product/ethics policy.
 
 ## Phase 17 — Progress journeys
 

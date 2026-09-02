@@ -1,5 +1,45 @@
 # Financial OS Progress
 
+## Phase 16 — Reviews, Reports, Export, and Search
+
+**Status:** Complete — all Phase 16 acceptance criteria objectively verified and self-accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
+
+**Started:** 2026-09-02
+
+**Verified:** 2026-09-02
+
+**Scope boundary:** Deterministic current/closed/restated monthly and yearly reports, subscriptions, authorized personal/household scope, versioned CSV/JSON exports, bounded reauthorized MongoDB search, and minimized optional AI report summaries only. No PDF, external search provider, Open Banking, implicit FX, AI-calculated totals, or canonical financial mutation.
+
+### Implemented
+
+- The repository began clean and synchronized at accepted Phase 15 commit `07f54c7a10a697a80fa96e72668d817e66d57ca0`; `.env.local` is ignored and untracked.
+- The complete owner attachment, Master Plan, architecture, decision log, implementation plan, and progress history were reread before changes.
+- Both synchronized Master Plan copies, ADR-054 through ADR-056, architecture, and the implementation plan record immutable close/restatement semantics, explicit scope, currency separation, export contracts, AI authority/retention, search reauthorization/freshness, pagination, deletion, performance targets, and Phase 9 exclusion before code relies on them.
+- Added pure, versioned monthly/yearly report projection over explicit profile-timezone periods and explicit personal or currently authorized household scope. Cash flow, refunds, category spending, accounts, budgets, debts, goals, net worth, savings, and subscription signals retain exact integer-minor-unit values, currency separation, source revisions, opaque provenance aliases, deterministic order, and a reproducible SHA-256 source fingerprint; transfers do not distort operating cash flow and no implicit FX exists.
+- Added immutable owner-scoped `financialReports` checkpoints. Closing stores the complete bounded report, period/scope, source evidence, currency groups, engine/policy versions, and audit identity. Later source corrections change current truth only; explicit restatement appends a linked version and preserves the original. User-visible removal is an audited visibility change and never mutates canonical finance.
+- Added authenticated, no-store current/close/restatement/read/hide and export routes with server-derived actors, trusted-origin mutation checks, bounded inputs, optimistic versions, stable idempotency payloads, owner-first indexes, and current household-share fingerprint reauthorization. Revoking a shared source immediately denies a previously closed household report even before physical derived cleanup.
+- Added versioned UTF-8 CSV and structured JSON exports. CSV has stable ASCII columns, a BOM for Hebrew interoperability, exact base-10 minor-unit strings, explicit currency and ISO time metadata, deterministic row order, streaming output, and server-side spreadsheet-formula neutralization. Public JSON and CSV omit owner/auth/provider/internal source identifiers; closed exports use the stored checkpoint rather than mutable current data.
+- Added provider-neutral `authorizedSearchDocuments` with owner-first MongoDB indexes, normalized Hebrew/Latin prefix tokens, bounded query-bound cursors, source/index timestamps and versions, explicit rebuild, canonical query-time reauthorization, stale-result disclosure, and immediate denial after deletion/unsharing. Search covers transactions/descriptions/categories, accounts, goals, debts, savings assets, notifications, closed reports, and saved report summaries; household search is assembled only from the live Phase 11 shared projection.
+- Added the optional report-summary path downstream of deterministic truth: at most 32 derived aliased facts enter the existing server-only provider abstraction; raw transactions, complete profiles, internal IDs, hidden prompts, and unrelated text do not. Schema/evidence validation prevents unsupported conclusions. `reportAiSummaries` stores only safe structured Hebrew output, source fingerprint/version, model/provider metadata, usage, and policy version; regeneration appends a version and deletion cannot affect report or financial truth.
+- Added protected Hebrew/RTL `/reports`, dashboard navigation, monthly/yearly and personal/household controls, separate-currency sections, current/closed/restated states, CSV/JSON actions, authorized search, AI-authority disclosure, and LTR isolation for money, dates, versions, and identifiers. Browser verification found and fixed the period-kind control so selecting a year now changes the label, validation, and value before submission.
+
+### Verification evidence
+
+- The complete unit suite passed 42 files / 211 tests. The Phase 16 unit/UI coverage verifies month/leap-year/year boundaries, exact cash flow/refunds/categories, transfer exclusion, no FX, reproducibility/fingerprint sensitivity, CSV UTF-8/schema/exactness/injection protection, public JSON identifier removal, search token normalization, minimized AI evidence, Hebrew labels, LTR money isolation, and explicit yearly controls.
+- The complete real-Mongo integration suite passed 17 files / 66 tests; four external-provider cases were intentionally skipped in that general run and executed separately. Phase 16 real-Mongo coverage verifies immutable report/restatement versions, BSON int64 exactness beyond JavaScript's safe integer range, owner/direct-ID denial, user-visible hide without evidence loss, summary ownership/delete, search owner separation/deletion freshness, and bounded 10,000-transaction performance. The Phase 11 regression additionally proves current-share reauthorization rejects a previously valid household report immediately after unsharing.
+- The representative 10,000-transaction test passed its server-side p95 assertions: deterministic report generation remained below 2 seconds and ordinary owner-indexed search remained below 500 milliseconds across 20 measured iterations; result pages remained at or below 100 records.
+- Real Anthropic regression passed 2 files / 2 live requests: the Phase 8 provider contract and the Phase 16 minimized report-summary contract both returned schema-validated Hebrew, evidence-cited output. Only synthetic deterministic acceptance facts were sent. The Phase 15 real Resend regression also passed 1 file / 2 live official test-mode requests, preserving the previously accepted provider path and truthful `sent` semantics.
+- Authenticated production-browser acceptance used the retained real Google/Auth.js MongoDB session on the final optimized build at port 3001. It verified `lang=he`, document/computed RTL, LTR-isolated exact money, personal monthly reporting, explicit close plus linked restatement history, CSV download, multi-domain account/goal/debt search, and an authorized household yearly report containing no private or unshared resources. Captured browser warning/error output was empty. The browser did not invoke AI with real user data; the required real provider path was verified separately with minimized synthetic context.
+- Type-check, zero-warning ESLint, two optimized Next.js production builds (including the browser-found yearly-control correction), `git diff --check`, real-Mongo integrity/isolation, registry-backed high-severity dependency audit, and server-only provider boundaries passed. The audit reported zero vulnerabilities. `.env.local` remained ignored/untracked and no secret value was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 16 is fully accepted under the autonomous progression rule. Every total remains traceable to authorized, versioned source evidence; report close/restatement history is immutable; exports reproduce the correct checkpoint with exact currency-separated money; search cannot expand current authorization; and Claude remains an optional explanation layer downstream of deterministic truth. Phase 9 remains visibly blocked and no provider provenance or bank synchronization was fabricated.
+
+### Exact next gate
+
+Phase 17 is next in roadmap order under the execution-order exception, but its roadmap explicitly requires a product/ethics review for restrained milestones, streaks, achievements, reversals, backfill, tone, and opt-out behavior. No approved Phase 17 policy currently resolves those material incentive-design decisions. Stop before Phase 17 code and request that policy; do not infer gamification rules that could pressure unsafe financial behavior.
+
 ## Phase 15 — Notifications
 
 **Status:** Complete — all Phase 15 acceptance criteria objectively verified and accepted under the owner-approved autonomous progression rule. Phase 9 remains BLOCKED, unimplemented, and unaccepted.

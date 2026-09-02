@@ -43,6 +43,7 @@ export const deleteAiConversationCommandSchema = z.object({
 });
 
 export type AiFocus = z.infer<typeof aiFocusSchema>;
+export type AiProviderFocus = AiFocus | "report";
 export type SendAiMessageCommand = z.infer<typeof sendAiMessageCommandSchema>;
 
 export const aiEvidenceLabels = [
@@ -74,6 +75,12 @@ export const aiEvidenceLabels = [
   "purchase.safer_date",
   "purchase.safety_margin",
   "purchase.total_price",
+  "report.budget_allocated",
+  "report.debt",
+  "report.goal",
+  "report.net_cash_flow",
+  "report.net_worth",
+  "report.savings",
 ] as const;
 
 export type AiEvidenceLabel = (typeof aiEvidenceLabels)[number];
@@ -92,7 +99,7 @@ export type AiEvidenceFact = Readonly<{
 
 export type AiSourceReference = Readonly<{
   alias: string;
-  kind: "budget_period" | "financial_engine_snapshot" | "goal_progress" | "purchase_simulation";
+  kind: "budget_period" | "financial_engine_snapshot" | "goal_progress" | "purchase_simulation" | "report_snapshot";
   sourceId: string;
   version: string;
 }>;
@@ -101,7 +108,7 @@ export type AiProviderSourceReference = Omit<AiSourceReference, "sourceId">;
 
 export type AiPreparedContext = Readonly<{
   evidence: readonly AiEvidenceFact[];
-  focus: AiFocus;
+  focus: AiProviderFocus;
   minimizationVersion: string;
   redactionCategories: readonly string[];
   sourceReferences: readonly AiSourceReference[];

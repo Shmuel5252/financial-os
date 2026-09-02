@@ -410,6 +410,36 @@ This log records durable product and architecture decisions. Status is `accepted
 - The final complete suite passed 58 files / 266 tests with real MongoDB, Anthropic, and Resend. Authenticated production-browser acceptance passed in Hebrew/RTL with a real Auth.js database session, deterministic evaluation, no fabricated alert, no overflow, and no console warning/error output. Type-check, zero-warning lint, optimized build, owner-first index and isolation checks, secret/configuration checks, and a zero-vulnerability registry audit passed.
 - Phase 15 is accepted under the execution-order exception. Phase 9 remains blocked and unaccepted. Phase 16 remains unstarted at its unresolved product/security-policy gate.
 
+## ADR-054 — Report closes are immutable checkpoints and corrections create restatements
+
+- **Decision:** Generate current reports from authorized canonical evidence for explicit monthly/yearly profile-timezone periods and explicit personal/household scope. Closing stores one immutable, currency-separated, versioned report with exact totals and source provenance. Later corrections update current truth but never rewrite that record; an explicit restatement appends a new immutable version linked to the original/superseded report. User-facing deletion hides an artifact while retaining the minimum immutable checkpoint/audit evidence required for integrity.
+- **Reasoning:** A closed report must explain what Financial OS accepted at that time, while financial correction cannot be blocked. Recomputing history silently would erase the original decision context; freezing canonical source records would preserve mistakes.
+- **Alternatives:** Mutable monthly rows, automatic historical rewrite, preventing post-close correction, rebuilding exports from current data, and destructive checkpoint deletion were rejected.
+- **Consequences:** Report state is explicitly `current`, `closed`, or `restated`; closed/restated exports reproduce stored evidence. Every aggregate is exact and grouped by currency. Household reports can include only currently authorized explicit shares and never infer access from membership.
+
+## ADR-055 — Phase 16 export and search are versioned, bounded, and reauthorized
+
+- **Decision:** Provide deterministic UTF-8 CSV and JSON report exports with stable versioned schemas, exact minor-unit strings, explicit currency, ISO dates, stable ordering, and formula-injection neutralization. Stream rows rather than load unbounded histories. Implement provider-neutral MongoDB search documents using normalized bounded prefix tokens, owner-first indexes, deterministic cursors, and indexed/update timestamps. Revalidate every candidate against current canonical ownership/share authorization before returning it; stale index content is never authorization truth.
+- **Reasoning:** Spreadsheet interoperability is useful but user text can execute formulas, and a search cache can outlive deletion/unsharing. Bounded/indexed queries meet the approved scale without adding an external provider or trusting materialized visibility.
+- **Alternatives:** Locale-formatted money, raw user text in CSV, unbounded exports, client-side search, direct index access, and external search infrastructure were rejected.
+- **Consequences:** First pages are capped at 100. Security-sensitive visibility changes deny results immediately through canonical revalidation even before cleanup. Acceptance measures report p95 <= 2 seconds and indexed search p95 <= 500 milliseconds against at least 10,000 transactions, two users, and shared/private evidence.
+
+## ADR-056 — AI report summaries are minimized versioned explanations
+
+- **Decision:** Build report summaries only from one authorized deterministic report view or immutable checkpoint, after Phase 8 minimization/redaction. The provider receives no raw transaction history, auth/provider identifiers, or unrelated financial records. Persist only explicitly saved, schema-validated user-visible Hebrew output, safe provider/model/policy metadata, scope/report references, generation time, and a monotonically increasing version. Regeneration appends; deletion removes user-visible content without changing the source report or canonical finance.
+- **Reasoning:** Report explanation benefits from Claude but cannot delegate aggregation, currency policy, or authorization to AI. Append-only versions preserve what the user saw without retaining hidden prompts or context dumps.
+- **Alternatives:** AI-generated totals, full-history prompts, mutable saved summary text, hidden report mutations, and raw provider-response retention were rejected.
+- **Consequences:** Every numerical statement must cite a supplied report evidence alias and survive the existing output-number authority validation. Personal and household summary contexts use separate authorized assemblers. Phase 9 remains blocked and supplies no report, search, or AI provenance.
+
+### Phase 16 verification addendum (2026-09-02)
+
+- ADR-054 through ADR-056 are implemented by the pure report projection, immutable `financialReports` close/restatement history, streamed versioned CSV/JSON, owner-indexed `authorizedSearchDocuments`, canonical query-time reauthorization, and versioned/deletable `reportAiSummaries`. Current source correction remains possible and none of these derived operations mutates canonical financial truth.
+- Unit/UI verification passed 42 files / 211 tests and the sequential real-Mongo integration regression passed 17 files / 66 tests. Exact BSON int64 money, currency separation, source fingerprints, immutable lineage, owner/direct-ID denial, immediate post-unshare rejection, search freshness/deletion, summary isolation/deletion, Hebrew export safety, and deterministic reproduction passed.
+- The representative 10,000-transaction fixture passed report-generation p95 below 2 seconds and owner-indexed search p95 below 500 milliseconds over 20 iterations, with first pages capped at 100. The implementation remains provider-neutral and Phase 9 contributes no data or provenance.
+- Two live Anthropic regression requests passed, including the Phase 16 minimized report explanation from synthetic deterministic facts; two live Resend test-mode regressions preserved the accepted Phase 15 provider boundary. No real user financial context was sent during browser verification.
+- The final optimized production build passed authenticated monthly personal and yearly household Hebrew/RTL browser journeys, exact LTR money isolation, close/restatement display, CSV download, and multi-domain authorized search with no captured warning/error output. Type-check, zero-warning lint, the registry dependency audit with zero vulnerabilities, Git/secret hygiene, and `.env.local` ignore status passed.
+- Phase 16 is accepted under the autonomous execution-order exception. Phase 9 remains blocked and unaccepted. Phase 17 is not started because its roadmap-required product/ethics policy for incentives, reversals, backfill, tone, and opt-out has not yet been approved.
+
 ## Phase 0 verification addendum — 2026-08-30
 
 - Money, rounding, dates/timezones, environment readiness, placeholder rejection, ownership filters, and safe errors are covered by 33 passing tests.
@@ -474,3 +504,4 @@ This log records durable product and architecture decisions. Status is `accepted
 - The licensed Open Banking provider, jurisdiction, token-encryption/KMS design, and consent requirements remain undecided.
 - Household private/shared resource semantics are resolved by ADR-043/044 and verified in Phase 11.
 - Phase 3 core income-confidence, horizon, margin-basis, and same-day-order policies are resolved by ADR-029. Phase 12 forecast-range/confidence policy is resolved by ADR-045/046.
+- Phase 17 requires an owner-approved product/ethics policy before implementation can define milestones, streaks, achievements, regression behavior, historical backfill, celebration tone, and user disable controls without risking unsafe financial pressure.

@@ -10,6 +10,7 @@ import {
   type FinancialEngineInput,
 } from "@/lib/domain/financial-engine/financial-engine";
 import { money } from "@/lib/domain/money/money";
+import { calculateFinancialReport } from "@/lib/domain/reports/report-engine";
 import { ConflictError, NotFoundError } from "@/lib/errors/application-error";
 import type { FinancialEngineSnapshot } from "@/lib/financial-engine/financial-engine-snapshot";
 import { goalRepositoryForDatabase, type GoalRepository } from "@/lib/goals/goal-repository";
@@ -44,6 +45,7 @@ import {
   type UserProfileRepository,
 } from "@/lib/profiles/profile-repository";
 import { saveProfile } from "@/lib/profiles/profile-service";
+import { assertSavedReportAuthorization, householdReportAuthorizationFingerprint } from "@/lib/reports/report-service";
 
 const testUri = process.env.MONGODB_TEST_URI;
 const describeWithMongo = testUri === undefined ? describe.skip : describe;
@@ -510,6 +512,27 @@ describeWithMongo("Phase 11 private-by-default households and permissions", () =
     await expect(
       dissolveHousehold(member, householdId, 1, dependencies()),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("denies a previously closed household report immediately after a source is unshared", async () => {
+    const center = await loadHouseholdCenter(member, householdId, dependencies());
+    const report = calculateFinancialReport({
+      accounts: center.sharedAccounts.map((item, index) => ({ amount: money(BigInt(item.balance.amountMinor), item.balance.currency), id: item.provenanceAlias, label: item.label, version: index + 1 })),
+      budget: [], generatedAt: now.toISOString(), goals: [], liabilities: [], netWorth: [], period: { kind: "month", value: "2026-09" }, savings: [],
+      scope: { householdId, kind: "household" }, subscriptions: [], timeZone: "Asia/Jerusalem", transactions: [],
+    });
+    const saved = { authorizationFingerprint: householdReportAuthorizationFingerprint(center), createdAt: now, hiddenAt: null, id: new ObjectId().toHexString(), report, reportVersion: 1, restatementReason: null, rootReportId: new ObjectId().toHexString(), schemaVersion: 1 as const, status: "closed" as const, supersedesId: null, version: 1 };
+    const loader = (actor: Actor, id?: string) => loadHouseholdCenter(actor, id, dependencies());
+    await expect(assertSavedReportAuthorization(member, saved, { loadHousehold: loader })).resolves.toBeUndefined();
+
+    const ownerCenter = await loadHouseholdCenter(owner, householdId, dependencies());
+    const shared = ownerCenter.eligibleResources.find((item) => item.resourceId === ownerAccountId);
+    expect(shared?.shared).toBe(true);
+    await changeHouseholdResourceShare(owner, householdId, { action: "unshare", expectedVersion: shared!.shareVersion, resourceId: ownerAccountId, resourceKind: "account" }, dependencies());
+    await expect(assertSavedReportAuthorization(member, saved, { loadHousehold: loader })).rejects.toBeInstanceOf(NotFoundError);
+    const afterUnshare = await loadHouseholdCenter(owner, householdId, dependencies());
+    const unshared = afterUnshare.eligibleResources.find((item) => item.resourceId === ownerAccountId);
+    await changeHouseholdResourceShare(owner, householdId, { action: "share", expectedVersion: unshared!.shareVersion, resourceId: ownerAccountId, resourceKind: "account" }, dependencies());
   });
 
   it("keeps Copilot context strictly actor-owned despite household sharing", async () => {

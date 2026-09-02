@@ -248,8 +248,6 @@ async function sharedProjection(
   const totals = new Map<string, Readonly<{ amountMinor: bigint; count: number }>>();
   const sharedAccounts: HouseholdCenterView["sharedAccounts"][number][] = [];
   const sharedGoals: HouseholdCenterView["sharedGoals"][number][] = [];
-  let accountAlias = 0;
-  let goalAlias = 0;
   for (const share of activeShares) {
     const resourceActor = actorForUserId(share.ownerUserId);
     const ownerLabel = names.get(share.ownerUserId) ?? "חבר/ת משק הבית";
@@ -265,12 +263,11 @@ async function sharedProjection(
         amountMinor: previous.amountMinor + fields.balance.amountMinor,
         count: previous.count + 1,
       });
-      accountAlias += 1;
       sharedAccounts.push({
         balance: serializeMoney(fields.balance),
         label: fields.name,
         ownerLabel,
-        provenanceAlias: `household.account.${accountAlias}`,
+        provenanceAlias: `household.account.${createHash("sha256").update(share.id, "utf8").digest("hex").slice(0, 16)}`,
       });
       continue;
     }
@@ -289,7 +286,6 @@ async function sharedProjection(
       definition.version,
     );
     const fields = goalFields(goalRecord);
-    goalAlias += 1;
     sharedGoals.push({
       currentValue:
         progress === null ? null : serializeMoney(progress.result.currentValue),
@@ -297,7 +293,7 @@ async function sharedProjection(
       normalizedProgressBasisPoints:
         progress?.result.normalizedProgressBasisPoints ?? null,
       ownerLabel,
-      provenanceAlias: `household.goal.${goalAlias}`,
+      provenanceAlias: `household.goal.${createHash("sha256").update(share.id, "utf8").digest("hex").slice(0, 16)}`,
       status: progress?.result.status ?? "not_evaluated",
       targetValue: serializeMoney(definition.reportedEvidence.targetAmount),
     });
