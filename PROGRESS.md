@@ -1,5 +1,42 @@
 # Financial OS Progress
 
+## Phase 17 — Progress journeys
+
+**Status:** Complete — all Phase 17 acceptance criteria objectively verified and self-accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.
+
+**Started:** 2026-09-02
+
+**Verified:** 2026-09-03
+
+**Scope boundary:** Deterministic, owner-scoped, versioned progress evidence for healthy milestones and streaks over existing Goal/Budget/Financial/Report truth; explicit trustworthy backfill; correction/supersession; restrained optional Hebrew/RTL presentation; and independently consented progress notifications. No universal health score, financial mutation, AI classification, household comparison, risky incentive, Open Banking provenance, or Phase 18 work.
+
+### Implemented
+
+- Phase 17 began from a clean synchronized repository at accepted Phase 16 commit `a58b7ff4325ea878d548743a1ece414a4bcb354d`; the approved attachment and every source-of-truth document were reviewed before code changes. ADR-057 through ADR-059 and both synchronized Master Plan copies record the product/ethics policy before implementation relies on it.
+- Added a pure, versioned progress-journey engine with separate deterministic dimensions, stable logical/evidence identities, explicit `achieved`, `in_progress`, `not_achieved`, and `unknown` outcomes, regression/recovery events, profile-calendar day/month streaks, historical maxima, and prohibited risky-engagement dimensions. There is no universal score or AI decision authority.
+- Added explicit `live` and bounded `backfill` evaluation over owner-authorized Goal Engine milestone/progress evidence, closed budgets, immutable Financial Engine snapshots, and saved personal reports. Goal milestones are consumed exactly at 25/50/75/100; stale or insufficient evidence becomes `unknown`; incomplete periods are not declared successful; corrected/reviewed source truth takes precedence; and reads never create evidence.
+- Added append-only owner-scoped `progressJourneyEvents` with owner/evidence idempotency, stable-series history, evidence fingerprints, versioned policy/rules, source provenance, correction/supersession, and owner-first indexes. Added one optimistic audited `progressJourneyPreferences` record per actor. Public views and export schema 9 omit owner and internal source identifiers.
+- Added authenticated, trusted-origin, rate-limited, no-store APIs for explicit evaluation/backfill and preferences. Actor identity is derived server-side; Phase 17 is personal-only and household membership cannot expand its evidence scope.
+- Progress notifications now require the independent Phase 17 opt-in, remain non-critical, and continue through Phase 15 consent, quiet-hour, minimization, and deduplication controls. Disabling progress notifications or presentation does not suppress deterministic critical warnings or any canonical financial view.
+- Added the protected Hebrew/RTL `/progress` experience, dashboard navigation, natural regression/unknown/backfill/correction language, separate dimensions, immutable history/provenance, LTR isolation, optional restrained static support, healthy streaks, and independent celebration/streak/notification controls. It contains no confetti, motion, shame, urgency, competition, financial-health score, or reward for spending, investing, borrowing, trading, risk, or app engagement.
+- Fixed a pre-existing Phase 14 date-dependent test harness defect exposed on 2026-09-03 by allowing test repositories to receive a deterministic clock. Production financial behavior and Phase 14 valuation policy are unchanged.
+
+### Verification evidence
+
+- Dedicated Phase 17 coverage passed 4 files / 18 tests, including pure engine/service/UI coverage and 5 real-Mongo integration tests. It verifies exact Goal Engine milestone consumption, streak start/continuation/break/recovery, Israel timezone/DST boundaries, regression and retained history, stale/unknown semantics, live versus backfill, correction/supersession, risky-incentive exclusions, preference isolation, owner/direct-key/two-user denial, owner-first indexes, progress-notification opt-in, and retained critical warnings.
+- The final sequential environment-loaded regression passed 66 files / 299 tests with no skips, `RUN_REAL_ANTHROPIC_TESTS=1`, `RUN_REAL_RESEND_TESTS=1`, real MongoDB, and one worker. The real Anthropic and Resend provider paths passed without substituting mocks for their acceptance gates.
+- Authenticated production-browser acceptance used the retained real Google/Auth.js MongoDB session on the optimized build at port 3001. The protected `/progress` route remained authenticated and verified explicit live/backfill evidence, stale and incomplete-period `unknown` states, honest in-progress Goal Engine state, immutable correction history, independent presentation opt-outs, persisted preference restoration, and a non-critical notification default of off.
+- Browser checks passed with `lang=he`, document/computed RTL, 33 explicit LTR isolates, one main and H1 landmark, no horizontal overflow at the active narrow viewport, no animations, natural Hebrew support/regression text, and no captured console warning/error output. Celebration and streak presentation work without motion; disabling either leaves dimensions/history intact.
+- Strict type-check, zero-warning ESLint, optimized Next.js production build, `git diff --check`, real-Mongo integrity/isolation, server-only provider boundaries, and the registry-backed high-severity dependency audit passed. The audit reported zero vulnerabilities. `.env.local` remained ignored/untracked and no secret value was printed, logged, committed, or pushed.
+
+### Acceptance conclusion
+
+Phase 17 is fully accepted under the autonomous progression rule. Every displayed state is a projection of authorized versioned deterministic evidence, corrections preserve prior history, regression is explicit and non-shaming, risky financial behavior cannot generate rewards, and all nonessential presentation/delivery controls remain independent from financial truth and critical warnings. Phase 9 remains visibly blocked and no Open Banking provenance was fabricated.
+
+### Exact next gate
+
+Phase 18 depends on a feature-complete candidate and chosen production infrastructure. Phase 9 is still blocked on official Open Banking Integration/Sandbox access, so Financial OS is not feature-complete and full Phase 18 acceptance or production-readiness claims are prohibited. Stop before Phase 18 implementation rather than partially accepting hardening against a knowingly absent production integration.
+
 ## Phase 16 — Reviews, Reports, Export, and Search
 
 **Status:** Complete — all Phase 16 acceptance criteria objectively verified and self-accepted under the owner-approved execution-order exception. Phase 9 remains BLOCKED, unimplemented, and unaccepted.

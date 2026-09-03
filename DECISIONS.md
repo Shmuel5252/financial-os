@@ -504,4 +504,31 @@ This log records durable product and architecture decisions. Status is `accepted
 - The licensed Open Banking provider, jurisdiction, token-encryption/KMS design, and consent requirements remain undecided.
 - Household private/shared resource semantics are resolved by ADR-043/044 and verified in Phase 11.
 - Phase 3 core income-confidence, horizon, margin-basis, and same-day-order policies are resolved by ADR-029. Phase 12 forecast-range/confidence policy is resolved by ADR-045/046.
-- Phase 17 requires an owner-approved product/ethics policy before implementation can define milestones, streaks, achievements, regression behavior, historical backfill, celebration tone, and user disable controls without risking unsafe financial pressure.
+- Phase 17 product/ethics policy is resolved by ADR-057 through ADR-059 and objectively verified. Phase 18 remains gated by the blocked Phase 9 official-provider acceptance and a feature-complete production candidate.
+## ADR-057 — Progress journeys are deterministic evidence, not a financial-health score
+
+- **Decision:** Phase 17 recognizes only objectively healthy, deterministic outcomes already established by authorized Financial OS evidence: Goal Engine milestone events (including debt-reduction and emergency-fund goals), closed under-budget periods, no-overdraft periods, Safety Margin maintenance, scheduled debt-payment progress, and positive confirmed cash flow. There is no universal score, competitive ranking, social comparison, or reward for spending, investing, borrowing, trading, risk-taking, or unnecessary app use. AI may explain an eligible event but cannot create, classify, or alter it.
+- **Reasoning:** A progress surface is useful only when it preserves the authority and meaning of the underlying financial engines. A composite score or engagement incentive would hide uncertainty and could pressure financially harmful behavior.
+- **Alternatives:** AI-selected achievements, monotonic percentages, points/leaderboards, spend-to-earn rewards, celebratory market revaluation, and app-check streaks were rejected.
+- **Consequences:** Phase 17 consumes Goal Engine milestones without recomputing goal truth, keeps financial dimensions separate, records regression and recovery honestly, and uses restrained Hebrew language with no confetti, urgency, fear, shame, or gambling metaphors.
+
+## ADR-058 — Progress evidence is append-only, versioned, correctable, and explicitly backfilled
+
+- **Decision:** Meaningful progress evaluation is an explicit authenticated command, never a page-read side effect. Each owner-scoped journey event has a stable logical identity, rule/policy versions, evaluation timestamp and profile-timezone period, source references and evidence fingerprint, `live` or `backfill` origin, deterministic outcome, and optional supersession. Corrections or policy changes append a successor while preserving the original. Insufficient trustworthy evidence yields `unknown`; it is never invented as success or regression.
+- **Reasoning:** Historical claims must remain explainable after canonical corrections and policy evolution. Stable identity and immutable evidence provide idempotency without rewriting history.
+- **Alternatives:** Mutable achievement rows, page-load creation, blind historical reconstruction, current-state-only streak inference, and treating missing evidence as failure were rejected.
+- **Consequences:** Current journey state is a projection over immutable events. Historical highs and achievements remain visible after regression. Backfilled events are visibly distinct from live evaluations and cannot be created without versioned source evidence.
+
+## ADR-059 — Progress presentation, privacy, and notifications are independently bounded
+
+- **Decision:** Progress is private/personal by default; Phase 17 introduces no household sharing, comparison, or new household evidence aggregation. Independent owner preferences control restrained celebration treatment, streak display, and progress notifications. Progress notifications default off, are always non-critical, use Phase 15 consent/quiet-hours/deduplication, and never bypass quiet hours. Disabling them cannot suppress critical financial warnings, core goals, budgets, forecasts, Safe to Spend, reports, or audit evidence.
+- **Reasoning:** Nonessential motivation must be optional and must not weaken safety signals or leak another person's financial behavior.
+- **Alternatives:** A single global alert toggle, enabled-by-default milestone email, household leaderboards, and hiding engine regression with presentation preferences were rejected.
+- **Consequences:** All ownership is server-derived and repository-filtered. UI is Hebrew/RTL, does not rely on color or motion, respects reduced-motion/disabled celebration choices, and keeps AI/notification providers downstream of minimized deterministic evidence.
+
+### Phase 17 verification addendum (2026-09-03)
+
+- ADR-057 through ADR-059 are implemented by the pure progress engine, explicit bounded evaluator, append-only `progressJourneyEvents`, audited `progressJourneyPreferences`, owner-scoped APIs, Phase 15 notification preference gate, schema-9 export, and protected Hebrew/RTL `/progress` route. Reads do not create evidence and no progress operation mutates financial, budget, goal, report, or notification truth.
+- Dedicated coverage passed 4 files / 18 tests, including 5 real-Mongo tests for immutable correction history, idempotency, owner/direct-key/two-user isolation, indexes, preference concurrency, notification opt-in, and retained critical warnings. The full sequential suite passed 66 files / 299 tests without skips with real MongoDB, Anthropic, and Resend.
+- Authenticated optimized-build acceptance verified live/backfill provenance, stale/incomplete evidence as `unknown`, in-progress goals without false achievement, regression/correction history, independent opt-outs and persistence, Hebrew/RTL/LTR isolation, no horizontal overflow, no animation, and no console warning/error output.
+- Type-check, zero-warning lint, production build, registry dependency audit with zero vulnerabilities, Git diff/secret hygiene, and ignored/untracked `.env.local` passed. Phase 17 is accepted. Phase 9 remains blocked and Phase 18 cannot honestly claim a feature-complete production candidate until that provider gate is resolved.

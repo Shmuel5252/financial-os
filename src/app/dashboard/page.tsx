@@ -166,6 +166,9 @@ export default async function DashboardPage() {
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/reports">
             {messages.navigation.reports}
           </Link>
+          <Link className="text-sm font-semibold text-[var(--accent)]" href="/progress">
+            {messages.navigation.progress}
+          </Link>
           <Link className="text-sm font-semibold text-[var(--accent)]" href="/goals">
             {messages.navigation.goals}
           </Link>

@@ -160,7 +160,9 @@ describeWithMongo("Phase 15 notification persistence, consent, delivery, and iso
     let center = await evaluateAndDeliverNotifications(firstActor, dependencies());
     expect(provider.commands).toHaveLength(1);
     expect(provider.commands[0]?.recipient).toBe("first@example.com");
-    expect(JSON.stringify(provider.commands[0])).not.toMatch(/99|100|userId|merchant|second@example\.com/);
+    expect(JSON.stringify(provider.commands[0])).not.toMatch(
+      /amountMinor|confirmedBalance|safetyMargin|userId|merchant|second@example\.com/,
+    );
     expect(center.notifications.find((item) => item.email.state === "sent")).toBeDefined();
 
     provider.status = "delivered";

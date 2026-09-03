@@ -57,11 +57,12 @@ describeWithMongo("Phase 14 net-worth persistence, history, and isolation", () =
   beforeAll(async () => {
     await client.connect();
     database = client.db(databaseName);
+    const manualEvidenceNow = () => new Date("2026-09-02T08:00:00.000Z");
     profileRepository = profileRepositoryForDatabase(database);
-    accounts = manualRecordRepositoryForDatabase(database, "accounts");
-    cards = manualRecordRepositoryForDatabase(database, "cards");
-    loans = manualRecordRepositoryForDatabase(database, "loans");
-    savings = manualRecordRepositoryForDatabase(database, "savings");
+    accounts = manualRecordRepositoryForDatabase(database, "accounts", manualEvidenceNow);
+    cards = manualRecordRepositoryForDatabase(database, "cards", manualEvidenceNow);
+    loans = manualRecordRepositoryForDatabase(database, "loans", manualEvidenceNow);
+    savings = manualRecordRepositoryForDatabase(database, "savings", manualEvidenceNow);
     goals = goalRepositoryForDatabase(database);
     netWorth = netWorthRepositoryForDatabase(database, () => new Date("2026-09-02T09:05:00.000Z"));
     household = householdRepositoryForDatabase(database, () => new Date("2026-09-02T09:00:00.000Z"));

@@ -37,6 +37,7 @@ import {
 } from "@/lib/notifications/notification";
 import { loadProfile } from "@/lib/profiles/profile-service";
 import type { UserProfile } from "@/lib/profiles/profile";
+import { getProgressJourneyRepository } from "@/lib/progress-journeys/progress-journey-repository";
 
 const MAX_DELIVERIES_PER_RUN = 20;
 const RETRY_DELAY_MS = 5 * 60_000;
@@ -49,6 +50,7 @@ export type NotificationDependencies = Readonly<{
   emailCapabilityReady?: boolean;
   now?: () => Date;
   profileLoader?: (actor: Actor) => Promise<UserProfile | null>;
+  progressNotificationsEnabled?: boolean;
   provider?: NotificationEmailProvider;
   repository?: NotificationRepository;
 }>;
@@ -77,6 +79,7 @@ async function loadSourceFacts(
   actor: Actor,
   profile: UserProfile,
   now: Date,
+  progressNotificationsEnabled: boolean,
   dependencies?: NotificationDependencies,
 ): Promise<readonly NotificationSourceFact[]> {
   const currentMonth = calendarMonth(calendarDateAtInstant(now.toISOString(), profile.fields.timeZone));
@@ -115,7 +118,7 @@ async function loadSourceFacts(
       unallocatedMinor: BigInt(budget.calculation.unallocated.amountMinor),
     });
   }
-  const goals = goalResult.status === "fulfilled" ? goalResult.value.goals : [];
+  const goals = progressNotificationsEnabled && goalResult.status === "fulfilled" ? goalResult.value.goals : [];
   for (const goal of goals) {
     if (goal.latestProgress !== null && goal.latestProgress.milestonesCrossed.length > 0) {
       facts.push({
@@ -253,7 +256,12 @@ export async function evaluateAndDeliverNotifications(
   const profile = await (dependencies?.profileLoader ?? loadProfile)(actor);
   if (profile === null) throw new InputValidationError([{ field: "profile", message: "A profile is required for notifications." }]);
   const preference = effectivePreference(await repository.findPreferencesForActor(actor));
-  const facts = await loadSourceFacts(actor, profile, now, dependencies);
+  const progressNotificationsEnabled = dependencies?.progressNotificationsEnabled ?? (
+    dependencies === undefined
+      ? (await (await getProgressJourneyRepository()).findPreferencesForActor(actor))?.progressNotificationsEnabled === true
+      : true
+  );
+  const facts = await loadSourceFacts(actor, profile, now, progressNotificationsEnabled, dependencies);
   for (const candidate of evaluateNotificationFacts(facts)) {
     if (!preference.inAppEnabled && !preference.emailEnabled) continue;
     await repository.createForActor(

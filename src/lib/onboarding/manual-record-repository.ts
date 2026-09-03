@@ -510,10 +510,12 @@ export class ManualRecordRepository {
 export function manualRecordRepositoryForDatabase(
   database: Db,
   section: ManualSection,
+  now?: () => Date,
 ): ManualRecordRepository {
   return new ManualRecordRepository(
     section,
     database.collection<ManualRecordDocument>(sectionCollections[section]),
+    now,
   );
 }
 

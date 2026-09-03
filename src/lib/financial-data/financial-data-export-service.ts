@@ -55,6 +55,15 @@ import { toUserProfileView, type UserProfileView } from "@/lib/profiles/profile"
 import type { UserProfileRepository } from "@/lib/profiles/profile-repository";
 import { loadProfile } from "@/lib/profiles/profile-service";
 import {
+  toProgressJourneyEventView,
+  toProgressJourneyPreferenceView,
+  type ProgressJourneyEventView,
+} from "@/lib/progress-journeys/progress-journey";
+import {
+  getProgressJourneyRepository,
+  type ProgressJourneyRepository,
+} from "@/lib/progress-journeys/progress-journey-repository";
+import {
   toSavedPurchaseSimulationView,
   type SavedPurchaseSimulationView,
 } from "@/lib/purchase-simulations/purchase-simulation";
@@ -102,8 +111,12 @@ export type FinancialDataExport = Readonly<{
   }>;
   profile: UserProfileView | null;
   purchaseSimulations: readonly SavedPurchaseSimulationView[];
+  progressJourney: Readonly<{
+    events: readonly ProgressJourneyEventView[];
+    preferences: ReturnType<typeof toProgressJourneyPreferenceView>;
+  }>;
   records: Readonly<Record<ManualSection, readonly ManualRecordView[]>>;
-  schemaVersion: 8;
+  schemaVersion: 9;
   transactionIntelligence: Readonly<{
     reviewEvidence: readonly TransactionIntelligenceReviewView[];
     runs: readonly TransactionIntelligenceRunView[];
@@ -119,6 +132,7 @@ export type FinancialDataExportDependencies = Readonly<{
   now?: () => Date;
   profileRepository?: UserProfileRepository;
   purchaseSimulationRepository?: PurchaseSimulationRepository;
+  progressJourneyRepository?: ProgressJourneyRepository;
   repositories?: Readonly<Partial<Record<ManualSection, ManualRecordRepository>>>;
   transactionIntelligenceRepository?: TransactionIntelligenceRepository;
 }>;
@@ -186,6 +200,11 @@ export async function buildFinancialDataExport(
       intelligenceReviews.filter((review) => review.runId === run.id),
     ]),
   );
+  const progressRepository = dependencies?.progressJourneyRepository ?? (dependencies === undefined ? await getProgressJourneyRepository() : null);
+  const [progressEvents, progressPreferences] = progressRepository === null ? [[], null] as const : await Promise.all([
+    progressRepository.listEventsForActor(actor),
+    progressRepository.findPreferencesForActor(actor),
+  ]);
 
   return {
     budgets: {
@@ -227,10 +246,14 @@ export async function buildFinancialDataExport(
     purchaseSimulations: purchaseSimulations.map(
       toSavedPurchaseSimulationView,
     ),
+    progressJourney: {
+      events: progressEvents.map(toProgressJourneyEventView),
+      preferences: toProgressJourneyPreferenceView(progressPreferences),
+    },
     records: Object.fromEntries(entries) as unknown as Readonly<
       Record<ManualSection, readonly ManualRecordView[]>
     >,
-    schemaVersion: 8,
+    schemaVersion: 9,
     transactionIntelligence: {
       reviewEvidence: intelligenceReviews.map(
         toTransactionIntelligenceReviewView,

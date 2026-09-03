@@ -1633,3 +1633,15 @@ Complete פירושו:
 "אני יודע שמתוך ה-8,000 ₪ שלי רק 2,400 ₪ באמת פנויים, אני יודע למה, אני יודע מה יקרה בחודש הקרוב, ואני יודע שאני מתקדם ב-63% ליעד הכלכלי שהצבתי."
 
 זה ה-Financial OS.
+
+## Phase 17 approved progress-journey policy
+
+Phase 17 is a deterministic, explanatory, and motivational layer over existing authorized financial truth. Eligible progress is limited to objectively healthy evidence already established by Financial OS: Goal Engine milestone events (including debt reduction and emergency-fund progress), closed under-budget periods, no-overdraft periods, Safety Margin maintenance, scheduled debt-payment progress, and positive confirmed cash flow. Progress never becomes a source of balances, budgets, Safe to Spend, goal state, forecast state, net worth, or debt truth. Claude may explain a cited result but cannot decide eligibility, streaks, milestones, regression, recovery, or financial health.
+
+Every rule has a stable identifier and version. Durable events preserve owner/scope, evaluation timestamp, profile-timezone period, source references and versions, an evidence fingerprint, live/backfill origin, result, and correction/supersession lineage. Page reads never create events. Historical backfill is explicit and allowed only from trustworthy versioned evidence; insufficient evidence remains `unknown`. Corrections and policy changes append a successor and preserve the original. Regression is current financial information, historical achievements remain visible, and recovery may be recorded without erasing either state.
+
+Healthy streaks may represent regular review, no overdraft, maintained Safety Margin, within-budget periods, scheduled debt payments, or positive cash flow. Missing evidence interrupts a verifiable streak without being mislabeled as failure. Financial OS never rewards spending, investing, borrowing, credit/debt creation, trading, risk-taking, or unnecessary app checking; it provides no universal financial-health score, leaderboards, social comparison, gambling/winning language, confetti, urgency, shame, fear, or loss-aversion pressure. Ambiguous balance changes, transfers, debt proceeds, and unrealized revaluation are not automatically celebrated.
+
+Progress is personal/private by default. Household evidence may be used only when every source is currently authorized; Phase 17 introduces no household comparison or sharing expansion. Independent owner preferences control restrained celebration treatment, streak display, and progress notifications. Progress notifications default off, remain non-critical, obey Phase 15 quiet hours/deduplication/consent/privacy, and never bypass quiet hours. Disabling progress presentation cannot suppress core engines, audit history, or critical financial warnings. Hebrew/RTL, LTR isolation, textual status cues, reduced-motion compatibility, and easy opt-out are required.
+
+Phase 9 remains blocked. Phase 17 uses manual/provider-neutral evidence only and cannot infer or fabricate Open Banking provenance.
