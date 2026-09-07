@@ -18,7 +18,9 @@ function createClientPromise(): Promise<MongoClient> {
     maxPoolSize: 20,
     minPoolSize: 0,
     promoteLongs: false,
-    serverSelectionTimeoutMS: 5_000,
+    // Allow the driver's default discovery budget in deployed cold starts.
+    // This remains bounded and does not replace fixing connectivity failures.
+    serverSelectionTimeoutMS: process.env.NODE_ENV === "production" ? 30_000 : 5_000,
   });
 
   return client.connect().catch((error: unknown) => {

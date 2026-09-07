@@ -51,7 +51,9 @@ function createAuthConfig(): NextAuthConfig {
     env.MONGODB_DB_NAME !== undefined
   ) {
     config.adapter = MongoDBAdapter(
-      getMongoClientPromise(),
+      // Connect only inside an awaited adapter operation; retry through the cache
+      // after a failed attempt instead of retaining a rejected initialization promise.
+      getMongoClientPromise,
       financialOsMongoAdapterOptions(env.MONGODB_DB_NAME),
     );
     config.providers = [
