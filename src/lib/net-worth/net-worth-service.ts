@@ -70,6 +70,9 @@ async function buildCurrent(
   const components: NetWorthComponentInput[] = [];
   for (const record of accountRecords) {
     const fields = manualSectionDomainSchemas.accounts.parse(record.fields);
+    // Provider card/loan account shells exist only to preserve transaction
+    // linkage. Their balance semantics are not sufficient net-worth evidence.
+    if (fields.type === "credit_card" || fields.type === "loan") continue;
     const positive = fields.balance.amountMinor >= 0n;
     const accountId = `account:${record.id}`;
     components.push({
@@ -84,7 +87,9 @@ async function buildCurrent(
       id: accountId,
       label: fields.name,
       liquidity: positive && (fields.type === "bank" || fields.type === "cash") ? "cash" : fields.type === "savings" ? "savings" : "non_cash",
-      provenance: sourceProvenance("manual_account_balance"),
+      provenance: record.source.kind === "open_banking"
+        ? { kind: "verified_provider", note: "financy_account_balance" }
+        : sourceProvenance("manual_account_balance"),
       side: positive ? "asset" : "liability",
       sourceId: record.id,
       sourceKind: "account",

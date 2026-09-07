@@ -975,6 +975,11 @@ export function ManualSectionForm({
               >
                 <div>
                   <p className="font-semibold">{recordLabel(record)}</p>
+                  {record.source.kind === "open_banking" ? (
+                    <p className="mt-1 text-xs font-semibold text-[var(--accent)]">
+                      {messages.onboarding.form.common.openBankingRecord}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-sm text-[var(--muted)]">
                     {firstMoneySummary(record.fields) === null ? (
                       messages.onboarding.form.common.manualConfiguration
@@ -983,14 +988,16 @@ export function ManualSectionForm({
                     )}
                   </p>
                 </div>
-                <button
-                  className="text-sm font-semibold text-red-700"
-                  disabled={working}
-                  onClick={() => void remove(record)}
-                  type="button"
-                >
-                  {messages.onboarding.form.actions.remove}
-                </button>
+                {record.source.kind === "manual" ? (
+                  <button
+                    className="text-sm font-semibold text-red-700"
+                    disabled={working}
+                    onClick={() => void remove(record)}
+                    type="button"
+                  >
+                    {messages.onboarding.form.actions.remove}
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

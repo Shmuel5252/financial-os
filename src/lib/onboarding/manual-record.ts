@@ -86,7 +86,6 @@ const incomeShape = {
 
 const accountShape = {
   ...namedSchema,
-  type: z.enum(["bank", "cash", "savings", "investments"]),
 };
 
 const cardShape = {
@@ -153,10 +152,12 @@ const incomeDomainSchema = z.object({
 const accountInputSchema = z.object({
   ...accountShape,
   balance: anyMoneyInputSchema,
+  type: z.enum(["bank", "cash", "savings", "investments"]),
 });
 const accountDomainSchema = z.object({
   ...accountShape,
   balance: moneyDomainSchema,
+  type: z.enum(["bank", "cash", "savings", "investments", "credit_card", "loan"]),
 });
 
 const cardInputSchema = z.object({
@@ -584,7 +585,10 @@ export type ManualRecord = Readonly<{
   fields: ManualFields;
   id: string;
   section: ManualSection;
-  source: Readonly<{ kind: "manual" }>;
+  source: Readonly<
+    | { kind: "manual" }
+    | { kind: "open_banking"; provider: "financy" }
+  >;
   updatedAt: Date;
   version: number;
 }>;
@@ -603,7 +607,10 @@ export type ManualRecordView = Readonly<{
   fields: SerializedDomainValue;
   id: string;
   section: ManualSection;
-  source: Readonly<{ kind: "manual" }>;
+  source: Readonly<
+    | { kind: "manual" }
+    | { kind: "open_banking"; provider: "financy" }
+  >;
   updatedAt: string;
   version: number;
 }>;

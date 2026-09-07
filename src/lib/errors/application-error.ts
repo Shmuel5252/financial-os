@@ -6,6 +6,7 @@ export type ApplicationErrorCode =
   | "INVALID_INPUT"
   | "NOT_FOUND"
   | "RATE_LIMITED"
+  | "RECONCILIATION_REQUIRED"
   | "UNAUTHENTICATED"
   | "UNAUTHORIZED";
 
@@ -72,6 +73,15 @@ export class NotFoundError extends ApplicationError {
 export class ConflictError extends ApplicationError {
   constructor(message = "The resource changed. Reload it and try again.") {
     super(message, { code: "CONFLICT", status: 409 });
+  }
+}
+
+export class ReconciliationRequiredError extends ApplicationError {
+  constructor() {
+    super("Bank reconnection requires explicit historical reconciliation before synchronization.", {
+      code: "RECONCILIATION_REQUIRED",
+      status: 409,
+    });
   }
 }
 

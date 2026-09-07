@@ -94,10 +94,9 @@ export const serverEnvSchema = z
         "RESEND_FROM_EMAIL must be an email address with an optional display name.",
       ).optional(),
     ),
-    OPEN_BANKING_PROVIDER: optionalNonEmptyString,
-    OPEN_BANKING_CLIENT_ID: optionalNonEmptyString,
-    OPEN_BANKING_CLIENT_SECRET: optionalSecret,
-    OPEN_BANKING_WEBHOOK_SECRET: optionalSecret,
+    OPEN_FINANCE_USER_ID: optionalNonEmptyString,
+    OPEN_FINANCE_CLIENT_ID: optionalNonEmptyString,
+    OPEN_FINANCE_CLIENT_SECRET: optionalSecret,
   })
   .superRefine((env, context) => {
     if (
@@ -156,10 +155,9 @@ export function getConfigurationStatus(env = getServerEnv()): ConfigurationStatu
     "MONGODB_DB_NAME",
   ]);
   const openBankingMissing = missingKeys(env, [
-    "OPEN_BANKING_PROVIDER",
-    "OPEN_BANKING_CLIENT_ID",
-    "OPEN_BANKING_CLIENT_SECRET",
-    "OPEN_BANKING_WEBHOOK_SECRET",
+    "OPEN_FINANCE_USER_ID",
+    "OPEN_FINANCE_CLIENT_ID",
+    "OPEN_FINANCE_CLIENT_SECRET",
   ]);
 
   return {
@@ -225,4 +223,25 @@ export function requireResendEnv(): Readonly<{
     throw new ConfigurationError("Resend email delivery is not configured.");
   }
   return { apiKey: env.RESEND_API_KEY, fromEmail: env.RESEND_FROM_EMAIL };
+}
+
+export function requireOpenFinanceEnv(): Readonly<{
+  clientId: string;
+  clientSecret: string;
+  userId: string;
+}> {
+  const env = getServerEnv();
+  if (
+    env.OPEN_FINANCE_USER_ID === undefined ||
+    env.OPEN_FINANCE_CLIENT_ID === undefined ||
+    env.OPEN_FINANCE_CLIENT_SECRET === undefined
+  ) {
+    throw new ConfigurationError("Open Banking is not configured.");
+  }
+
+  return {
+    clientId: env.OPEN_FINANCE_CLIENT_ID,
+    clientSecret: env.OPEN_FINANCE_CLIENT_SECRET,
+    userId: env.OPEN_FINANCE_USER_ID,
+  };
 }

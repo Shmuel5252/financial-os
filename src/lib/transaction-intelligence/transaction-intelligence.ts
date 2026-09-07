@@ -55,7 +55,7 @@ export type TransactionIntelligenceInput = Readonly<{
   date: string;
   id: string;
   merchant: string | null;
-  sourceKind: "manual";
+  sourceKind: "manual" | "open_banking";
   type: "expense" | "income" | "refund" | "transfer";
   updatedAt: string;
   version: number;

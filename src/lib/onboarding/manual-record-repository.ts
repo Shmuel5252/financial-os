@@ -43,7 +43,17 @@ export type ManualRecordDocument = {
   idempotencyKeyHash?: string;
   idempotencyPayloadHash?: string;
   schemaVersion?: number;
-  source: "manual" | Readonly<{ kind: "manual" }>;
+  source:
+    | "manual"
+    | Readonly<{ kind: "manual" }>
+    | Readonly<{
+        connectionAlias: string;
+        kind: "open_banking";
+        observationFingerprint: string;
+        observedAt: Date;
+        provider: "financy";
+        recordAlias: string;
+      }>;
   updatedAt: Date;
   userId: ObjectId;
   version: number;
@@ -193,12 +203,19 @@ function mapDocument(
     throw new DependencyUnavailableError("Stored manual record metadata is invalid.");
   }
 
+  const source = document.source === "manual" || document.source.kind === "manual"
+    ? ({ kind: "manual" } as const)
+    : document.source.kind === "open_banking" && document.source.provider === "financy"
+      ? ({ kind: "open_banking", provider: "financy" } as const)
+      : null;
+  if (source === null) throw new DependencyUnavailableError("Stored record source is invalid.");
+
   return {
     createdAt: document.createdAt,
     fields: validateManualFields(section, fromStoredValue(document.fields)),
     id: document._id.toHexString(),
     section,
-    source: { kind: "manual" },
+    source,
     updatedAt: document.updatedAt,
     version: document.version,
   };
@@ -438,6 +455,7 @@ export class ManualRecordRepository {
       {
         _id: parseObjectId(recordId),
         deletedAt: null,
+        $or: [{ source: "manual" }, { "source.kind": "manual" }],
         userId: actorUserId,
         version: expectedVersion,
       },
@@ -479,6 +497,7 @@ export class ManualRecordRepository {
       {
         _id: parseObjectId(recordId),
         deletedAt: null,
+        $or: [{ source: "manual" }, { "source.kind": "manual" }],
         userId: actorUserId,
         version: expectedVersion,
       },

@@ -95,4 +95,21 @@ describe("server environment configuration", () => {
     expect(JSON.stringify(status)).not.toContain("test-key");
     expect(() => parseServerEnv({ NODE_ENV: "test", RESEND_FROM_EMAIL: "not-an-email" })).toThrow(/RESEND_FROM_EMAIL/);
   });
+
+  it("requires all three Financy server-only values without exposing them", () => {
+    const configured = getConfigurationStatus(parseServerEnv({
+      NODE_ENV: "test",
+      OPEN_FINANCE_CLIENT_ID: "financy-client",
+      OPEN_FINANCE_CLIENT_SECRET: "financy-secret",
+      OPEN_FINANCE_USER_ID: "financy-user",
+    }));
+    expect(configured.futureAdapters.openBankingConfigured).toBe(true);
+    expect(JSON.stringify(configured)).not.toContain("financy-secret");
+
+    const missing = getConfigurationStatus(parseServerEnv({
+      NODE_ENV: "test",
+      OPEN_FINANCE_CLIENT_ID: "financy-client",
+    }));
+    expect(missing.futureAdapters.openBankingConfigured).toBe(false);
+  });
 });
