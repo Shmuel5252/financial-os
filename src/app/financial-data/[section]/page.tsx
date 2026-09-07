@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { ManualSectionForm } from "@/components/onboarding/manual-section-form";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
@@ -85,13 +84,7 @@ export default async function FinancialDataSectionPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <HomeLink />
-      <Link
-        className="mt-6 inline-flex font-semibold text-[var(--accent)]"
-        href="/financial-data"
-      >
-        {messages.financialData.actions.back}
-      </Link>
+      <AppNavigation currentPath={`/financial-data/${section}`} />
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">
         {messages.financialData.eyebrow}
       </p>

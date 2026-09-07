@@ -11,6 +11,7 @@ import type {
 type ProfileFormProps = Readonly<{
   continuePath: string;
   initialProfile: UserProfileView | null;
+  management?: boolean;
 }>;
 
 type ProfileResponse = Readonly<{
@@ -27,7 +28,7 @@ const householdOptions: readonly Readonly<{
   { label: messages.onboarding.profile.form.householdOptions.other, value: "other" },
 ];
 
-export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) {
+export function ProfileForm({ continuePath, initialProfile, management = false }: ProfileFormProps) {
   const [displayName, setDisplayName] = useState(initialProfile?.displayName ?? "");
   const [countryCode, setCountryCode] = useState(
     initialProfile?.countryCode ?? "",
@@ -85,7 +86,7 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
       setVersion(saved.profile.version);
       setStatus({
         kind: "saved",
-        message: messages.onboarding.profile.form.saved,
+        message: management ? messages.onboarding.form.saved : messages.onboarding.profile.form.saved,
       });
       window.location.assign(continuePath);
     } catch (error) {
@@ -197,7 +198,7 @@ export function ProfileForm({ continuePath, initialProfile }: ProfileFormProps) 
       >
         {status.kind === "saving"
           ? messages.onboarding.profile.form.saving
-          : messages.onboarding.profile.form.save}
+          : management ? messages.management.save : messages.onboarding.profile.form.save}
       </button>
 
       <p

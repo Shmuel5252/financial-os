@@ -59,6 +59,7 @@ export function ProgressJourneyCenter({ initialView }: Readonly<{ initialView: P
 
   return (
     <div className="mt-10 space-y-8">
+      <p className="text-sm leading-7 text-[var(--muted)]">{messages.management.goalHistory}</p>
       {view.preferences.celebrationsEnabled && latestPositive !== undefined ? <section className="rounded-3xl border border-emerald-300 bg-emerald-50 p-6 text-emerald-950" aria-label={messages.progress.celebration.label}>
         <h2 className="text-xl font-semibold">{messages.progress.celebration.title}</h2>
         <p className="mt-2 leading-7">{messages.progress.celebration.description(dimensionLabel[latestPositive.dimension])}</p>

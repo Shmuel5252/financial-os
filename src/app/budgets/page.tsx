@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BudgetPlanner } from "@/components/budgets/budget-planner";
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { calendarMonthSchema } from "@/lib/budgets/budget";
@@ -46,17 +45,7 @@ export default async function BudgetsPage({ searchParams }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-6 py-12 sm:py-20">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <HomeLink />
-        <nav className="flex flex-wrap gap-4" aria-label={messages.budgets.title}>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/copilot">
-            {messages.navigation.copilot}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/dashboard">
-            {messages.budgets.actions.dashboard}
-          </Link>
-        </nav>
-      </div>
+      <AppNavigation currentPath="/budgets" />
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">{messages.budgets.eyebrow}</p>
       <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">{messages.budgets.title}</h1>
       <p className="mt-4 max-w-3xl leading-7 text-[var(--muted)]">{messages.budgets.description}</p>

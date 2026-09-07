@@ -1,5 +1,13 @@
 # Financial OS Architecture
 
+## Focused management UX maintenance — 2026-09-07
+
+Authenticated pages share `AppNavigation`: persistent dashboard/data-hub links and a collapsed, grouped tools menu. This is presentation reuse, not a replacement authentication layout: every page retains its existing server-side actor/profile guards. Completed onboarding section URLs redirect to the corresponding existing financial-data section, and completed review redirects to the hub. Profile management reuses the profile workflow at `/financial-data/profile`; Safety Margin is exposed in the same management section catalog. No profile progress is reset and no source collections are copied.
+
+Saved-record disclosure uses an explicit field allowlist, exact decimal-string money formatting, localized enums and safe reference labels. Manual updates use the existing trusted-origin, server-actor, expected-version PUT API. Provider records remain read-only. Goal record editing is limited to title/priority; material changes use immutable Goal Engine definitions. Transaction category changes remain on the immutable correction path. UI defaults are reconstructed without Number conversion of money. The root numeric-focus boundary selects zero only in numeric/decimal controls and does not alter validation or data.
+
+Manual goal entry remains user-reported, nonnegative evidence with a positive aspirational target. Type-specific copy distinguishes positive debt/overdraft magnitude from signed account balances and the engine's canonical zero-debt / sustained-balance conditions. Verified Goal Engine and progress-journey semantics are unchanged. There is no persisted goal-task list or fixed twelve-step plan to edit: percentage milestones, financial definition versions and append-only evaluations are separate concepts. Users can revise a definition or correct source data and reevaluate; they cannot toggle a verified completion manually. See `MANAGEMENT_UX_QA.md` and ADR-068.
+
 ## Latest verified Phase 9 boundary — 2026-09-07
 
 Phase 9 is accepted within the real local/staged Financy configuration and the owner-approved development-baseline replacement. The latest exact evidence and production limitations are in `PHASE_9_ACCEPTANCE_REPORT.md`; earlier checkpoint paragraphs below are historical, not current blockers. The single approved refresh completed through real Auth.js/UI/service/provider/MongoDB handling, advanced the provider data date, and was followed by two successful ordinary syncs with exact repeat digests and no duplicate truth. The original failed refresh and completed disconnect receipts remain immutable.

@@ -118,6 +118,9 @@ describe("Phase 6 Hebrew/RTL goal presentation", () => {
     expect(html).toContain(messages.goalEngine.baseline.verified);
     expect(html).toContain(messages.goalEngine.statuses.regressed);
     expect(html).toContain(messages.goalEngine.history.title);
+    expect(html).toContain(messages.management.goalReopen);
+    expect(html).toContain('href="/financial-data"');
+    expect(html).toContain("2026-08-20");
     expect(html).toContain(messages.goalEngine.separation);
     expect(html).toContain("50.00%");
     expect(html).toContain("11,000.00 ILS".replace(",", ""));
@@ -140,5 +143,12 @@ describe("Phase 6 Hebrew/RTL goal presentation", () => {
 
     expect(html).toContain(messages.budgets.systemCategories.food);
     expect(html).not.toContain(">food<");
+  });
+  it.each(["explicit_amount", "months_of_essential_expenses"])("shows only applicable emergency target fields for %s", (kind) => {
+    const item = view.goals[0]!;
+    const html = renderToStaticMarkup(<GoalCenter initialView={{ ...view, goals: [{ ...item, reported: { ...item.reported, type: "emergency_fund" }, definition: { ...item.definition!, configuration: { kind: "emergency_fund", fundScope: { source: "savings", recordIds: [] }, targetBasis: kind === "explicit_amount" ? { kind, amount: amount("2000000") } : { kind, months: 3, essentialCategoryIds: ["system:food"] } } } }] }} />);
+    expect(html.includes('name="targetAmount"')).toBe(kind === "explicit_amount");
+    expect(html.includes('name="months"')).toBe(kind === "months_of_essential_expenses");
+    expect(html).not.toContain('name="accountFundIds"');
   });
 });

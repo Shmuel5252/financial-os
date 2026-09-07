@@ -1,5 +1,15 @@
 # Financial OS Progress
 
+## Focused manual-QA cleanup — 2026-09-07
+
+Final verification: 71 test files / 361 tests passed; the opt-in real Financy reconnection suite is explicitly skipped (1 file / 1 test), and unrelated external-provider/destructive-operation suites were excluded as listed in the QA report. Type-check, zero-warning lint, production build and authenticated local production-browser checks passed. Dependency audit: 0 vulnerabilities. No fresh real-provider acceptance or deployed Vercel verification is claimed.
+
+Resumed from a clean `78e0e434383e9e9bb9d09c1b062dd5740dcf5862` checkout. Implemented shared authenticated navigation, completed-onboarding management routing, profile/Safety Margin management access, expandable saved record details, audited/version-checked manual editing, type-aware Hebrew goal copy and zero-selection input behavior. Goal financial history, immutable corrections and provider read-only boundaries remain intact. This is maintenance, not Phase 18 acceptance or staging deployment.
+
+Verification evidence and intentional scope limits are recorded in `MANAGEMENT_UX_QA.md`. Real authenticated local production-browser checks confirm RTL, all seven manual goal types, numeric replacement/validation, safe details/edit controls, management back links, completed-onboarding redirects, and existing dashboard/forecast/goals/progress pages. Browser checks made no financial mutations; persistence/isolation/update tests use isolated real MongoDB test databases. No paid Financy refresh, disconnect or other provider mutation was performed. `.env.local` remains ignored and untracked; port 3000 is untouched.
+
+Release/checkpoint authorization: the owner approved one cleanup commit and push only. The release rerun again passed 71 files / 361 tests, with one opt-in reconnection test skipped and the documented external/destructive suites excluded; type-check, zero-warning lint, production build and dependency audit (0 vulnerabilities) passed. No product code was changed during this release step. Commit message: `fix(ux): unify financial management navigation and forms`; the containing commit identifies this checkpoint, and its exact SHA / post-push clean synchronization are reported in the release handoff. Vercel staging still requires validation against that SHA. Stop after this checkpoint; do not begin a phase or another cleanup automatically.
+
 ## Latest execution authority — 2026-09-07
 
 The owner's one additional 20-credit refresh authorization has been used exactly once, without disconnect. No additional paid attempt is authorized. The authenticated application persisted `completed/accepted` at 2026-09-07 04:25:59.621 UTC; provider data date advanced to 2026-09-07. Both post-refresh browser syncs completed; the second changed zero canonical records and retained identical canonical/observation BSON digests. Phase 9 acceptance criteria now pass. The newer authority permits Phase 18 only after the clean committed/pushed Phase 9 checkpoint; it does not resolve production infrastructure/privacy decisions.

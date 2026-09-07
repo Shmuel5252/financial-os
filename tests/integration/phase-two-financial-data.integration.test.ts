@@ -34,7 +34,10 @@ import {
   profileRepositoryForDatabase,
   type UserProfileRepository,
 } from "@/lib/profiles/profile-repository";
-import { saveProfile } from "@/lib/profiles/profile-service";
+import { completeOnboardingStep, loadProfile, saveProfile } from "@/lib/profiles/profile-service";
+import { buildUpdateFields } from "@/components/onboarding/manual-section-form";
+import { recordFormValues } from "@/lib/financial-data/record-presentation";
+import { toManualRecordView } from "@/lib/onboarding/manual-record";
 import { purchaseSimulationRepositoryForDatabase } from "@/lib/purchase-simulations/purchase-simulation-repository";
 import { transactionIntelligenceRepositoryForDatabase } from "@/lib/transaction-intelligence/transaction-intelligence-repository";
 
@@ -313,6 +316,39 @@ describeWithMongo("Phase 2 financial data foundation", () => {
     expect(
       new Set([...firstPage.records, ...secondPage.records].map((record) => record.id)).size,
     ).toBe(3);
+  });
+
+  it("edits a saved management record through the UI payload without resetting completed onboarding or losing audit/isolation", async () => {
+    let profile = (await loadProfile(firstActor, { repository: profileRepository }))!;
+    for (let index = 0; index < 10 && profile.onboarding.status !== "complete"; index++) {
+      profile = await completeOnboardingStep(firstActor, profile.onboarding.currentStep, profile.version, { repository: profileRepository });
+    }
+    expect(profile.onboarding.status).toBe("complete");
+    const beforeProfile = await database.collection("profiles").findOne({ userId: new ObjectId(firstActor.userId) });
+    expect(beforeProfile).not.toBeNull();
+    const beforeAccounts = await database.collection("accounts").find({}).toArray();
+    const dependencies = { profileRepository, repository: repositories.savings };
+    const original = await createManualRecord(firstActor, "savings", {
+      name: "Management QA", balance: { amount: "90071992547409.93", currency: "ILS" },
+      availability: "fixed_term", maturityDate: "2027-01-01", institution: "QA institution", accountIdentifierLast4: "1234",
+    }, randomUUID(), dependencies);
+    const form = new FormData();
+    for (const [key, value] of Object.entries(recordFormValues(toManualRecordView(original)))) form.set(key, value);
+    form.set("name", "Management QA corrected");
+    const fields = buildUpdateFields(toManualRecordView(original), form, "ILS");
+    const changed = await updateManualRecord(firstActor, "savings", original.id, original.version, fields, dependencies);
+    expect(changed.id).toBe(original.id);
+    expect(changed.version).toBe(original.version + 1);
+    expect(toManualRecordView((await repositories.savings.findForActor(firstActor, original.id))!).fields).toEqual(toManualRecordView(changed).fields);
+    expect(await repositories.savings.findForActor(secondActor, original.id)).toBeNull();
+    await expect(updateManualRecord(firstActor, "savings", original.id, original.version, fields, dependencies)).rejects.toBeInstanceOf(ConflictError);
+    const raw = await database.collection("savings").findOne({ _id: new ObjectId(original.id) });
+    expect(raw?.fields.balance.amountMinor).toBeInstanceOf(Long);
+    expect(raw?.fields.balance.amountMinor.toBigInt()).toBe(9007199254740993n);
+    expect(raw?.auditTrail).toHaveLength(2);
+    expect((await loadProfile(firstActor, { repository: profileRepository }))!.onboarding).toEqual(profile.onboarding);
+    expect(await database.collection("profiles").findOne({ userId: new ObjectId(firstActor.userId) })).toEqual(beforeProfile);
+    expect(await database.collection("accounts").find({}).toArray()).toEqual(beforeAccounts);
   });
 
   it("creates immutable source manifests and isolates snapshot listings", async () => {

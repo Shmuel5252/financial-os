@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { TransactionIntelligenceReview } from "@/components/transaction-intelligence/transaction-intelligence-review";
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getBudgetRepository } from "@/lib/budgets/budget-repository";
@@ -34,17 +33,7 @@ export default async function TransactionIntelligencePage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <HomeLink />
-        <nav aria-label={messages.transactionIntelligence.title}>
-          <Link
-            className="text-sm font-semibold text-[var(--accent)]"
-            href="/financial-data/transactions"
-          >
-            {messages.financialData.sections.transactions.label}
-          </Link>
-        </nav>
-      </div>
+      <AppNavigation currentPath="/transaction-intelligence" />
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">
         {messages.transactionIntelligence.eyebrow}
       </p>

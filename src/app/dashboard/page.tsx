@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { DashboardRefresh } from "@/components/dashboard/dashboard-refresh";
 import { TimelinePanel } from "@/components/dashboard/timeline-panel";
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
@@ -142,44 +141,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <HomeLink />
-        <nav className="flex flex-wrap gap-4" aria-label={messages.dashboard.title}>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/copilot">
-            {messages.navigation.copilot}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/purchase-simulation">
-            {messages.navigation.purchaseSimulation}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/forecasts">
-            {messages.navigation.forecasts}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/debt-strategies">
-            {messages.navigation.debtStrategies}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/net-worth">
-            {messages.navigation.netWorth}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/notifications">
-            {messages.navigation.notifications}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/reports">
-            {messages.navigation.reports}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/progress">
-            {messages.navigation.progress}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/goals">
-            {messages.navigation.goals}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/budgets">
-            {messages.navigation.budgets}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/financial-data">
-            {messages.dashboard.actions.financialData}
-          </Link>
-        </nav>
-      </div>
+      <AppNavigation currentPath="/dashboard" />
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">
         {messages.dashboard.eyebrow}
       </p>

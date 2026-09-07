@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { NotificationCenter } from "@/components/notifications/notification-center";
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
@@ -21,7 +20,7 @@ export default async function NotificationsPage() {
   if (profile === null || profile.onboarding.status !== "complete") redirect("/onboarding/review");
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <div className="flex flex-wrap items-center justify-between gap-4"><HomeLink /><nav aria-label={messages.notifications.title} className="flex flex-wrap gap-4"><Link className="text-sm font-semibold text-[var(--accent)]" href="/dashboard">{messages.navigation.dashboard}</Link><Link className="text-sm font-semibold text-[var(--accent)]" href="/forecasts">{messages.navigation.forecasts}</Link></nav></div>
+      <AppNavigation currentPath="/notifications" />
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">{messages.notifications.eyebrow}</p>
       <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">{messages.notifications.title}</h1>
       <p className="mt-4 max-w-3xl leading-7 text-[var(--muted)]">{messages.notifications.description}</p>

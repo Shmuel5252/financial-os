@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import type { SerializedMoney } from "@/lib/domain/money/money";
@@ -117,6 +118,8 @@ function ConfigurationFields({ item, view }: Readonly<{ item: GoalCenterItemView
   const configuration = objectValue(item.definition?.configuration);
   const fundScope = objectValue(configuration.fundScope);
   const targetBasis = objectValue(configuration.targetBasis);
+  const [source, setSource] = useState(stringValue(fundScope.source, "savings"));
+  const [basis, setBasis] = useState(stringValue(targetBasis.kind, "explicit_amount"));
   const type = item.reported.type;
   const target = objectValue(configuration.targetAmount ?? configuration.spendingCeiling ?? targetBasis.amount);
   const targetDefault = stringValue(target.amountMinor) === ""
@@ -144,38 +147,35 @@ function ConfigurationFields({ item, view }: Readonly<{ item: GoalCenterItemView
     </>;
   }
   if (type === "emergency_fund") {
-    const source = stringValue(fundScope.source, "savings");
     return <>
       <label className="block text-sm font-semibold">{messages.goalEngine.configuration.fundSource}
-        <select className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 font-normal" defaultValue={source} name="fundSource">
+        <select className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 font-normal" value={source} onChange={(event) => setSource(event.target.value)} name="fundSource">
           <option value="savings">{messages.goalEngine.configuration.fundSavings}</option>
           <option value="accounts">{messages.goalEngine.configuration.fundAccounts}</option>
         </select>
       </label>
-      <CheckGroup defaultIds={source === "savings" ? ids(fundScope.recordIds) : []} label={messages.goalEngine.configuration.fundSavings} name="savingFundIds" options={view.sources.savings} />
-      <CheckGroup defaultIds={source === "accounts" ? ids(fundScope.recordIds) : []} label={messages.goalEngine.configuration.fundAccounts} name="accountFundIds" options={view.sources.accounts} />
+      {source === "savings" ? <CheckGroup defaultIds={fundScope.source === "savings" ? ids(fundScope.recordIds) : []} label={messages.goalEngine.configuration.fundSavings} name="savingFundIds" options={view.sources.savings} /> : <CheckGroup defaultIds={fundScope.source === "accounts" ? ids(fundScope.recordIds) : []} label={messages.goalEngine.configuration.fundAccounts} name="accountFundIds" options={view.sources.accounts} />}
       <label className="block text-sm font-semibold">{messages.goalEngine.configuration.targetBasis}
-        <select className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 font-normal" defaultValue={stringValue(targetBasis.kind, "explicit_amount")} name="targetBasis">
+        <select className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 font-normal" value={basis} onChange={(event) => setBasis(event.target.value)} name="targetBasis">
           <option value="explicit_amount">{messages.goalEngine.configuration.explicitAmount}</option>
           <option value="months_of_essential_expenses">{messages.goalEngine.configuration.months}</option>
         </select>
       </label>
-      <MoneyField defaultValue={targetDefault} label={messages.goalEngine.configuration.targetAmount} name="targetAmount" />
-      <NumberField defaultValue={numberValue(targetBasis.months, 3)} label={messages.goalEngine.configuration.months} name="months" />
-      <CheckGroup defaultIds={ids(targetBasis.essentialCategoryIds)} label={messages.goalEngine.configuration.essentialCategories} name="categoryIds" options={view.categories} />
+      {basis === "explicit_amount" ? <MoneyField defaultValue={targetDefault} label={messages.goalEngine.configuration.targetAmount} name="targetAmount" /> : <>
+        <NumberField defaultValue={numberValue(targetBasis.months, 3)} label={messages.goalEngine.configuration.months} name="months" />
+        <CheckGroup defaultIds={ids(targetBasis.essentialCategoryIds)} label={messages.goalEngine.configuration.essentialCategories} name="categoryIds" options={view.categories} />
+      </>}
     </>;
   }
   if (type === "savings_target") {
-    const source = stringValue(fundScope.source, "savings");
     return <>
       <label className="block text-sm font-semibold">{messages.goalEngine.configuration.fundSource}
-        <select className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 font-normal" defaultValue={source} name="fundSource">
+        <select className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 font-normal" value={source} onChange={(event) => setSource(event.target.value)} name="fundSource">
           <option value="savings">{messages.goalEngine.configuration.fundSavings}</option>
           <option value="accounts">{messages.goalEngine.configuration.fundAccounts}</option>
         </select>
       </label>
-      <CheckGroup defaultIds={source === "savings" ? ids(fundScope.recordIds) : []} label={messages.goalEngine.configuration.fundSavings} name="savingFundIds" options={view.sources.savings} />
-      <CheckGroup defaultIds={source === "accounts" ? ids(fundScope.recordIds) : []} label={messages.goalEngine.configuration.fundAccounts} name="accountFundIds" options={view.sources.accounts} />
+      {source === "savings" ? <CheckGroup defaultIds={fundScope.source === "savings" ? ids(fundScope.recordIds) : []} label={messages.goalEngine.configuration.fundSavings} name="savingFundIds" options={view.sources.savings} /> : <CheckGroup defaultIds={fundScope.source === "accounts" ? ids(fundScope.recordIds) : []} label={messages.goalEngine.configuration.fundAccounts} name="accountFundIds" options={view.sources.accounts} />}
       <MoneyField defaultValue={targetDefault} label={messages.goalEngine.configuration.targetAmount} name="targetAmount" />
     </>;
   }
@@ -359,6 +359,8 @@ export function GoalCenter({ initialView }: Readonly<{ initialView: GoalCenterVi
           {progress.completedAt === null ? null : <p className="mt-2 text-sm">{messages.goalEngine.progress.completedAt} <bdi dir="ltr">{progress.completedAt}</bdi></p>}
         </section>}
         {item.definition === null ? null : <form className="mt-6 rounded-2xl border border-[var(--border)] p-4" onSubmit={(event) => evaluate(item, event)}>
+          <p className="mb-3 text-sm leading-7 text-[var(--muted)]">{messages.management.goalReopen}</p>
+          <Link className="mb-3 inline-block font-semibold text-[var(--accent)]" href="/financial-data">{messages.management.sourceUpdate}</Link>
           {item.reported.type === "custom" ? <MoneyField defaultValue={moneyMajor(item.reported.currentValue)} label={messages.goalEngine.progress.current} name="manualCurrentValue" /> : null}
           <button className="mt-4 w-full rounded-xl border border-[var(--border)] px-4 py-2 font-semibold disabled:opacity-60" disabled={working} type="submit">{working ? messages.goalEngine.actions.evaluating : messages.goalEngine.actions.evaluate}</button>
         </form>}

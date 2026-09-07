@@ -98,6 +98,9 @@ export default async function ManualOnboardingPage({ params }: PageProps) {
   }
 
   const section = parsedSection.data;
+  if (profile.onboarding.status === "complete") {
+    redirect(`/financial-data/${section}`);
+  }
   const details = sectionDetails[section];
   const records = await listManualRecords(actor, section);
 

@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DebtStrategyCenter } from "@/components/debt-strategies/debt-strategy-center";
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
@@ -22,7 +21,7 @@ export default async function DebtStrategiesPage() {
   const view = await loadDebtStrategyCenter(actor);
   return (
     <main className="mx-auto w-full max-w-7xl px-6 py-12 sm:py-20">
-      <div className="flex flex-wrap items-center justify-between gap-4"><HomeLink /><nav className="flex flex-wrap gap-4" aria-label={messages.debtStrategies.eyebrow}><Link className="text-sm font-semibold text-[var(--accent)]" href="/dashboard">{messages.navigation.dashboard}</Link><Link className="text-sm font-semibold text-[var(--accent)]" href="/forecasts">{messages.navigation.forecasts}</Link><Link className="text-sm font-semibold text-[var(--accent)]" href="/net-worth">{messages.navigation.netWorth}</Link></nav></div>
+      <AppNavigation currentPath="/debt-strategies" />
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">{messages.debtStrategies.eyebrow}</p>
       <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">{messages.debtStrategies.title}</h1>
       <p className="mt-4 max-w-3xl leading-7 text-[var(--muted)]">{messages.debtStrategies.description}</p>

@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  createContext,
+  useContext,
   useRef,
   useState,
   type FormEvent,
@@ -8,6 +10,8 @@ import {
   type ReactNode,
   type SelectHTMLAttributes,
 } from "react";
+import Link from "next/link";
+import { recordFormValues, recordDetailRows } from "@/lib/financial-data/record-presentation";
 
 import type {
   ManualRecordView,
@@ -72,7 +76,7 @@ function moneyInput(form: FormData, name: string, currency: string) {
   };
 }
 
-function buildFields(
+export function buildFields(
   section: ManualSection,
   form: FormData,
   currency: string,
@@ -184,6 +188,9 @@ function buildFields(
   }
 }
 
+const RecordDefaults = createContext<Readonly<Record<string, string>>>({});
+const ReadonlyFields = createContext<readonly string[]>([]);
+
 function Field({
   label,
   name,
@@ -194,11 +201,15 @@ function Field({
     name: string;
   } & Omit<InputHTMLAttributes<HTMLInputElement>, "name">
 >) {
+  const defaults = useContext(RecordDefaults);
+  const locked = useContext(ReadonlyFields).includes(name);
   return (
     <label className="block text-sm font-semibold">
       {label}
       <input
         {...props}
+        defaultValue={defaults[name] ?? props.defaultValue}
+        readOnly={locked || props.readOnly}
         className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 font-normal outline-none transition focus:border-[var(--accent)]"
         name={name}
       />
@@ -216,16 +227,21 @@ function SelectField({
   label: ReactNode;
   name: string;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "name">>) {
+  const defaults = useContext(RecordDefaults);
+  const locked = useContext(ReadonlyFields).includes(name);
   return (
     <label className="block text-sm font-semibold">
       {label}
       <select
         {...props}
+        defaultValue={props.value === undefined ? defaults[name] ?? props.defaultValue : undefined}
+        disabled={locked || props.disabled}
         className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 font-normal outline-none transition focus:border-[var(--accent)]"
         name={name}
       >
         {children}
       </select>
+      {locked ? <input type="hidden" name={name} value={defaults[name] ?? ""} /> : null}
     </label>
   );
 }
@@ -241,7 +257,7 @@ function CurrencyLabel({
   );
 }
 
-function FormFields({
+export function FormFields({
   accountOptions = [],
   currency,
   section,
@@ -252,9 +268,12 @@ function FormFields({
   section: ManualSection;
   transactionOptions?: readonly Readonly<{ id: string; label: string }>[];
 }>) {
-  const [safetyKind, setSafetyKind] = useState("fixed");
-  const [savingsAvailability, setSavingsAvailability] = useState("liquid");
-  const [transactionType, setTransactionType] = useState("expense");
+  const defaults = useContext(RecordDefaults);
+  const [safetyKind, setSafetyKind] = useState(defaults.kind ?? "fixed");
+  const [savingsAvailability, setSavingsAvailability] = useState(defaults.availability ?? "liquid");
+  const [transactionType, setTransactionType] = useState(defaults.type ?? "expense");
+  const [goalType, setGoalType] = useState<keyof typeof messages.management.goalFields>((defaults.type as keyof typeof messages.management.goalFields) ?? "debt_free");
+  const goalCopy = messages.management.goalFields[goalType];
   const { fields } = messages.onboarding.form;
 
   switch (section) {
@@ -474,7 +493,7 @@ function FormFields({
       return (
         <>
           <Field label={fields.goalTitle} name="title" required />
-          <SelectField label={fields.goalType} name="type">
+          <SelectField label={fields.goalType} name="type" value={goalType} onChange={(event) => setGoalType(event.target.value as typeof goalType)}>
             <option value="debt_free">{messages.onboarding.form.goalTypes.debt_free}</option>
             <option value="no_overdraft">{messages.onboarding.form.goalTypes.no_overdraft}</option>
             <option value="no_credit_dependency">{messages.onboarding.form.goalTypes.no_credit_dependency}</option>
@@ -486,26 +505,31 @@ function FormFields({
           <Field
             dir="ltr"
             inputMode="decimal"
-            label={<CurrencyLabel currency={currency} label={fields.targetAmount} />}
+            label={<CurrencyLabel currency={currency} label={goalCopy.target} />}
             name="targetAmount"
+            pattern="(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
             required
           />
           <Field
             defaultValue="0"
             dir="ltr"
             inputMode="decimal"
-            label={<CurrencyLabel currency={currency} label={fields.startingValue} />}
+            label={<CurrencyLabel currency={currency} label={goalCopy.starting} />}
             name="startingValue"
+            pattern="(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
             required
           />
           <Field
             defaultValue="0"
             dir="ltr"
             inputMode="decimal"
-            label={<CurrencyLabel currency={currency} label={fields.currentValue} />}
+            label={<CurrencyLabel currency={currency} label={goalCopy.current} />}
             name="currentValue"
+            pattern="(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
             required
           />
+          <p className="text-sm leading-7 text-[var(--muted)]">{goalCopy.help}</p>
+          <p className="text-sm leading-7 text-[var(--muted)]">{messages.management.goalReported}</p>
           <Field
             dir="ltr"
             label={fields.targetDateOptional}
@@ -770,6 +794,82 @@ function firstMoneySummary(value: SerializedDomainValue): string | null {
   return null;
 }
 
+export function RecordEditorFields({ record, currency, accountOptions = [], transactionOptions = [] }: Readonly<{
+  record: ManualRecordView;
+  currency: string;
+  accountOptions?: readonly Readonly<{ id: string; label: string }>[];
+  transactionOptions?: readonly Readonly<{ id: string; label: string }>[];
+}>) {
+  return <RecordDefaults value={recordFormValues(record)}><ReadonlyFields value={record.section === "transactions" ? ["category"] : []}>
+    {record.section === "goals" ? <>
+      <Field label={messages.onboarding.form.fields.goalTitle} name="title" required />
+      <Field label={messages.onboarding.form.fields.priority} name="priority" min={1} max={5} type="number" required />
+    </> : <FormFields accountOptions={accountOptions} currency={currency} section={record.section} transactionOptions={transactionOptions} />}
+  </ReadonlyFields></RecordDefaults>;
+}
+
+export function buildUpdateFields(record: ManualRecordView, form: FormData, currency: string): unknown {
+  const values = recordFormValues(record);
+  const locked = record.section === "goals" ? ["type", "targetAmount", "startingValue", "currentValue", "targetDate"] : record.section === "transactions" ? ["category"] : [];
+  for (const key of locked) form.set(key, values[key] ?? "");
+  return buildFields(record.section, form, currency);
+}
+
+export function RecordDetails({ record, apiBasePath, currency, accountOptions = [], transactionOptions = [], onUpdated }: Readonly<{
+  record: ManualRecordView;
+  apiBasePath: string;
+  currency: string;
+  accountOptions?: readonly Readonly<{ id: string; label: string }>[];
+  transactionOptions?: readonly Readonly<{ id: string; label: string }>[];
+  onUpdated: (record: ManualRecordView) => void;
+}>) {
+  const [editing, setEditing] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+  const rows = recordDetailRows(record, [...accountOptions, ...transactionOptions]);
+
+  async function update(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setWorking(true); setError("");
+    try {
+      const fields = buildUpdateFields(record, new FormData(event.currentTarget), currency);
+      const response = await fetch(`${apiBasePath}/${record.section}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: record.id, expectedVersion: record.version, fields }),
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok) throw new Error(userFacingErrorMessage(payload, messages.errors.recordSave));
+      onUpdated((payload as RecordResponse).record);
+      setEditing(false);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : messages.errors.recordSave);
+    } finally { setWorking(false); }
+  }
+
+  return <details className="rounded-xl border border-[var(--border)] p-3">
+    <summary className="cursor-pointer font-semibold text-[var(--accent)]">{messages.management.details} · {recordLabel(record)}</summary>
+    <dl className="mt-4 space-y-3 text-sm">
+      {rows.map((row) => <div key={row.key}><dt className="text-[var(--muted)]">{row.label}</dt><dd className="mt-1 break-words">{row.ltr ? <bdi dir="ltr">{row.text}</bdi> : row.text}</dd></div>)}
+      <div><dt>{messages.management.created}</dt><dd><bdi dir="ltr">{record.createdAt}</bdi></dd></div>
+      <div><dt>{messages.management.updated}</dt><dd><bdi dir="ltr">{record.updatedAt}</bdi></dd></div>
+      <div><dt>{messages.management.version}</dt><dd>{record.version}</dd></div>
+    </dl>
+    {record.section === "goals" || record.section === "transactions" ? <div className="mt-4 text-sm leading-7">
+      <p>{messages.management.immutable}</p>
+      <Link className="font-semibold text-[var(--accent)]" href={record.section === "goals" ? "/goals" : "/transaction-intelligence"}>{record.section === "goals" ? messages.management.goalEdit : messages.management.transactionCorrection}</Link>
+    </div> : null}
+    {record.source.kind !== "manual" ? <p className="mt-4 text-sm">{messages.onboarding.form.common.openBankingRecord}</p> : <>
+      <button className="mt-4 font-semibold text-[var(--accent)]" disabled={working} onClick={() => { setEditing(!editing); setError(""); }} type="button">{editing ? messages.management.cancel : messages.management.edit}</button>
+      {editing ? <form className="mt-4 space-y-4" onSubmit={update}>
+        <p className="text-sm leading-7">{messages.management.editHint}</p>
+        <RecordEditorFields record={record} accountOptions={accountOptions} currency={currency} transactionOptions={transactionOptions} />
+        <button className="rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-white disabled:opacity-50" disabled={working} type="submit">{messages.management.save}</button>
+      </form> : null}
+    </>}
+    <p aria-live="polite" className="mt-3 text-sm">{error}</p>
+  </details>;
+}
+
 export function ManualSectionForm({
   accountOptions = [],
   apiBasePath = "/api/onboarding",
@@ -787,6 +887,7 @@ export function ManualSectionForm({
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [message, setMessage] = useState("");
   const [working, setWorking] = useState(false);
+  const [formRevision, setFormRevision] = useState(0);
   const idempotencyKey = useRef<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -819,6 +920,7 @@ export function ManualSectionForm({
       );
       idempotencyKey.current = null;
       form.reset();
+      setFormRevision((current) => current + 1);
       setMessage(messages.onboarding.form.saved);
     } catch (error) {
       setMessage(
@@ -944,6 +1046,7 @@ export function ManualSectionForm({
           {messages.onboarding.form.common.addRecord}
         </h2>
         <FormFields
+          key={formRevision}
           accountOptions={accountOptions}
           currency={currency}
           section={section}
@@ -964,13 +1067,13 @@ export function ManualSectionForm({
         </h2>
         {records.length === 0 ? (
           <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-            {messages.onboarding.form.common.empty}
+              {apiBasePath === "/api/onboarding" ? messages.onboarding.form.common.empty : messages.management.empty}
           </p>
         ) : (
           <ul className="mt-4 space-y-3">
             {records.map((record) => (
               <li
-                className="flex items-center justify-between gap-4 rounded-2xl bg-[var(--background)] p-4"
+                className="space-y-3 rounded-2xl bg-[var(--background)] p-4"
                 key={record.id}
               >
                 <div>
@@ -988,6 +1091,14 @@ export function ManualSectionForm({
                     )}
                   </p>
                 </div>
+                <RecordDetails
+                  record={record}
+                  apiBasePath={apiBasePath}
+                  currency={currency}
+                  accountOptions={accountOptions}
+                  transactionOptions={transactionOptions}
+                  onUpdated={(updated) => setRecords((current) => current.map((item) => item.id === updated.id ? updated : item))}
+                />
                 {record.source.kind === "manual" ? (
                   <button
                     className="text-sm font-semibold text-red-700"

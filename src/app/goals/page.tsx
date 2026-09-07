@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { GoalCenter } from "@/components/goals/goal-center";
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
@@ -23,12 +23,9 @@ export default async function GoalsPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <HomeLink />
-      <nav className="mt-6 flex flex-wrap gap-4" aria-label={messages.goalEngine.navigationLabel}>
-        <Link className="font-semibold text-[var(--accent)]" href="/copilot">{messages.navigation.copilot}</Link>
-        <Link className="font-semibold text-[var(--accent)]" href="/dashboard">{messages.goalEngine.actions.dashboard}</Link>
-        <Link className="font-semibold text-[var(--accent)]" href="/financial-data/goals">{messages.goalEngine.actions.addGoal}</Link>
-      </nav>
+      <AppNavigation currentPath="/goals" />
+      <Link className="mt-6 inline-flex font-semibold text-[var(--accent)]" href="/financial-data/goals">{messages.goalEngine.actions.addGoal}</Link>
+      <p className="mt-4 text-sm leading-7 text-[var(--muted)]">{messages.management.goalHistory}</p>
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">{messages.goalEngine.eyebrow}</p>
       <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em]">{messages.goalEngine.title}</h1>
       <p className="mt-4 max-w-3xl leading-7 text-[var(--muted)]">{messages.goalEngine.description}</p>

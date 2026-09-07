@@ -73,6 +73,7 @@ export default async function OnboardingReviewPage() {
     })),
   );
   const completed = profile.onboarding.status === "complete";
+  if (completed) redirect("/financial-data");
   const canComplete =
     profile.onboarding.status === "in_progress" &&
     profile.onboarding.currentStep === "review";

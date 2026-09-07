@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ReportCenter } from "@/components/reports/report-center";
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
@@ -30,5 +29,5 @@ export default async function ReportsPage({ searchParams }: Readonly<{ searchPar
   const [current, saved] = await Promise.all([generateCurrentReport(actor, scope, period), listSavedReports(actor)]);
   const latest = saved.find((item) => item.report.period.kind === period.kind && item.report.period.value === period.value && JSON.stringify(item.report.scope) === JSON.stringify(scope));
   const summaries = latest === undefined ? [] : await listReportAiSummaries(actor, latest.id);
-  return <main className="mx-auto w-full max-w-7xl px-6 py-12 sm:py-20"><div className="flex flex-wrap items-center justify-between gap-4"><HomeLink /><nav aria-label={messages.reports.title} className="flex flex-wrap gap-4"><Link className="text-sm font-semibold text-[var(--accent)]" href="/dashboard">{messages.navigation.dashboard}</Link><Link className="text-sm font-semibold text-[var(--accent)]" href="/notifications">{messages.navigation.notifications}</Link></nav></div><p className="mt-8 text-sm font-semibold text-[var(--accent)]">{messages.reports.eyebrow}</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">{messages.reports.title}</h1><p className="mt-4 max-w-3xl leading-7 text-[var(--muted)]">{messages.reports.description}</p><ReportCenter households={households.households.map((item) => ({ id: item.id, name: item.name }))} initialCurrent={toFinancialReportView(current)} initialSaved={saved.map(toSavedFinancialReportView)} initialSummaries={summaries.map(toReportAiSummaryView)} /></main>;
+  return <main className="mx-auto w-full max-w-7xl px-6 py-12 sm:py-20"><AppNavigation currentPath="/reports" /><p className="mt-8 text-sm font-semibold text-[var(--accent)]">{messages.reports.eyebrow}</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">{messages.reports.title}</h1><p className="mt-4 max-w-3xl leading-7 text-[var(--muted)]">{messages.reports.description}</p><ReportCenter households={households.households.map((item) => ({ id: item.id, name: item.name }))} initialCurrent={toFinancialReportView(current)} initialSaved={saved.map(toSavedFinancialReportView)} initialSummaries={summaries.map(toReportAiSummaryView)} /></main>;
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SnapshotPanel } from "@/components/financial-data/snapshot-panel";
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
@@ -35,38 +35,7 @@ export default async function FinancialDataPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <HomeLink />
-        <nav className="flex flex-wrap gap-4" aria-label={messages.financialData.title}>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/open-banking">
-            {messages.navigation.openBanking}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/households">
-            {messages.navigation.households}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/transaction-intelligence">
-            {messages.navigation.transactionIntelligence}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/copilot">
-            {messages.navigation.copilot}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/purchase-simulation">
-            {messages.navigation.purchaseSimulation}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/forecasts">
-            {messages.navigation.forecasts}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/goals">
-            {messages.navigation.goals}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/budgets">
-            {messages.navigation.budgets}
-          </Link>
-          <Link className="text-sm font-semibold text-[var(--accent)]" href="/dashboard">
-            {messages.navigation.dashboard}
-          </Link>
-        </nav>
-      </div>
+      <AppNavigation currentPath="/financial-data" />
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">
         {messages.financialData.eyebrow}
       </p>
@@ -78,6 +47,9 @@ export default async function FinancialDataPage() {
       </p>
 
       <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <li className="rounded-3xl border border-[var(--border)] bg-white p-5">
+          <Link className="font-semibold text-[var(--accent)]" href="/financial-data/profile">{messages.onboarding.profile.label}</Link>
+        </li>
         {phaseTwoFinancialSections.map((section) => {
           const details = messages.financialData.sections[section];
 

@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { HomeLink } from "@/components/navigation/home-link";
+import { AppNavigation } from "@/components/navigation/app-navigation";
 import { OpenBankingCenter } from "@/components/open-banking/open-banking-center";
 import { auth } from "@/lib/auth";
 import { actorFromSession } from "@/lib/auth/actor";
@@ -23,10 +22,7 @@ export default async function OpenBankingPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <HomeLink />
-        <Link className="text-sm font-semibold text-[var(--accent)]" href="/financial-data">{messages.financialData.title}</Link>
-      </div>
+      <AppNavigation currentPath="/open-banking" />
       <p className="mt-8 text-sm font-semibold text-[var(--accent)]">{messages.openBanking.eyebrow}</p>
       <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em]">{messages.openBanking.title}</h1>
       <p className="mt-4 max-w-3xl leading-7 text-[var(--muted)]">{messages.openBanking.description}</p>
