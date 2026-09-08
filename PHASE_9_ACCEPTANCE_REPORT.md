@@ -27,6 +27,8 @@ This report is included in the Phase 9 acceptance commit. Its exact hash, succes
 
 ## Next-phase boundary
 
+**Historical handoff below, superseded on 2026-09-08:** The owner has since verified Vercel staging, deployed Atlas and real Google/Auth.js login after `812b280`. See PHASE_18_ENTRY_REVIEW.md for current evidence classes and remaining operational/privacy gates. This note updates the handoff, not the Phase 9 results or its staged Financy acceptance boundary.
+
 The newest owner authority permits Phase 18 after the clean Phase 9 checkpoint. Its documented prerequisite is chosen production infrastructure. Only local loopback MongoDB/Auth configuration is verified here; there is no linked Vercel project or supplied hosted production environment. Production resource/access selection, operational SLO/backup-retention/restore targets, audit-retention versus full-erasure policy, and general multi-user provider onboarding remain explicit infrastructure/product gates. Do not fabricate hosted verification, purchase/provision consequential infrastructure, weaken privacy policy, or self-accept Phase 18. No Phase 18 implementation has been performed in this Phase 9 change.
 
 ## Historical checkpoint — 2026-09-06 (superseded by the evidence above)

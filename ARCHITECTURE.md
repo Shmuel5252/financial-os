@@ -1,5 +1,13 @@
 # Financial OS Architecture
 
+## Current operational boundary — 2026-09-08
+
+Phase 18 first slice only; NOT accepted. Owner-verified deployed evidence now includes Vercel staging/Git main deployment, Atlas persistence, real Google/Auth.js login after `812b280`, and deployed management QA. Older statements below about no Vercel/loopback-only access describe historical checkpoints, not current availability. Local CLI linkage is not evidence of remote project existence. Independent environment isolation, external settings, backup/restore, monitoring/rollback and privacy verification remain outstanding; see PHASE_18_ENTRY_REVIEW.md and its exact acceptance matrix.
+
+`812b280` makes the Mongo adapter use a lazy cached factory, so an awaited adapter operation receives failures and a later operation can recover; deployed selection timeout is 30 seconds. This slice adds only `safeAuthLogger`: all Auth.js log levels override raw upstream message/cause/stack serialization with fixed categories and random correlation metadata; auth/session/PKCE behavior is unchanged. No generic telemetry/admin/readiness infrastructure exists yet.
+
+PHASE_18_DATA_INVENTORY.md classifies all 52 source-defined collections, including sensitive auth token/session storage, embedded financial audit values, immutable snapshots, household cross-subject evidence and development BSON archives. This is not a live database inventory or retention/erasure authorization. AUTH_SECRET still keys Financy aliases: eventual versioned key separation is approved direction but no key migration occurs. Approved SLO/load/recovery/admin targets are in ADR-069; legal evidence retention remains unresolved.
+
 ## Focused management UX maintenance — 2026-09-07
 
 Authenticated pages share `AppNavigation`: persistent dashboard/data-hub links and a collapsed, grouped tools menu. This is presentation reuse, not a replacement authentication layout: every page retains its existing server-side actor/profile guards. Completed onboarding section URLs redirect to the corresponding existing financial-data section, and completed review redirects to the hub. Profile management reuses the profile workflow at `/financial-data/profile`; Safety Margin is exposed in the same management section catalog. No profile progress is reset and no source collections are copied.

@@ -10,6 +10,7 @@ import {
 } from "@/lib/config/server-env";
 import { financialOsAuthCookies } from "@/lib/auth/cookies";
 import { financialOsMongoAdapterOptions } from "@/lib/auth/persistence";
+import { safeAuthLogger } from "@/lib/auth/safe-logger";
 import { getMongoClientPromise } from "@/lib/db/mongodb";
 
 function createAuthConfig(): NextAuthConfig {
@@ -30,6 +31,7 @@ function createAuthConfig(): NextAuthConfig {
       },
     },
     debug: false,
+    logger: safeAuthLogger,
     cookies: financialOsAuthCookies(useSecureCookies),
     providers: [],
     session: {

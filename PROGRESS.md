@@ -1,5 +1,15 @@
 # Financial OS Progress
 
+## Phase 18 first slice — 2026-09-08 — NOT accepted
+
+Resumed from clean accepted `812b280e679bdf7bdc5b9a8f031262cd3a2c202f`. Owner confirmed deployed Vercel staging connected to main, working Atlas persistence and full Google/Auth.js login after the auth/Mongo fix, plus deployed management QA. These are owner-verified deployed facts. Old current-state no-hosting/loopback-only claims below are preserved historical checkpoints and superseded by this entry; independent external isolation/backup/configuration verification is still absent.
+
+Scope: PHASE_18_ENTRY_REVIEW.md contains the exact 22-row acceptance matrix and operational/logging inventory. PHASE_18_DATA_INVENTORY.md covers all 52 source-defined collections and concrete backup/restore/erasure consequences. ADR-069 records approved SLO/load/admin/recovery/key-separation directions while leaving full-erasure versus immutable evidence unresolved. No deployment/provisioning, key change, user data deletion, provider operation, product/domain change or Phase 19.
+
+Sensitive logging: a synthetic test reproduced Auth.js default raw message/cause logging with debug false (1 failed, 4 passed before correction). The only runtime change is supported Auth.js logger configuration with safe fixed categories/correlation IDs and no debug output. No evidence of an actual historical secret leak is asserted. Regression covers configuration absence, test-vs-runtime variables, origin separation, headers, liveness, logger redaction and static collection coverage; final results are recorded in PHASE_18_ENTRY_REVIEW.md after execution. No commit/push before owner review.
+
+First-slice final verification: 3 focused files / 15 tests passed; selected full suite 74 files / 376 tests passed with real isolated loopback MongoDB, one explicitly skipped reconnection test and the six documented unrelated external/destructive exclusions. Type-check, zero-warning lint, production build and registry audit (0 vulnerabilities) passed. Initial registry access failed in the sandbox and succeeded on the authorized retry. A bounded private-value scan of 328 source candidates and 33 client JS files found zero matches; diff hygiene and ignored/untracked .env.local passed. No new external login/provider/browser/restore/load evidence is claimed. Phase 18 remains unaccepted and this uncommitted slice awaits review.
+
 ## Focused manual-QA cleanup — 2026-09-07
 
 Final verification: 71 test files / 361 tests passed; the opt-in real Financy reconnection suite is explicitly skipped (1 file / 1 test), and unrelated external-provider/destructive-operation suites were excluded as listed in the QA report. Type-check, zero-warning lint, production build and authenticated local production-browser checks passed. Dependency audit: 0 vulnerabilities. No fresh real-provider acceptance or deployed Vercel verification is claimed.

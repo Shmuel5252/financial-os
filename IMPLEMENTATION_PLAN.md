@@ -295,6 +295,12 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 18 — Production hardening and operations
 
+**Current entry / first slice (2026-09-08): permitted only for evidence, inventory, non-mutating checks and proven narrow logging redaction; NOT accepted.** The owner verified Vercel staging (Git-connected main), deployed Atlas persistence, real Google/Auth.js login after `812b280`, and management UX QA. Those are operator-verified deployed facts, not new automated/external checks by this slice. The previous absence-of-hosting claim below is superseded, not a current blocker. `PHASE_18_ENTRY_REVIEW.md` maps every requirement and remaining gate; `PHASE_18_DATA_INVENTORY.md` covers 52 source-defined collections. Isolation/configuration, real backup/restore, operations and privacy acceptance remain outstanding. No Phase 19 or commit/push without review.
+
+Approved provisional targets/directions: 99.5% eligible core requests / rolling 30 days; 10 concurrent synthetic staging users / 30 minutes; RPO <=24h, RTO <=4h, 30-day backup history and isolated real restore; metadata-only explicitly allowlisted admin; eventual separate versioned Financy identity-key material. No key migration/rotation now. Full-erasure versus immutable evidence policy remains unresolved pending collection-level owner review.
+
+### Historical entry review — superseded by the current entry above
+
 **Entry review (2026-09-07): Not implemented or accepted.** The Phase 9 acceptance blocker is resolved at its documented staged boundary. The next genuine prerequisite remains chosen production infrastructure/access: only local loopback MongoDB/Auth are verified and no Vercel project is linked. The established target is Vercel plus secured MongoDB, not a new platform decision. Concrete isolated environments/access, SLO/backup/restore targets and audit-retention versus full-account erasure require owner/operator decisions before they can be honestly hardened and verified. General multi-user Financy programmatic onboarding remains a hosted-production access gate. Stop here rather than mock operational readiness or silently provision consequential resources. The roadmap scope below is unchanged.
 
 - **Objective:** Harden security, reliability, performance, observability, privacy, accessibility, mobile/RTL, and operations.
