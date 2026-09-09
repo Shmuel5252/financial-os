@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { signOutAction } from "@/lib/auth/actions";
 import { messages } from "@/lib/i18n";
 
 const groups = [
@@ -23,6 +24,9 @@ export function AppNavigation({ currentPath }: Readonly<{ currentPath: string }>
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 font-semibold text-[var(--accent)]">
       <Link aria-current={currentPath === "/dashboard" ? "page" : undefined} href="/dashboard">{messages.management.backDashboard}</Link>
       <Link aria-current={currentPath === "/financial-data" ? "page" : undefined} href="/financial-data">{section ? messages.financialData.actions.back : messages.financialData.title}</Link>
+      <form action={signOutAction} className="ms-auto">
+        <button type="submit" className="min-h-11 rounded-lg border border-[var(--border)] px-4 py-2">{messages.management.signOut}</button>
+      </form>
     </div>
     <details className="mt-3">
       <summary className="cursor-pointer text-sm font-semibold">{messages.management.allTools}</summary>

@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { FocusEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+// Static UI rendering does not execute Next's server-action runtime.
+vi.mock("@/lib/auth/actions", () => ({ signOutAction: vi.fn() }));
 import { AppNavigation } from "@/components/navigation/app-navigation";
 import { selectZeroOnFocus } from "@/components/forms/numeric-focus-boundary";
 import { ManualSectionForm, RecordDetails, RecordEditorFields, buildFields, buildUpdateFields } from "@/components/onboarding/manual-section-form";

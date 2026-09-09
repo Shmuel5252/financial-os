@@ -4,6 +4,7 @@ export const hebrewMessages = {
   brand: "Financial OS",
   management: {
     navigation: "ניווט במרחב הפיננסי",
+    signOut: "התנתקות",
     navigationData: "הנתונים שלי",
     navigationPlanning: "תכנון וקבלת החלטות",
     navigationInsights: "תובנות ומעקב",

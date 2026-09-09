@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 
 import { HomeLink } from "@/components/navigation/home-link";
 import { ReviewCompletion } from "@/components/onboarding/review-completion";
-import { auth, signOut } from "@/lib/auth";
+import { auth } from "@/lib/auth";
+import { signOutAction } from "@/lib/auth/actions";
 import { actorFromSession } from "@/lib/auth/actor";
 import { getConfigurationStatus } from "@/lib/config/server-env";
 import { messages } from "@/lib/i18n";
@@ -43,12 +44,6 @@ const stepPaths: Readonly<Record<OnboardingStep, string>> = {
   review: "/onboarding/review",
   safety_margin: "/onboarding/safety_margin",
 };
-
-async function signOutAction() {
-  "use server";
-
-  await signOut({ redirectTo: "/" });
-}
 
 export default async function OnboardingReviewPage() {
   if (!getConfigurationStatus().authentication.ready) {
