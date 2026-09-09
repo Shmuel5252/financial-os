@@ -1,5 +1,15 @@
 # Financial OS Progress
 
+## Phase 18 security preparation checkpoint approved — 2026-09-09
+
+Owner approved checkpoint/push of the nine-file bounded preparation slice. Final narrow review confirms allowlisted public session JSON, no bearer/internal-session/adapter extras, unchanged normal auth/cookie/PKCE/actor semantics and synthetic-only test fixtures. Fresh focused rerun: 7 files / 30 tests passed. Same-source full non-external regression 412 passed / 1 opt-in skipped (six external/destructive exclusions), type-check, zero-warning lint, build and zero-vulnerability audit remain current. See PHASE_18_OFFLINE_PREPARATION.md for exact scope/evidence. Commit message: `fix(auth): minimize public sessions and checkpoint Phase 18 preparation`. Git push is authorized to trigger the existing deployment integration, not to change Vercel settings. Exact SHA/synchronization in final handoff; deployed readiness and real auth acceptance remain pending. Stop after push; Phase 18 unaccepted, no Phase 19.
+
+## Phase 18 offline security/preparation slice — 2026-09-09 — uncommitted
+
+Base checkpoint e7dbbcb02f827e12570a0b7f4a1b24bbffc1cc7f is owner-reported Ready on staging. Owner-authenticated bindings returns only forbidden; green bindings and actual principal/isolation remain pending. No browser/operator action required or performed for this slice.
+
+Proven synthetic installed-Auth.js HTTP regression exposed the prior public session passthrough including a bearer sessionToken and adapter fields (initial 1 failed / 3 passed). Narrow projection fix implemented, preserving actor ID/presentation/expiry and normal authentication semantics. No real token read or production compromise claimed. Additional malformed operator-list denial test; complete restore-order inventory and future index/role/monitoring design in PHASE_18_OFFLINE_PREPARATION.md / ADR-072. No external mutation, index refactor, restore, commit/push or Phase 19. Final verification: 4 targeted files / 20 tests; full non-external regression 81 files / 412 tests passed, 1 opt-in reconnection skipped and six explicitly excluded external/destructive files; real local MongoDB included. Type-check, zero-warning lint, production build and audit (0 vulnerabilities) passed. Exact commands/limitations in preparation report. Fix not yet deployed; stop for review.
+
 ## Phase 18 checkpoint authorization and final review — 2026-09-09
 
 Owner approved checkpointing the existing operational foundation/binding/role-rehearsal slices, with final bindings-route review and then stop. No Phase 18 whole-phase acceptance or Phase 19. Final review confirms authentication alone is insufficient; operator allowlist is mandatory; ordinary/anonymous/disabled/failed-auth responses contain no bindings, and authorized assertions cannot be parameterized into an environment inspector. Six route-security tests added; no product behavior change. See PHASE_18_BINDING_REHEARSAL.md for review and final verification evidence. No Atlas/Vercel variable/user/network/provider changes authorized or performed.

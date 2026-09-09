@@ -1,5 +1,11 @@
 # Financial OS Architecture
 
+## Public session boundary / offline operations preparation — 2026-09-09
+
+ADR-072: Auth.js public session callback explicitly projects only expiry and user ID/name/email/image. Adapter session/user document extras never become public JSON; database bearer tokens remain within normal server/cookie handling. Synthetic installed-handler reproduction established the old passthrough exposure; deployed remediation has not been verified. No actor authorization, Google/PKCE, Mongo lifecycle or financial semantics changed.
+
+PHASE_18_OFFLINE_PREPARATION.md supplements index and 52-collection inventories with a gated restore order, narrower-role candidate and monitoring contracts. No index initialization refactor, role grant, recovery job or retention policy implemented. Owner-reported staging e7dbbcb and forbidden binding result supersede earlier undeployed statements only for that checkpoint; successful binding/credential isolation remains pending. Phase 18 unaccepted; no Phase 19.
+
 ## Binding-proof / role-rehearsal supplement — 2026-09-08
 
 ADR-071 / PHASE_18_BINDING_REHEARSAL.md supersede older current-state limitations while preserving historical evidence. Owner accepted real Atlas Free/Frankfurt/staging-namespace/admin/network/backup findings, not full isolation or Phase 18 acceptance. New protected `/api/ops/bindings` exposes only fixed-contract match/mismatch/unknown; no general env inspector, finance payload or provider action. Required config presence is not credential validity; declared staging and populated namespace do not prove cluster identity. No hosted configuration/deployment executed.

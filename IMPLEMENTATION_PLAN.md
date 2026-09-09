@@ -295,6 +295,8 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 18 — Production hardening and operations
 
+**Offline security/preparation slice (2026-09-09), NOT accepted:** ADR-072 / PHASE_18_OFFLINE_PREPARATION.md record a synthetic-proven public database-session exposure and minimal safe projection fix, unchanged bindings authorization, restore sequencing and future role/index/monitoring design. e7dbbcb deployed Ready and owner forbidden are owner evidence only. New fix awaits review/deployment/real auth verification. No live credential changes, backup execution, commit/push or Phase 19.
+
 **Binding proof and least-privilege rehearsal slice (2026-09-08), NOT accepted:** owner-approved fixed protected environment checks, real disposable local authenticated readWrite rehearsal, index/backup inventories and final future-cutover checklist only. PHASE_18_BINDING_REHEARSAL.md / ADR-071 record results and remaining hosted/owner gates. Existing uncommitted work preserved; no Atlas/Vercel changes, live cutover, backup jobs, Phase 19 or commit/push before review.
 
 **Second slice (2026-09-08), NOT accepted:** First slice approved and pushed at `5cf41e452defb1bf175f12d82a098a779553b415`. Current work is read-only staging configuration verification plus protected metadata-only readiness and documented monitoring/SLO/deletion-restore design. See PHASE_18_OPERATIONS_FOUNDATION.md / ADR-070 for exact evidence, remaining Atlas/operator gates and verification. No second-slice commit/push before review. Original roadmap scope/acceptance below remains unchanged; no Phase 19, provider action, secret rotation or erasure implementation.

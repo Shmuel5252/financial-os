@@ -1,5 +1,12 @@
 # Financial OS Decision Log
 
+## ADR-072 — Public session projection and offline recovery preparation (2026-09-09)
+
+- The installed Auth.js database-session HTTP path demonstrably serialized the prior callback's full adapter session, including a synthetic bearer sessionToken. Fix only that boundary: public `expires` and `user.{id,name,email,image}`, server-derived ID, no object spread or internal fields. Preserve normal database/cookie/PKCE/session lifecycle. Synthetic reproduction proves code exposure, not production compromise; hosted verification and any incident response require separate approval.
+- Existing operator authorization remains unchanged. New malformed allowlist negative coverage; owner-reported deployed forbidden is not green binding or complete authorization acceptance.
+- PHASE_18_OFFLINE_PREPARATION.md defines the 52-collection quarantined restore order, current deletion/revocation replay barriers, metadata-only monitoring design and proposed five-action post-index-migration custom role. These are designs, not executed restore/role grants or approved erasure/retention policy. readWrite remains the previously rehearsed initial cutover role.
+- No infrastructure or credential changes, external provider calls, index refactor, commit/push or Phase 19 in this slice. Await review.
+
 ## ADR-071 — Fixed staging binding evidence and disposable role rehearsal (2026-09-08)
 
 - Only approved bounded third slice; preserve prior uncommitted work, no live credential cutover or Phase 19. See PHASE_18_BINDING_REHEARSAL.md for exact gates/checklist.

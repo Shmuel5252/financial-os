@@ -33,7 +33,7 @@ async function route(authenticate: () => Promise<unknown>, failDatabase = false)
 }
 
 describe("bindings endpoint final security review", () => {
-  it.each(["anonymous", "ordinary", "auth-failure", "disabled"])("returns no binding metadata for %s", async (kind) => {
+  it.each(["anonymous", "ordinary", "auth-failure", "disabled", "malformed"])("returns no binding metadata for %s", async (kind) => {
     const authenticate = vi.fn(async () => {
       if (kind === "anonymous") {
         const { UnauthenticatedError } = await import("@/lib/errors/application-error");
@@ -44,12 +44,13 @@ describe("bindings endpoint final security review", () => {
     });
     const { GET, getDatabase } = await route(authenticate);
     if (kind === "disabled") vi.stubEnv("OPERATIONS_OPERATOR_USER_IDS", "");
+    if (kind === "malformed") vi.stubEnv("OPERATIONS_OPERATOR_USER_IDS", operator + ",*");
     const response = await GET();
     const category = kind === "anonymous" ? "authentication_required" : kind === "auth-failure" ? "unavailable" : "forbidden";
     expect(await response.json()).toEqual({ status: category });
     expect(response.status).toBe(kind === "anonymous" ? 401 : kind === "auth-failure" ? 503 : 403);
     expect(getDatabase).not.toHaveBeenCalled();
-    if (kind === "disabled") expect(authenticate).not.toHaveBeenCalled();
+    if (kind === "disabled" || kind === "malformed") expect(authenticate).not.toHaveBeenCalled();
   });
 
   it("returns exactly fixed assertions to an operator and ignores inspection parameters", async () => {

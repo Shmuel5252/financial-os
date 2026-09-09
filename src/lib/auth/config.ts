@@ -21,13 +21,18 @@ function createAuthConfig(): NextAuthConfig {
   const config: NextAuthConfig = {
     callbacks: {
       session({ session, token, user }) {
-        const userId = user?.id ?? token.sub;
-
-        if (session.user !== undefined && userId !== undefined) {
-          session.user.id = userId;
-        }
-
-        return session;
+        const userId = user?.id ?? token?.sub;
+        // Database sessions contain bearer tokens and adapter fields. Never
+        // spread them (or the adapter user) into the public session response.
+        return {
+          expires: session.expires,
+          user: {
+            ...(userId === undefined ? {} : { id: userId }),
+            name: session.user?.name ?? null,
+            email: session.user?.email ?? null,
+            image: session.user?.image ?? null,
+          },
+        };
       },
     },
     debug: false,

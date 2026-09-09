@@ -16,6 +16,14 @@ it("classifies every existing inventory collection in the backup secret boundary
   expect(names(boundary)).toHaveLength(52);
 });
 
+it("accounts for all 52 collections in the quarantined restore-order plan", () => {
+  const boundary = readFileSync("PHASE_18_BACKUP_BOUNDARY.md", "utf8");
+  const plan = readFileSync("PHASE_18_OFFLINE_PREPARATION.md", "utf8");
+  const names = [...boundary.matchAll(/^\| `([A-Za-z]+)` \|/gm)].map(match => match[1]);
+  expect(names).toHaveLength(52);
+  for (const name of names) expect(plan).toContain("`" + name + "`");
+});
+
 it("lists every source createIndex definition, including manual templates and offline indexes", () => {
   const inventory = readFileSync("PHASE_18_INDEX_INVENTORY.md", "utf8");
   let count = 0;
