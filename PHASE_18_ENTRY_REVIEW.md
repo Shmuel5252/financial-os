@@ -1,5 +1,15 @@
 # Phase 18 — entry evidence and first-slice acceptance matrix
 
+## Binding / role slice supplement — 2026-09-08
+
+Owner accepted real read-only Atlas findings: Free/Frankfurt, staging namespace exists, visible admin grant (runtime principal unknown), broad network access, inactive managed backups and missing operational contacts. Thus 18-03/04/10 now have additional external evidence, but isolation/least privilege/recovery are not satisfied. 18-14 gains real local authenticated-role denial evidence, not live Atlas authorization acceptance. Protected bindings endpoint and source/index/backup inventories are documented in PHASE_18_BINDING_REHEARSAL.md. Original matrix acceptance gates remain open; Phase 18 NOT accepted. No live cutover/backup/provider action or Phase 19.
+
+## Second-slice supplement — 2026-09-08
+
+First slice owner-approved/pushed at `5cf41e452defb1bf175f12d82a098a779553b415`. The first-slice status/results below are preserved historically. Current second slice remains uncommitted for review, Phase 18 NOT accepted. PHASE_18_OPERATIONS_FOUNDATION.md records independent Vercel/Google settings evidence, protected readiness implementation, monitoring/SLO contract and deletion/restore design options. Atlas access/tier/backup and full separation remain unverified.
+
+Matrix delta: 18-04 is now **partially satisfied** (Vercel region/compute/protection/domain and Google staging callback observed; limits, credential/DB isolation and full deployed access checks pending). 18-08 is now **partially satisfied** (repository protected readiness/default-denied operator boundary implemented; real deployed operator test, monitor and alerts pending). 18-09 remains partially satisfied: contract defined, no measurement. 18-03/10/11 remain pending external verification; 18-12 remains owner-policy gate with concrete options. All other row statuses and whole-phase acceptance gates remain unchanged.
+
 ## Status and authority — 2026-09-08
 
 **Phase 18 NOT accepted. First slice only; no Phase 19, commit or push authorized.** Reviewed base: `812b280e679bdf7bdc5b9a8f031262cd3a2c202f`. The base working tree was clean and local `origin/main` matched; this slice does not claim a fresh remote/deployment inspection. No infrastructure/provider mutation, paid refresh, key change, user-data deletion, or financial-domain change is authorized.

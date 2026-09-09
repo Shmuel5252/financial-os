@@ -1,5 +1,19 @@
 # Financial OS Architecture
 
+## Binding-proof / role-rehearsal supplement — 2026-09-08
+
+ADR-071 / PHASE_18_BINDING_REHEARSAL.md supersede older current-state limitations while preserving historical evidence. Owner accepted real Atlas Free/Frankfurt/staging-namespace/admin/network/backup findings, not full isolation or Phase 18 acceptance. New protected `/api/ops/bindings` exposes only fixed-contract match/mismatch/unknown; no general env inspector, finance payload or provider action. Required config presence is not credential validity; declared staging and populated namespace do not prove cluster identity. No hosted configuration/deployment executed.
+
+Real isolated auth-enabled MongoDB readWrite rehearsal covers current adapter/data/index operations and negative administration/foreign-database access. Runtime index creation remains unchanged; PHASE_18_INDEX_INVENTORY.md classifies every definition. PHASE_18_BACKUP_BOUNDARY.md extends the 52-collection inventory with secret exclusion and restoration barriers; no raw secret-bearing authentication snapshots declared safe and no backup/erase code added. Existing ownership/exact-money/immutable evidence behavior unchanged. No commit/push until review, no Phase 19.
+
+## Current second-slice boundary — 2026-09-08
+
+First slice owner-approved/pushed at `5cf41e452defb1bf175f12d82a098a779553b415`; earlier no-commit/readiness-absent statements below are historical. Phase 18 remains NOT accepted. ADR-070 and PHASE_18_OPERATIONS_FOUNDATION.md define the current narrowly bounded operational foundation and external evidence.
+
+New `/api/ops/readiness` is default-denied by optional server-only environment-local operator user-ID allowlist, then requires the ordinary authenticated actor; no financial authorization changes or operator finance browser. Only bounded statuses leave the route. Authorized Mongo ping uses the shared pool and 3-second command timeout; whole-response deadline is 5 seconds, observing late errors without cancelling/closing application connections. Only probes coalesce; never cache actor authorization. Liveness remains separate. No operational collections, provider actions, telemetry platform or deletion implementation. Real local Mongo is tested; deployed operator authentication/readiness still requires private operator configuration and acceptance. Atlas tier/isolation/backup verification remains gated on console access.
+
+Core-request-sli-v1 is a measurement contract, not measured SLO compliance. Deletion-ledger/restore release barrier and shared-evidence redaction are proposed policy options against the unchanged 52-collection inventory; no immutable-history/retention behavior changed. No Phase 19.
+
 ## Current operational boundary — 2026-09-08
 
 Phase 18 first slice only; NOT accepted. Owner-verified deployed evidence now includes Vercel staging/Git main deployment, Atlas persistence, real Google/Auth.js login after `812b280`, and deployed management QA. Older statements below about no Vercel/loopback-only access describe historical checkpoints, not current availability. Local CLI linkage is not evidence of remote project existence. Independent environment isolation, external settings, backup/restore, monitoring/rollback and privacy verification remain outstanding; see PHASE_18_ENTRY_REVIEW.md and its exact acceptance matrix.

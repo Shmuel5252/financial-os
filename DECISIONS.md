@@ -1,5 +1,20 @@
 # Financial OS Decision Log
 
+## ADR-071 — Fixed staging binding evidence and disposable role rehearsal (2026-09-08)
+
+- Only approved bounded third slice; preserve prior uncommitted work, no live credential cutover or Phase 19. See PHASE_18_BINDING_REHEARSAL.md for exact gates/checklist.
+- Fixed staging namespace/origin contract, explicit FINANCIAL_OS_ENVIRONMENT, metadata-only schema existence and configuration presence; no raw env-value introspection. Reuse fail-closed authenticated operator boundary. Namespace equality is not cluster/principal identity or complete isolation proof; return unknown for those.
+- Real authentication-enabled disposable local MongoDB verifies scoped readWrite for current operations, installed Auth.js lifecycle and actual repository indexes; denies foreign DB/admin/escalation with Unauthorized. Atlas-specific and real deployed auth acceptance remains separate. No atlasAdmin application need found; do not infer visible admin equals live credential.
+- Indexes remain runtime-created; inventory establishes future moveability only behind migration/release verification. No DDL refactor. Backup boundary excludes bearer session/verification material and requires filtered OAuth linkage; managed whole-database snapshots of current secret-bearing auth storage cannot be called secret-free. No auth storage/deletion/backup implementation changed.
+
+## ADR-070 — Phase 18 protected readiness and operational contracts (2026-09-08)
+
+- Owner approved first-slice checkpoint `5cf41e4` and this bounded second slice; Phase 18 is not accepted. Only first slice pushed; no second-slice commit before review.
+- Use existing server-derived Auth.js actor plus exact environment-local immutable user-ID allowlist for metadata-only readiness. Empty/invalid optional allowlist denies all without breaking normal config. No household admin inference, request-supplied identity, finance browsing or bearer bypass. No actual operator identity configured here.
+- Keep `/api/health` liveness. `/api/ops/readiness` returns only fixed status metadata, with a 5-second response deadline and 3-second Mongo ping timeout, reusing the existing pool; no providers, mutations or raw logs. The response deadline observes but does not cancel underlying work. Coalesce probes, never authorization. No external monitor or distributed rate-limit claim.
+- PHASE_18_OPERATIONS_FOUNDATION.md records independently observed Vercel/Google configuration distinctly from owner login evidence and unverified Atlas/credential separation. It defines core-request-sli-v1 before measurement and proposes deletion-ledger/shared-evidence options; neither operational compliance nor erasure policy is self-approved.
+- No key rotation, external mutation, backup/restore, Financy action, financial-domain change or Phase 19. Recovery targets unchanged; actual Atlas inspection and concrete erasure/hold/shared-history policy remain gates.
+
 ## ADR-069 — Phase 18 bounded first slice, evidence classes and safe auth logging (2026-09-08)
 
 - **Authority:** Evidence reconciliation, acceptance/collection/control inventory, non-mutating tests and narrowly justified redaction only. No new infrastructure/service, account/data/provider mutation, key change, product behavior change, Phase 19, commit or push. Phase 18 remains unaccepted.

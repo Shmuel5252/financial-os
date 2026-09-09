@@ -1,0 +1,39 @@
+# Phase 18 runtime index dependency inventory
+
+2026-09-08, source review and disposable authenticated MongoDB rehearsal. All 90 source createIndex call sites covered (templates and a shared duplicate mean this is not a physical index count). No index architecture refactor or Atlas operation. This is source inventory, not a live Atlas index listing.
+
+Classification **R -> M**: currently created by the repository getter/ensureIndexes in application runtime; the index must exist before dependent traffic, but creation can move to a separately privileged deployment initializer after a verified release barrier. None needs to be newly created per request. Do not remove a runtime call until all environments, fresh DBs and rollback versions have verified initialization. Unique/partial indexes protect concurrency/idempotency; treating them as optional performance indexes would weaken integrity. TTL expiry is performed by MongoDB, not application delete authority. The installed Auth.js adapter adds no explicit index creation; implicit `_id_` indexes are server-managed.
+
+All listed names below are exact except the three documented manual-section templates. Key order/options remain defined by each source ensureIndexes and are executed unmodified in the real role test. An inventory regression guards every source createIndex name. Shared `financialSnapshots` has one identically named owner-idempotency index requested by two repositories: that is not two different physical indexes.
+
+| Repository (src/lib) | Classification | Index names |
+| --- | --- | --- |
+| ai/ai-conversation-repository.ts | R -> M | `ai_conversations_owner_updated`, `ai_conversations_owner_version` |
+| budgets/budget-repository.ts | R -> M | `budget_categories_owner_category`, `budget_categories_owner_idempotency`, `budget_periods_owner_month`, `budget_periods_owner_status_month`, `budget_corrections_owner_transaction_history`, `budget_corrections_owner_idempotency` |
+| debt-strategies/debt-strategy-repository.ts | R -> M | `debt_strategies_owner_idempotency`, `debt_strategies_owner_page` |
+| financial-engine/financial-engine-snapshot-repository.ts | R -> M | `financial_snapshots_owner_idempotency`, `financial_engine_snapshots_owner_page`, `financial_engine_snapshots_reproducible_input` |
+| financial-snapshots/financial-snapshot-repository.ts | R -> M | `financial_snapshots_owner_page`, `financial_snapshots_owner_idempotency` |
+| forecasts/forecast-repository.ts | R -> M | `forecasts_owner_idempotency`, `forecasts_owner_page`, `forecasts_owner_source`, `forecast_scenarios_owner_idempotency`, `forecast_scenarios_owner_forecast` |
+| goals/goal-repository.ts | R -> M | `goal_definitions_owner_goal_version`, `goal_definitions_owner_idempotency`, `goal_progress_owner_goal_version_time`, `goal_progress_owner_evidence`, `goal_progress_owner_idempotency`, `goal_command_receipts_owner_idempotency`, `goal_command_receipts_owner_record` |
+| households/household-repository.ts | R -> M | `households_owner_status`, `households_owner_idempotency`, `household_members_unique`, `household_members_user_status`, `household_members_household_status`, `household_invitations_token`, `household_invitations_one_active`, `household_invitations_household_status`, `household_shares_unique_resource`, `household_shares_household_status_owner` |
+| net-worth/net-worth-repository.ts | R -> M | `net_worth_items_owner_idempotency`, `net_worth_items_owner_active`, `net_worth_snapshots_owner_state`, `net_worth_snapshots_owner_page`, `net_worth_snapshots_owner_automatic_day` |
+| notifications/notification-repository.ts | R -> M | `notifications_owner_dedupe`, `notifications_owner_page`, `notifications_owner_cooldown`, `notifications_owner_delivery`, `notification_preferences_owner` |
+| onboarding/manual-record-repository.ts | R -> M | `${this.section}_owner_active_page`, `${this.section}_owner_idempotency`, `${this.section}_owner_record_version`, `transactions_owner_date`, `recurring_transactions_owner_next_occurrence`, `safety_margin_one_active_per_user` |
+| open-banking/account-reconciliation-repository.ts | R -> M | `bank_reconciliation_owner_canonical_unique`, `bank_reconciliation_owner_alias_unique`, `bank_reconciliation_owner_request_unique` |
+| open-banking/open-banking-repository.ts | R -> M | `bank_binding_provider_subject_unique`, `bank_binding_owner_provider_unique`, `bank_connections_owner_provider_external_unique`, `bank_revisions_owner_record_sequence_unique`, `bank_sync_owner_idempotency_unique`, `bank_lifecycle_owner_idempotency_unique`, `bank_sync_owner_started`, `accounts_owner_open_banking_record_unique`, `transactions_owner_open_banking_record_unique` |
+| profiles/profile-repository.ts | R -> M | `profiles_unique_user` |
+| progress-journeys/progress-journey-repository.ts | R -> M | `progress_events_owner_evidence`, `progress_events_owner_stable_history`, `progress_events_owner_series`, `progress_events_owner_timeline`, `progress_preferences_owner` |
+| purchase-simulations/purchase-simulation-repository.ts | R -> M | `purchase_simulations_owner_idempotency`, `purchase_simulations_owner_page`, `purchase_simulations_owner_snapshot` |
+| reports/report-repository.ts | R -> M | `reports_owner_idempotency`, `reports_owner_visible_page`, `reports_owner_root_version`, `reports_owner_period` |
+| reports/report-summary-repository.ts | R -> M | `report_summaries_owner_idempotency`, `report_summaries_owner_report_version`, `report_summaries_owner_report_versions` |
+| search/search-repository.ts | R -> M | `search_owner_source`, `search_owner_tokens` |
+| security/rate-limiter.ts | R -> M | `rate_limits_expiry` (TTL) |
+| transaction-intelligence/transaction-intelligence-repository.ts | R -> M | `transaction_intelligence_runs_owner_created`, `transaction_intelligence_runs_owner_idempotency`, `transaction_intelligence_reviews_owner_signal_sequence`, `transaction_intelligence_reviews_owner_idempotency` |
+| open-banking/development-baseline.ts | Offline owner-approved migration initialization only, NOT ordinary runtime and NOT test-only | `bank_development_migration_owner_active_policy`, `bank_development_archive_owner_source` |
+| tests/integration/phase-eighteen-role.integration.test.ts | Test-only; disposable child instance | `fixture_unique_partial`, `fixture_ttl` |
+
+Manual templates expand for all ten sections: accounts, cards, expenses, goals, income, loans, recurring_transactions, safety_margin, savings, transactions. They map respectively to accounts, creditCards, recurringExpenses, goals, incomeSources, loans, recurringTransactions, safetyMargins, savings, transactions. Three base indexes per section plus three conditional indexes. Tests invoking production ensureIndexes are testing R -> M definitions, not additional test-only definitions.
+
+The readWrite rehearsal executes all exported repository index initializers, every manual section, reconciliation and rate-limit indexes, and offline utility index creation (never its financial retirement operation). Generic TTL/unique/partial behavior is additionally exercised. This proves MongoDB 8.3 local built-in-role compatibility, not Atlas 8.0.32 execution or completeness of a deployed Atlas index set.
+
+Future narrower role: with verified pre-created collections/indexes and compatible migration/rollback barriers, a custom application role can remove createIndex and avoid the extra drop/index-management capabilities bundled into readWrite, retaining only required find/insert/update/remove and any necessary metadata reads. Ordinary readWrite does not enforce collection immutability or user ownership; append-only evidence and owner checks remain application responsibilities. Moving index creation alone does not make a blanket readWrite role narrower; the grant must separately change and be tested. No role or call changed here.
