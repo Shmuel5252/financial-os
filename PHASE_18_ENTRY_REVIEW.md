@@ -1,5 +1,9 @@
 # Phase 18 — entry evidence and first-slice acceptance matrix
 
+## Current repository package delta — 2026-09-09 (NOT accepted)
+
+Historical rows below retain their original dated evidence. The current full 18-01 through 18-22 status is reconciled in PHASE_18_HARDENING_PACKAGE.md. Gate A (deployed a0d99cd auth/session) and Gate B (operator bindings) remain pending; no new deployed evidence. Logging/input/readiness/export/CI/CSP/focus/optional controls and offline tooling have repository evidence, not production acceptance. No cutover, restore, erasure, live load or Phase 19.
+
 ## Binding / role slice supplement — 2026-09-08
 
 Owner accepted real read-only Atlas findings: Free/Frankfurt, staging namespace exists, visible admin grant (runtime principal unknown), broad network access, inactive managed backups and missing operational contacts. Thus 18-03/04/10 now have additional external evidence, but isolation/least privilege/recovery are not satisfied. 18-14 gains real local authenticated-role denial evidence, not live Atlas authorization acceptance. Protected bindings endpoint and source/index/backup inventories are documented in PHASE_18_BINDING_REHEARSAL.md. Original matrix acceptance gates remain open; Phase 18 NOT accepted. No live cutover/backup/provider action or Phase 19.

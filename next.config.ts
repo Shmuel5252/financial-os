@@ -9,13 +9,14 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob:",
   "object-src 'none'",
   "script-src 'self' 'unsafe-inline'",
+  "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
 ].join("; ");
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: contentSecurityPolicy },
   { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=()" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Referrer-Policy", value: "no-referrer" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
 ];

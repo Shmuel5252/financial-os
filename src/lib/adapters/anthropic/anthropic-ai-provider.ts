@@ -1,4 +1,5 @@
 import "server-only";
+import { assertCapabilityEnabled } from "@/lib/operations/controls";
 
 import { z } from "zod";
 
@@ -153,6 +154,7 @@ export class AnthropicAiProvider implements AiProvider {
   }
 
   async generate(request: AiProviderRequest): Promise<AiProviderResult> {
+    assertCapabilityEnabled("ai");
     assertSafeAiProviderContext(request.context);
 
     let response: Response;

@@ -10,6 +10,7 @@ export async function GET(): Promise<Response> {
   let evidence: BindingEvidence | undefined;
   const authorization = await boundedReadiness(evaluateReadiness({
     authenticate: requireActor,
+    deadlineAt: Date.now() + 5_000,
     operatorIds: parseOperatorAllowlist(process.env.OPERATIONS_OPERATOR_USER_IDS),
     probe: async () => { evidence = await inspectStagingBinding(process.env, getDatabase); },
   }));

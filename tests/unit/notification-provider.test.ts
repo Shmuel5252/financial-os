@@ -20,6 +20,16 @@ function command() {
 }
 
 describe("Phase 15 minimized Resend adapter", () => {
+  it("bounds transport and exposes only a safe timeout category", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const provider = new ResendNotificationEmailProvider({ apiKey: "synthetic", fromEmail: "fixture@example.invalid", telemetry: { emit() {} },
+      fetchImplementation: vi.fn(async (_url, init) => { expect(init?.signal).toBe(controller.signal); controller.abort(); throw new Error("SYNTHETIC_PRIVATE_TIMEOUT"); }) as typeof fetch });
+    try {
+      await expect(provider.send(command())).rejects.toMatchObject({ providerCategory: "PROVIDER", message: "The notification provider request failed safely." });
+      expect(timeout).toHaveBeenCalledWith(20_000);
+    } finally { timeout.mockRestore(); }
+  });
   it("submits the exact generic template with application and provider idempotency", async () => {
     let requestBody = "";
     let headers = new Headers();

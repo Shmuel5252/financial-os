@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireActor } from "@/lib/auth/actor";
+import { consumeMutationRateLimit } from "@/lib/security/rate-limiter";
 import { buildFinancialDataExport } from "@/lib/financial-data/financial-data-export-service";
 import { errorResponse } from "@/lib/http/route-response";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const actor = await requireActor();
+    await consumeMutationRateLimit(actor, "financial-data-export");
     const exported = await buildFinancialDataExport(actor);
 
     return NextResponse.json(exported, {

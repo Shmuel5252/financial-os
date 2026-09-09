@@ -5,6 +5,7 @@ import nextTypeScript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTypeScript,
+  { rules: { "no-eval": "error", "no-implied-eval": "error", "no-new-func": "error" } },
   globalIgnores([
     ".next/**",
     "coverage/**",

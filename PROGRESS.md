@@ -1,5 +1,17 @@
 # Financial OS Progress
 
+## Phase 18 hardening release review — 2026-09-09 — checkpoint authorized
+
+Owner-approved final review of the 41-file package found no additional release blocker and required no code fix. Fresh focused security/ops/auth: 49 tests / seven files passed. Full non-external regression: 437 tests / 83 files passed, one opt-in skip and six unchanged external/destructive exclusions; isolated real local MongoDB included. Type-check, zero-warning lint, production build, local security check (357 files, zero findings), index check and dependency audit (zero vulnerabilities) passed. One checkpoint commit/push authorized; exact SHA and synchronization in final handoff. Gates A/B remain pending, Phase 18 unaccepted, no Phase 19. No external configuration mutation. Hosted Ready/browser acceptance must use the resulting exact deployment and is not claimed here. Full review in PHASE_18_HARDENING_PACKAGE.md.
+
+## Phase 18 substantial repository hardening — 2026-09-09 — review pending
+
+Continued from a0d99cddfcd40813d69d30f9d39740aecb81d8ba without reverting prior work. Gates A (deployed session/auth acceptance) and B (deployed bindings/operator acceptance) remain pending. ADR-073, PHASE_18_HARDENING_PACKAGE.md and PHASE_18_RUNBOOKS.md contain current scope/evidence, original-criterion matrix, precise remaining policy/external gates and runbooks.
+
+Implemented bounded logging projections, streamed input cap, late-auth readiness deadline, export throttles, default-preserving optional operation brakes, CSP/referrer/focus refinements, CI safety checks and isolated test service, offline 52-collection recovery/erasure tools, source index manifest and non-network synthetic load scheduler. No real backup/restore/staging load, provider/secret/infrastructure mutation, commit/push or Phase 19. Final test/build/security results recorded in the package report after execution; no whole-phase acceptance.
+
+Final verification: 437 tests / 83 files passed, one opt-in reconnection skip, six explicit external/destructive exclusions; real isolated local MongoDB included. Focused six files / 39 tests passed. Type-check, zero-warning lint, production build, 357-file security guard and 90-definition index check passed. Registry audit: zero vulnerabilities. HEAD unchanged; 41 changed/new files intentionally uncommitted; .env.local ignored/untracked. See package report for exclusions, observed Git global-ignore permission warning and remaining hosted/manual gates. Stop for owner review; Phase 18 remains unaccepted.
+
 ## Phase 18 security preparation checkpoint approved — 2026-09-09
 
 Owner approved checkpoint/push of the nine-file bounded preparation slice. Final narrow review confirms allowlisted public session JSON, no bearer/internal-session/adapter extras, unchanged normal auth/cookie/PKCE/actor semantics and synthetic-only test fixtures. Fresh focused rerun: 7 files / 30 tests passed. Same-source full non-external regression 412 passed / 1 opt-in skipped (six external/destructive exclusions), type-check, zero-warning lint, build and zero-vulnerability audit remain current. See PHASE_18_OFFLINE_PREPARATION.md for exact scope/evidence. Commit message: `fix(auth): minimize public sessions and checkpoint Phase 18 preparation`. Git push is authorized to trigger the existing deployment integration, not to change Vercel settings. Exact SHA/synchronization in final handoff; deployed readiness and real auth acceptance remain pending. Stop after push; Phase 18 unaccepted, no Phase 19.

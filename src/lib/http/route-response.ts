@@ -25,7 +25,7 @@ export function errorResponse(error: unknown): NextResponse {
   if (!(error instanceof ApplicationError)) {
     console.error("Unhandled route error", {
       correlationId,
-      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorName: "UnexpectedError",
     });
   }
 

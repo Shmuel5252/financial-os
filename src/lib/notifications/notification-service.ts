@@ -1,4 +1,5 @@
 import "server-only";
+import { capabilityEnabled } from "@/lib/operations/controls";
 
 import { randomUUID } from "node:crypto";
 
@@ -171,6 +172,8 @@ async function processDueEmails(
     await repository.revokeQueuedEmailsForActor(actor);
     return;
   }
+  // Pause delivery before claiming jobs; in-app notifications remain available.
+  if (!capabilityEnabled("email")) return;
   const recipient = await repository.findRecipientEmailForActor(actor);
   for (let count = 0; count < MAX_DELIVERIES_PER_RUN; count += 1) {
     const notification = await repository.claimReadyEmailForActor(actor);

@@ -13,6 +13,7 @@ const probe = singleFlightProbe(async () => {
 export async function GET(): Promise<Response> {
   const result = await boundedReadiness(evaluateReadiness({
     authenticate: requireActor,
+    deadlineAt: Date.now() + 5_000,
     operatorIds: parseOperatorAllowlist(process.env.OPERATIONS_OPERATOR_USER_IDS),
     probe,
   }));

@@ -44,6 +44,20 @@ function providerPayload() {
 }
 
 describe("Anthropic provider adapter", () => {
+  it("uses a bounded abort signal and redacts transport timeout details", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const provider = new AnthropicAiProvider({ apiKey: "synthetic", model: "claude-test-model", fetchImplementation: vi.fn(async (_url, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      controller.abort();
+      throw new Error("SYNTHETIC_PRIVATE_TIMEOUT");
+    }) as typeof fetch });
+    try {
+      await expect(provider.generate({ context, requestId: crypto.randomUUID() })).rejects.toMatchObject({ code: "DEPENDENCY_UNAVAILABLE", message: "The AI provider is temporarily unavailable." });
+      expect(timeout).toHaveBeenCalled(); expect(timeout.mock.calls[0]![0]).toBeGreaterThan(0);
+      expect(timeout.mock.calls[0]![0]).toBeLessThanOrEqual(60_000);
+    } finally { timeout.mockRestore(); }
+  });
   it("terminates provider transport details and sends only minimized structured context", async () => {
     let capturedBody = "";
     let capturedWorkspaceHeader: string | null = null;

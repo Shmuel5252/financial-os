@@ -1,4 +1,5 @@
 import "server-only";
+import { safeProviderTelemetry } from "@/lib/operations/safe-telemetry";
 
 export type AiTelemetryEvent = Readonly<{
   durationMs: number;
@@ -20,6 +21,6 @@ export interface AiTelemetrySink {
 export class ConsoleAiTelemetrySink implements AiTelemetrySink {
   emit(event: AiTelemetryEvent): void {
     const method = event.status === "success" ? console.info : console.warn;
-    method("AI provider telemetry", event);
+    method("AI provider telemetry", safeProviderTelemetry(event, "anthropic"));
   }
 }

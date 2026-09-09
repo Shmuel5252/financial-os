@@ -1,4 +1,5 @@
 import "server-only";
+import { assertCapabilityEnabled } from "@/lib/operations/controls";
 
 import { randomUUID } from "node:crypto";
 
@@ -74,6 +75,7 @@ export async function sendAiMessage(
   command: SendAiMessageCommand,
   dependencies?: AiServiceDependencies,
 ): Promise<AiConversation> {
+  assertCapabilityEnabled("ai");
   const resolved = await resolveDependencies(dependencies);
   const existing =
     command.conversationId === undefined

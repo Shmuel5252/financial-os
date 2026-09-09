@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { MongoClient, ObjectId, type Db } from "mongodb";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { Actor } from "@/lib/auth/actor";
 import type { BudgetView } from "@/lib/budgets/budget";
@@ -268,5 +268,19 @@ describeWithMongo("Phase 15 notification persistence, consent, delivery, and iso
       email: { state: "not_requested" },
       trigger: "forecast_below_safety_margin",
     });
+  });
+  it("pauses outbound delivery without claiming emails or suppressing in-app evidence", async () => {
+    const fixtureActor: Actor = { kind: "user", userId: new ObjectId().toHexString() };
+    await database.collection("authUsers").insertOne({ _id: new ObjectId(fixtureActor.userId), email: "pause@example.invalid" });
+    await saveProfile(fixtureActor, { countryCode: "IL", displayName: "בדיקה", expectedVersion: null, householdType: "single", primaryCurrency: "ILS", timeZone: "Asia/Jerusalem" }, { repository: profileRepository });
+    await saveNotificationPreferences(fixtureActor, { emailEnabled: true, expectedVersion: null, inAppEnabled: true, quietHours: { enabled: false, endHour: 8, startHour: 22 } }, dependencies());
+    const beforeCount = provider.commands.length;
+    vi.stubEnv("OPERATIONS_DISABLE_EMAIL", "true");
+    try {
+      const center = await evaluateAndDeliverNotifications(fixtureActor, dependencies());
+      expect(center.notifications).toHaveLength(1);
+      expect(center.notifications[0]?.email).toMatchObject({ state: "pending", attempts: 0 });
+      expect(provider.commands).toHaveLength(beforeCount);
+    } finally { vi.unstubAllEnvs(); }
   });
 });

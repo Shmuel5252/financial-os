@@ -7,7 +7,7 @@ import type { Actor } from "@/lib/auth/actor";
 import { RateLimitedError } from "@/lib/errors/application-error";
 import {
   rateLimiterForDatabase,
-  type MongoRateLimiter,
+  MongoRateLimiter,
 } from "@/lib/security/rate-limiter";
 
 const testUri = process.env.MONGODB_TEST_URI;
@@ -46,5 +46,20 @@ describeWithMongo("MongoDB mutation rate limiter", () => {
 
     expect(stored?._id).not.toContain(actor.userId);
     expect(stored?.count).toBe(3);
+  });
+
+  it("isolates actor and scope, resets by clock without TTL deletion, and bounds concurrent requests", async () => {
+    let now = new Date("2026-01-01T00:00:00Z");
+    const scoped = new MongoRateLimiter(client.db(databaseName).collection("rateLimits"), () => now);
+    const policy = { limit: 2, windowMs: 60_000 };
+    await scoped.consume(actor, "exports", policy);
+    await scoped.consume(actor, "exports", policy);
+    await expect(scoped.consume(actor, "exports", policy)).rejects.toBeInstanceOf(RateLimitedError);
+    await scoped.consume({ kind: "user", userId: new ObjectId().toHexString() }, "exports", policy);
+    await scoped.consume(actor, "different-export", policy);
+    now = new Date("2026-01-01T00:01:00Z");
+    await scoped.consume(actor, "exports", policy);
+    const results = await Promise.allSettled(Array.from({ length: 5 }, () => scoped.consume(actor, "concurrent", policy)));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(2);
   });
 });

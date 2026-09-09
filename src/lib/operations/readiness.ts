@@ -15,6 +15,7 @@ type Dependencies = Readonly<{
   authenticate: () => Promise<Actor>;
   operatorIds: readonly string[];
   probe: () => Promise<void>;
+  deadlineAt?: number;
 }>;
 
 type Result = Readonly<{
@@ -30,10 +31,12 @@ export async function evaluateReadiness(dependencies: Dependencies): Promise<Res
   if (dependencies.operatorIds.length === 0) return { status: 403, category: "forbidden" };
   try {
     const actor = await dependencies.authenticate();
+    if (dependencies.deadlineAt !== undefined && Date.now() >= dependencies.deadlineAt) return unavailable;
     if (actor.kind !== "user" || !dependencies.operatorIds.includes(actor.userId)) {
       return { status: 403, category: "forbidden" };
     }
     await dependencies.probe();
+    if (dependencies.deadlineAt !== undefined && Date.now() >= dependencies.deadlineAt) return unavailable;
     return { status: 200, category: "ready" };
   } catch (error: unknown) {
     if (error instanceof UnauthenticatedError) return { status: 401, category: "authentication_required" };

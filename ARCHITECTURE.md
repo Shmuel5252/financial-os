@@ -1,5 +1,11 @@
 # Financial OS Architecture
 
+## Repository hardening package — 2026-09-09
+
+ADR-073 / PHASE_18_HARDENING_PACKAGE.md supplement prior evidence. Common route logger uses fixed category; AI/email console sinks reconstruct bounded telemetry. JSON input is capped during stream consumption. Protected readiness/bindings refuse late-auth probes. Heavy exports reuse actor/scope counters. Deployment-only optional brakes preserve financial reads; no admin finance or mutable control API. Public auth projection unchanged; Gate A and Gate B remain explicitly pending.
+
+Offline recovery/erasure planners classify the 52 collections and cannot enable restoration/deletion; source index manifest resolves no live schema; load scheduler has no HTTP/session/data adapter and rejects external origins. Exact BSON integrity tests do not prove snapshot consistency. Operational runbooks, key separation, migration and erasure policies remain gated designs. Source CSP/focus changes need deployed browser acceptance. No external configuration, financial-domain changes or Phase 19.
+
 ## Public session boundary / offline operations preparation — 2026-09-09
 
 ADR-072: Auth.js public session callback explicitly projects only expiry and user ID/name/email/image. Adapter session/user document extras never become public JSON; database bearer tokens remain within normal server/cookie handling. Synthetic installed-handler reproduction established the old passthrough exposure; deployed remediation has not been verified. No actor authorization, Google/PKCE, Mongo lifecycle or financial semantics changed.

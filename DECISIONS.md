@@ -1,5 +1,14 @@
 # Financial OS Decision Log
 
+## ADR-073 — Repository-only operational hardening, no external acceptance (2026-09-09)
+
+- Authority: substantial repository-only Phase 18 package after a0d99cd; Gates A/B explicitly pending; no commit/push, provider/infrastructure/secret changes, real backup/restore/load or Phase 19.
+- Fixed unexpected-error log category and runtime allowlisted console provider telemetry; no raw event object/model/error-name passthrough. Bound JSON buffering while reading, preserving 16KiB input contract. Add late-auth readiness deadline checks without changing operator permissions or Mongo pool lifecycle.
+- Retain inline hydration CSP until nonce/browser gate; forbid script attributes and use no-referrer. Restore visible focus and respect reduced motion, no redesign. Apply existing 30/min actor/scope limiter to the two expensive exports; no OAuth callback throttle or blanket read quota.
+- Deployment-only, server-only disable flags for AI generation, bank refresh and email dispatch default to unchanged behavior. No config mutation API, private-finance admin capability or provider action. Future live flag audit/rollback requires operator evidence.
+- Recovery/erasure/load/source-index tooling is non-executable or injected synthetic planning only, not an exporter/restore or staging runner. Preserve secret exclusions, exact BSON, current deletion/revocation barriers and original 52-collection inventory. No erasure/retention/key policy invented. readWrite remains the tested cutover role; versioned Financy identity-key separation remains design-only.
+- PHASE_18_HARDENING_PACKAGE.md / PHASE_18_RUNBOOKS.md record evidence, all remaining gates and exact future procedures. CI Mongo/secret guard/index checks and static lint are repository changes, not an executed hosted workflow or comprehensive security clearance.
+
 ## ADR-072 — Public session projection and offline recovery preparation (2026-09-09)
 
 - The installed Auth.js database-session HTTP path demonstrably serialized the prior callback's full adapter session, including a synthetic bearer sessionToken. Fix only that boundary: public `expires` and `user.{id,name,email,image}`, server-derived ID, no object spread or internal fields. Preserve normal database/cookie/PKCE/session lifecycle. Synthetic reproduction proves code exposure, not production compromise; hosted verification and any incident response require separate approval.

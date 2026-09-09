@@ -1,4 +1,5 @@
 import { requireActor } from "@/lib/auth/actor";
+import { consumeMutationRateLimit } from "@/lib/security/rate-limiter";
 import { errorResponse } from "@/lib/http/route-response";
 import { parseReportCommand, reportPeriodSchema, reportScopeSchema } from "@/lib/reports/report";
 import { reportCsvStream, toPublicReportExport } from "@/lib/reports/report-export";
@@ -7,7 +8,9 @@ import { findSavedReport, generateCurrentReport } from "@/lib/reports/report-ser
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
-    const actor = await requireActor(); const url = new URL(request.url); const format = url.searchParams.get("format");
+    const actor = await requireActor();
+    await consumeMutationRateLimit(actor, "report-export");
+    const url = new URL(request.url); const format = url.searchParams.get("format");
     if (format !== "csv" && format !== "json") throw new RangeError("Unsupported report export format.");
     const snapshotId = url.searchParams.get("snapshotId");
     const report = snapshotId === null

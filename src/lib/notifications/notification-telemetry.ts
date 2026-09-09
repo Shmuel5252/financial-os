@@ -1,4 +1,5 @@
 import "server-only";
+import { safeProviderTelemetry } from "@/lib/operations/safe-telemetry";
 
 export type NotificationTelemetryEvent = Readonly<{
   adapterVersion: string;
@@ -18,6 +19,6 @@ export interface NotificationTelemetrySink {
 export class ConsoleNotificationTelemetrySink implements NotificationTelemetrySink {
   emit(event: NotificationTelemetryEvent): void {
     const method = event.status === "success" ? console.info : console.warn;
-    method("Notification provider telemetry", event);
+    method("Notification provider telemetry", safeProviderTelemetry(event, "resend"));
   }
 }

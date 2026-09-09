@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { MongoClient, ObjectId } from "mongodb";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { Actor } from "@/lib/auth/actor";
 import { ConflictError } from "@/lib/errors/application-error";
@@ -26,6 +26,17 @@ describeWithMongo("user profile repository isolation", () => {
     userId: new ObjectId().toHexString(),
   };
   let repository: UserProfileRepository;
+
+  it("operator status never broadens a financial repository's actor scope", async () => {
+    vi.stubEnv("OPERATIONS_OPERATOR_USER_IDS", firstActor.userId);
+    try {
+      const other = new ObjectId().toHexString();
+      await saveProfile({ kind: "user", userId: other }, { countryCode: "IL", displayName: "Private fixture", expectedVersion: null, householdType: "single", primaryCurrency: "ILS", timeZone: "Asia/Jerusalem" }, { repository });
+      const own = await repository.findForActor(firstActor);
+      expect(own?.fields.displayName).not.toBe("Private fixture");
+      expect((await repository.findForActor({ kind: "user", userId: other }))?.fields.displayName).toBe("Private fixture");
+    } finally { vi.unstubAllEnvs(); }
+  });
 
   beforeAll(async () => {
     await client.connect();

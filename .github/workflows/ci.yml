@@ -17,6 +17,23 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      mongo:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+      MONGODB_TEST_DB_NAME: financial_os_ci
+      RUN_REAL_ANTHROPIC_TESTS: "0"
+      RUN_REAL_RESEND_TESTS: "0"
+      RUN_REAL_OPEN_FINANCE_TESTS: "0"
+      RUN_REAL_OPEN_FINANCE_RECONNECTION_TESTS: "0"
 
     steps:
       - name: Check out repository
@@ -33,6 +50,12 @@ jobs:
 
       - name: Audit production and development dependencies
         run: npm audit --audit-level=high
+
+      - name: Reject private artifacts and known secret signatures
+        run: npm run security:check
+
+      - name: Verify source index inventory
+        run: npm run operations:index-check
 
       - name: Run unit and available integration tests
         run: npm test

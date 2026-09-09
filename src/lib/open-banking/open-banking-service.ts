@@ -1,4 +1,5 @@
 import "server-only";
+import { assertCapabilityEnabled } from "@/lib/operations/controls";
 
 import { createHash, createHmac } from "node:crypto";
 
@@ -396,6 +397,7 @@ export async function requestOpenBankingRefresh(
   idempotencyKey: string,
   dependenciesInput?: OpenBankingDependencies,
 ): Promise<Readonly<{ costCredits: number; status: string }>> {
+  assertCapabilityEnabled("bankRefresh");
   const resolved = await dependencies(dependenciesInput);
   await resolved.repository.assertBinding(actor, subjectAlias());
   const lifecycle = await resolved.repository.startLifecycle(actor, "refresh", idempotencyKey);
