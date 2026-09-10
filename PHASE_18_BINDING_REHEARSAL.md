@@ -1,5 +1,7 @@
 # Phase 18 — environment binding and least-privilege rehearsal
 
+2026-09-10 update: deployed Gates A/B are now owner-manually accepted. The current detailed operator cutover/rollback/retirement checklist is PHASE_18_PRE_CUTOVER.md, supplementing the original rehearsal below. No live principal or cluster identity is inferred from bounded bindings. No live cutover has been approved or executed.
+
 ## Owner-approved checkpoint security review — 2026-09-09
 
 Owner authorized one checkpoint of all approved uncommitted operational foundation/binding rehearsal work after final review, then stop after push. This supersedes earlier no-commit instructions for this checkpoint only; no live cutover/configuration change or Phase 19.

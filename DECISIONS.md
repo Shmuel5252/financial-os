@@ -1,5 +1,9 @@
 # Financial OS Decision Log
 
+## Phase 18 evidence update — 2026-09-10 (no new role policy)
+
+Owner accepted deployed Gates A/B on staging revision 3c370a2. Preserve the already locally verified database-scoped readWrite candidate; no atlasAdmin/cross-database grant or untested custom-role substitution. PHASE_18_PRE_CUTOVER.md contains evidence, exact proposed operator actions and separately authorized retirement only after validation, observation and consumer inventory. AUTH_SECRET/OAuth/Financy identity material remains unchanged. Historical InvalidCheck and earlier discrepant bindings report remain unresolved. No live cutover or full Phase 18 acceptance authorized.
+
 ## ADR-073 — Repository-only operational hardening, no external acceptance (2026-09-09)
 
 - Authority: substantial repository-only Phase 18 package after a0d99cd; Gates A/B explicitly pending; no commit/push, provider/infrastructure/secret changes, real backup/restore/load or Phase 19.

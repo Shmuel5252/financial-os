@@ -295,6 +295,8 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 18 — Production hardening and operations
 
+**Current deployed gate update (2026-09-10):** Owner manually accepted Gates A/B on staging 3c370a2. PHASE_18_PRE_CUTOVER.md records exact evidence, unresolved InvalidCheck/discrepancy, live readWrite-on-financial_os_staging plan and rollback/retirement gates. Supersedes historical pending A/B below. Live execution approval and private principal/rollback proof remain required; Phase 18 unaccepted, Phase 19 unopened. Documentation preparation only, no commit/push before review.
+
 **Substantial repository-only package (2026-09-09), NOT accepted:** ADR-073 / PHASE_18_HARDENING_PACKAGE.md and PHASE_18_RUNBOOKS.md track implemented bounded hardening and non-executable recovery/load/privacy/key plans. Gate A a0d99cd deployed auth/session acceptance and Gate B deployed operator bindings remain pending. Live cutovers blocked; repository verification proceeds independently. No commit/push or Phase 19 under this authorization.
 
 **Offline security/preparation slice (2026-09-09), NOT accepted:** ADR-072 / PHASE_18_OFFLINE_PREPARATION.md record a synthetic-proven public database-session exposure and minimal safe projection fix, unchanged bindings authorization, restore sequencing and future role/index/monitoring design. e7dbbcb deployed Ready and owner forbidden are owner evidence only. New fix awaits review/deployment/real auth verification. No live credential changes, backup execution, commit/push or Phase 19.

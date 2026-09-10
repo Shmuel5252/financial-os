@@ -1,5 +1,9 @@
 # Phase 18 — entry evidence and first-slice acceptance matrix
 
+## Current deployed prerequisite delta — 2026-09-10
+
+Gates A/B are owner-manually accepted on deployed 3c370a2; see PHASE_18_PRE_CUTOVER.md for bounded evidence and limitations. This supersedes pending A/B in the dated matrices below and the hardening report. Rows 18-02/04/08/14/21 gain deployed-owner auth/operator evidence only; actual Atlas principal/least privilege, broader security clearance and all other outstanding requirements remain open. InvalidCheck is unresolved historical evidence, not a fixed incident. Phase 18 remains unaccepted; live cutover requires separate approval.
+
 ## Current repository package delta — 2026-09-09 (NOT accepted)
 
 Historical rows below retain their original dated evidence. The current full 18-01 through 18-22 status is reconciled in PHASE_18_HARDENING_PACKAGE.md. Gate A (deployed a0d99cd auth/session) and Gate B (operator bindings) remain pending; no new deployed evidence. Logging/input/readiness/export/CI/CSP/focus/optional controls and offline tooling have repository evidence, not production acceptance. No cutover, restore, erasure, live load or Phase 19.

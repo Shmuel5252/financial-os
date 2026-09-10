@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 deployed gates accepted; pre-cutover preparation — 2026-09-10
+
+Owner explicitly accepted Gates A and B on deployed staging revision 3c370a204d364ccc66a6e039dac0416634be4616: real login/persistence/sign-out/re-login/minimized session, bounded operator bindings, anonymous authentication_required and ordinary authenticated forbidden. PHASE_18_PRE_CUTOVER.md records provenance, unresolved InvalidCheck and earlier non-operator-result discrepancy, exact readWrite cutover/rollback and retirement conditions. This dated update supersedes prior pending-gate statements without rewriting historical evidence. Cluster/principal identity and live least-privilege cutover remain unverified. Documentation only; no live changes, commit/push or Phase 19. Phase 18 remains unaccepted.
+
 ## Phase 18 hardening release review — 2026-09-09 — checkpoint authorized
 
 Owner-approved final review of the 41-file package found no additional release blocker and required no code fix. Fresh focused security/ops/auth: 49 tests / seven files passed. Full non-external regression: 437 tests / 83 files passed, one opt-in skip and six unchanged external/destructive exclusions; isolated real local MongoDB included. Type-check, zero-warning lint, production build, local security check (357 files, zero findings), index check and dependency audit (zero vulnerabilities) passed. One checkpoint commit/push authorized; exact SHA and synchronization in final handoff. Gates A/B remain pending, Phase 18 unaccepted, no Phase 19. No external configuration mutation. Hosted Ready/browser acceptance must use the resulting exact deployment and is not claimed here. Full review in PHASE_18_HARDENING_PACKAGE.md.
