@@ -1,5 +1,25 @@
 # Financial OS Progress
 
+## Phase 18 cutover disposition checkpoint approved — 2026-09-14
+
+Owner-approved status: **technically successful / observation incomplete**, neither full PASS nor FAIL. Owner verified deployed login/session/read/write/logout/re-login and healthy liveness/readiness/bindings; retained agent samples support normal authenticated reads/refresh and operational HTTP 200 with no observed new Mongo/Auth/5xx failures. Latest window began 06:16:45 Asia/Jerusalem; last absolute run timestamp 06:33:22 (last retained server request 06:31:14.999). Thirty minutes were not proved. PHASE_18_CUTOVER_OBSERVATION.md preserves provenance and historical incidents. This current disposition supersedes earlier pending status below. Documentation-only commit/push authorized; no new observation window, infrastructure/credential changes or Phase 19. Keep old Atlas user active; stop after checkpoint and await approval for any further Phase 18 work. Phase 18 remains not fully accepted.
+
+## Phase 18 original-window evidence audit — 2026-09-14
+
+Audited the window starting 06:16:45 Asia/Jerusalem without restarting it. Last retained server sample: readiness 200 at 06:31:14.999; last absolute run clock: 06:33:22. Later authenticated reports observation and 50-second wait exist but carry no absolute end timestamp. No captured evidence establishes 06:46:45 or later. Historical Vercel query for 06:16–07:00 now returns Outside of allowed range; unavailable logs do not establish a clean interval. Cutover remains evidence-INCOMPLETE, not PASS/FAIL of the application. No new window or commit/push. Cold/index/two-user remain separate; old credential untouched; Phase 19 unopened. Details in PHASE_18_CUTOVER_OBSERVATION.md.
+
+## Phase 18 bounded cutover observation — 2026-09-14 — incomplete due to tool limit
+
+Owner narrowed cutover PASS to 30 continuous minutes of stable normal authenticated operation/readiness without new Mongo/Auth/5xx failures; cold/index/two-user checks are separate Phase 18 work, not cutover blockers. New start 2026-09-13 22:11:36 UTC. Authenticated reads/refresh/session preservation succeeded and sampled operational endpoints returned 200, with no displayed new server failures. Last captured request 22:30:50.402 UTC; browser usage-limit denial prevented verified completion. No 30-minute PASS, commit/push, infrastructure change or old-user retirement. See PHASE_18_CUTOVER_OBSERVATION.md; the unattended continuation gap is excluded. Phase 19 unopened.
+
+## Phase 18 resumed observation incomplete — 2026-09-13
+
+New window began 17:49:44 UTC on the same Ready staging revision 86c74b4. Authenticated management/accounts/forecast/goals reads and goals refresh succeeded; sampled health/readiness HTTP 200 and no displayed new server/auth/Mongo errors. Owner-assisted Google re-login returned to authenticated onboarding; identity continuity was not inferred. Captured request samples extend through 18:03:22.451 UTC, not a full 30-minute window. Continuation at 22:05:05 UTC found a changed browser session; the unattended gap is excluded. See the additive PHASE_18_CUTOVER_OBSERVATION.md evidence, including unintended-but-authorized sign-out during navigation. Final cutover acceptance, cold/index/isolation evidence and old-credential retirement remain pending. No commit/push on incomplete observation; no infrastructure changes or Phase 19.
+
+## Phase 18 live cutover observation interrupted — 2026-09-10
+
+Owner reports dedicated staging readWrite credential cutover and successful manual core/auth/health checks. Agent verified deployment dpl_7bdVBeapJUx9AF4rvGrKRT5R88zS Ready/Current on 86c74b4, authenticated dashboard and current HTTP 200 evidence. Formal observation 12:17:46–12:18:51 UTC ended after 65 seconds when baseline logs revealed InvalidCheck on this deployment at 12:13:10.830 UTC (before the observation window). PHASE_18_CUTOVER_OBSERVATION.md distinguishes source evidence and unknowns. Thirty-minute soak NOT completed; cutover not finally accepted, old credential retirement pending. No root cause inferred, rollback/config changes or commit/push performed. Gates A/B retain their prior owner acceptance; current incident and full Phase 18 remain open. Phase 19 unopened.
+
 ## Phase 18 deployed gates accepted; pre-cutover preparation — 2026-09-10
 
 Owner explicitly accepted Gates A and B on deployed staging revision 3c370a204d364ccc66a6e039dac0416634be4616: real login/persistence/sign-out/re-login/minimized session, bounded operator bindings, anonymous authentication_required and ordinary authenticated forbidden. PHASE_18_PRE_CUTOVER.md records provenance, unresolved InvalidCheck and earlier non-operator-result discrepancy, exact readWrite cutover/rollback and retirement conditions. This dated update supersedes prior pending-gate statements without rewriting historical evidence. Cluster/principal identity and live least-privilege cutover remain unverified. Documentation only; no live changes, commit/push or Phase 19. Phase 18 remains unaccepted.
