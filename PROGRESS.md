@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 household recovery schema increment — 2026-09-15
+
+Resumed clean from `775dfeba1101cc6019c56585ad4be99be4662a7e`. Three strict quarantine adapters now cover household, membership and share BSON without changing audit history or product behavior. Invitations remain fail-closed pending an inert token-free/index-compatible restore contract. Seven new unit cases; full non-external regression 474 tests passed across 92 files, one opt-in skip, unchanged six external/destructive exclusions. Type-check/lint/build/security/index/audit passed. Details and exact continuation in PHASE_18_RECOVERY_IMPLEMENTATION.md: shared-reference/privacy transformations and derived report integrity remain unfinished. No full recovery/erasure or Phase 18 acceptance; no external actions.
+
 ## Phase 18 approved deletion/recovery track — 2026-09-14
 
 Unit 2 verified after pushed `4d90ff47b546ffca1f869cf810508bbe7e5f185b`: signed 52-inventory package framing, initial auth/profile/manual v2 field adapters, independent injected receipt persistence and real local application-schema recovery. 467 regression tests / 91 files passed, one opt-in skip, same six external/destructive exclusions; types/lint/build/security/index/audit green. Nonempty unreviewed schemas fail closed; no full 52-collection restore/erasure acceptance or live key/store claimed. Next exact repository action: household/shared-evidence schema/redaction/reference adapters and synthetic tests, then remaining provider/notification/archive coverage and fencing. Do not restart completed units. Detailed evidence and remaining gates in PHASE_18_RECOVERY_IMPLEMENTATION.md.
