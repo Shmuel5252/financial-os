@@ -77,12 +77,13 @@ export function restorationDisposition(input: {
   if (![now, ledgerReadAt].every(v => instant.safeParse(v).success) || !Number.isSafeInteger(maxLedgerAgeMs) || maxLedgerAgeMs < 0
     || ledgerReadAt > now || now - ledgerReadAt > maxLedgerAgeMs || !Number.isSafeInteger(authoritativeRevision)
     || authoritativeRevision < 0 || suppliedRevision !== authoritativeRevision || input.keys.length === 0) return fail();
-  const seenSubjects = new Set<string>(); const seenOperations = new Set<string>();
+  const seenSubjects = new Set<string>();
   const receipts = input.receipts.map(r => validateDeletionReceipt(r, input.environment, input.keys));
   for (const r of receipts) {
     const subjectKey = `${r.keyVersion}:${r.subject}`;
-    if (seenSubjects.has(subjectKey) || seenOperations.has(r.operationId) || r.acceptedAt > ledgerReadAt) return fail();
-    seenSubjects.add(subjectKey); seenOperations.add(r.operationId);
+    // Idempotency keys are subject-scoped; reuse by a different actor cannot invalidate their ledger.
+    if (seenSubjects.has(subjectKey) || r.acceptedAt > ledgerReadAt) return fail();
+    seenSubjects.add(subjectKey);
   }
   const suppressed = (id: string) => input.keys.some(key => seenSubjects.has(`${key.version}:${deletionSubject(id, input.environment, key)}`));
   if (suppressed(input.ownerId)) return "exclude-owner";

@@ -60,6 +60,11 @@ describe("minimal deletion ledger", () => {
     expect(() => beginDeletion(actor, "isolated-test", "not-an-operation", at, key)).toThrow();
     expect(() => beginDeletion(actor, "isolated-test", randomUUID(), at, { version: 1, material: new Uint8Array(1) })).toThrow();
   });
+  it("isolates reused operation keys between actors", () => {
+    const operation = randomUUID();
+    const receipts = [beginDeletion(actor, "isolated-test", operation, at, key), beginDeletion(other, "isolated-test", operation, at, key)];
+    expect(restorationDisposition(decision(receipts))).toBe("exclude-owner");
+  });
 });
 
 describe("configured deletion retention", () => {

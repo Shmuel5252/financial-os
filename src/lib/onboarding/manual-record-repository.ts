@@ -59,7 +59,7 @@ export type ManualRecordDocument = {
   version: number;
 };
 
-const sectionCollections: Readonly<Record<ManualSection, string>> = {
+export const sectionCollections: Readonly<Record<ManualSection, string>> = {
   accounts: "accounts",
   cards: "creditCards",
   expenses: "recurringExpenses",

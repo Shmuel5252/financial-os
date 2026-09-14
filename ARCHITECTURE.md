@@ -2,6 +2,8 @@
 
 ## Approved deletion/recovery boundary — 2026-09-14
 
+Implementation supplement: synthetic-only authenticated package framing binds the full 52-name inventory while requiring explicit trusted schema adapters for every nonempty included class. Initial auth/profile/manual adapters preserve existing validation/money semantics; missing provider/legacy/derived adapters fail closed. Injected deletion receipt persistence uses majority writes and actor-scoped CAS without a runtime DB fallback or new app endpoint. Current ledger completeness, release fencing and full shared erasure are still prerequisites, not supplied by an old package. See PHASE_18_RECOVERY_IMPLEMENTATION.md for actual local evidence and unsupported classes.
+
 ADR-074 supersedes the historical pending erasure-direction gate, not prior evidence. Ordinary personal financial/audit payloads are erasable; other household members retain independent ownership. Shared copies require explicit privacy redaction/recomputation. A separately durable minimized pseudonymous ledger prevents resurrection; retention derives from actual restorable-copy/replay windows and configured safety margin, not indefinite/default TTL. Backups are filtered/encrypted and token-free, with current ledger replay before release. See PHASE_18_RECOVERY_IMPLEMENTATION.md for implementation limits. No live erasure, new secret, provider action or whole-phase acceptance follows from this approval.
 
 ## Repository hardening package — 2026-09-09

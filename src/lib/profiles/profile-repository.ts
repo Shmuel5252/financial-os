@@ -50,7 +50,7 @@ export type UserProfileDocument = Readonly<{
   version: number;
 }>;
 
-const storedProfileSchema = z.object({
+export const storedProfileSchema = z.object({
   _id: z.instanceof(ObjectId),
   auditTrail: z.array(
     z.object({
