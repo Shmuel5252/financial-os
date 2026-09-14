@@ -2,6 +2,8 @@
 
 ## Phase 18 household recovery schema increment — 2026-09-15
 
+Schema checkpoint `32e4e36e151689694149b82af5bd1e6d307a2029` pushed and verified clean/synchronized. Subsequent internal reference analysis resolves household/audit/resource contributors and rejects foreign share ownership, missing and duplicate references; it does not release or mutate restored data. Final regression 477 passed / 93 files, one opt-in skip and unchanged exclusions; types/lint/build/security/index checks passed, dependency audit unchanged at zero vulnerabilities. Next: inert invitation representation, deletion-aware shared transformations and report integrity. Full erasure/recovery remains unfinished; no new external gate has been claimed.
+
 Resumed clean from `775dfeba1101cc6019c56585ad4be99be4662a7e`. Three strict quarantine adapters now cover household, membership and share BSON without changing audit history or product behavior. Invitations remain fail-closed pending an inert token-free/index-compatible restore contract. Seven new unit cases; full non-external regression 474 tests passed across 92 files, one opt-in skip, unchanged six external/destructive exclusions. Type-check/lint/build/security/index/audit passed. Details and exact continuation in PHASE_18_RECOVERY_IMPLEMENTATION.md: shared-reference/privacy transformations and derived report integrity remain unfinished. No full recovery/erasure or Phase 18 acceptance; no external actions.
 
 ## Phase 18 approved deletion/recovery track — 2026-09-14
