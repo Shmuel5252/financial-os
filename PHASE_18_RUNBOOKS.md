@@ -1,5 +1,16 @@
 # Phase 18 operational runbooks — prepared, not executed
 
+## 2026-09-14 recovery policy supplement
+
+ADR-074 approves erasure/shared redaction/minimal ledger and filtered encrypted backup direction; historical pending-policy statements below describe the earlier plan. Use PHASE_18_RECOVERY_IMPLEMENTATION.md for current implementation limits. Cutover observation remains incomplete, no new window.
+
+- Backup: no deployed job exists. Select approved consistent capture and storage/key/expiry mechanisms before real capture. Token/session exclusions apply before encryption. A valid GCM tag/checksum does not prove field minimization or consistency; reject unknown/sensitive content, never fall back to an unfiltered dump.
+- Corrupted artifact: quarantine, return bounded integrity-failure status, do not print decrypted content or attempt partial import. Obtain another validated recovery point and check RPO impact; do not replace live data or bypass validation.
+- Deletion: suppression must be independently durable BEFORE destructive work. Missing key/store/write fence is a stop condition. Retry the original subject/operation only, keep partial suppression active, preserve other owners and explicitly redact shared historical contributions. Verify all collection classes before reporting local completion; remote provider revocation is separate.
+- Restore: obtain current authoritative ledger revision independently from the backup, filter before use and again at release under a fence. Missing/stale/conflicting ledger blocks release. No old sessions/tokens/jobs/consents become active. Key material remains outside data artifacts; only isolated synthetic primitive verification exists so far.
+- Retention: do not expire a ledger receipt based on request age alone. Verify last restorable copy/replay expiry and apply configured documented margin. Unknown coverage requires review, not silent deletion or permanent retention. RPO <=24h, RTO <=4h, >=30-day history remain unverified operational targets.
+- Compromised recovery key: stop release/capture, isolate affected artifacts and follow owner-approved exposure review/rotation. Never rotate AUTH_SECRET/Financy material as a workaround. Rollback cannot undo valid erasure; every older deployment/restore must still honor current suppression.
+
 2026-09-09. Owner approval is required before live settings/credentials/network changes, backup/restore, destructive drills or paid actions. No secrets, payloads, cookies, account IDs or raw URLs with auth queries in incident records. Record only environment, exact revision, bounded category, time/window, impact and non-user-derived correlation where available. Gates A/B remain pending.
 
 ## Common entry and recovery proof

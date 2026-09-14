@@ -1,5 +1,11 @@
 # Financial OS Progress
 
+## Phase 18 approved deletion/recovery track — 2026-09-14
+
+Resumed clean from `6b1bb3d4c5bb402b52eb0e78d5f5424e34bde89b`. ADR-074 records approved erasure/shared privacy/minimal ledger/filtered encrypted backup direction before implementation. PHASE_18_RECOVERY_IMPLEMENTATION.md tracks the next work and evidence. No repeated observation, infrastructure/credential change, real deletion or Phase 19. Cutover remains technically successful / observation incomplete; Phase 18 unaccepted.
+
+Unit 1 verified: signed minimal ledger/retention/restore decisions, authenticated synthetic BSON envelope, strict isolated-target capability and real local primitive recovery test. 18 focused tests; full non-external regression 458 passed, one opt-in skip, six unchanged external/destructive exclusions. Types/lint/build/security/index/audit passed (zero audit vulnerabilities). Four legacy test dependency fallbacks corrected without runtime changes; no real configuration needed by regression. Full 52-collection exporter/deletion/restore not yet implemented. Next exact action: filtered package schema/manifest and quarantine integration; independent durable ledger/key/storage/fencing gates still required before live erasure. Details and limitations in PHASE_18_RECOVERY_IMPLEMENTATION.md.
+
 ## Phase 18 cutover disposition checkpoint approved — 2026-09-14
 
 Owner-approved status: **technically successful / observation incomplete**, neither full PASS nor FAIL. Owner verified deployed login/session/read/write/logout/re-login and healthy liveness/readiness/bindings; retained agent samples support normal authenticated reads/refresh and operational HTTP 200 with no observed new Mongo/Auth/5xx failures. Latest window began 06:16:45 Asia/Jerusalem; last absolute run timestamp 06:33:22 (last retained server request 06:31:14.999). Thirty minutes were not proved. PHASE_18_CUTOVER_OBSERVATION.md preserves provenance and historical incidents. This current disposition supersedes earlier pending status below. Documentation-only commit/push authorized; no new observation window, infrastructure/credential changes or Phase 19. Keep old Atlas user active; stop after checkpoint and await approval for any further Phase 18 work. Phase 18 remains not fully accepted.

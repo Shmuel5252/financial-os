@@ -54,7 +54,8 @@ describe("Phase 18 operational safety", () => {
   });
   it("classifies every collection for erasure review without authorizing deletion or retention", () => {
     const plan = erasurePlan(); expect(plan.map(item => item.collection)).toEqual(recoveryCollections);
-    expect(plan.every(item => !item.execute && item.release === "owner-policy-pending")).toBe(true);
+    expect(plan.every(item => !item.execute && item.release === "implementation-verification-required")).toBe(true);
+    expect(plan.find(item => item.collection === "households")?.sharedConsequence).toBe("redact-subject-preserve-independent-owners");
   });
   it("keeps HTTP liveness independent of a failing Mongo readiness path", async () => {
     const operator = "100000000000000000000001";

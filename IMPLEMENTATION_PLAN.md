@@ -295,6 +295,8 @@ The original Phase 0 through Phase 20 order is preserved. Internal scope is clar
 
 ## Phase 18 — Production hardening and operations
 
+**2026-09-14 recovery track:** ADR-074 approves personal erasure, preservation of other household owners, explicit shared redaction, minimized configurable-retention suppression ledger, and filtered encrypted token-free backups. PHASE_18_RECOVERY_IMPLEMENTATION.md records implementation scope and verification. Historical policy-pending entries below are superseded for this direction only. Live durability/key/storage/consistent capture/release remain separate gates. Cutover remains technically successful / observation incomplete; no new observation, Phase 18 acceptance or Phase 19.
+
 **Current deployed gate update (2026-09-10):** Owner manually accepted Gates A/B on staging 3c370a2. PHASE_18_PRE_CUTOVER.md records exact evidence, unresolved InvalidCheck/discrepancy, live readWrite-on-financial_os_staging plan and rollback/retirement gates. Supersedes historical pending A/B below. Live execution approval and private principal/rollback proof remain required; Phase 18 unaccepted, Phase 19 unopened. Documentation preparation only, no commit/push before review.
 
 **Substantial repository-only package (2026-09-09), NOT accepted:** ADR-073 / PHASE_18_HARDENING_PACKAGE.md and PHASE_18_RUNBOOKS.md track implemented bounded hardening and non-executable recovery/load/privacy/key plans. Gate A a0d99cd deployed auth/session acceptance and Gate B deployed operator bindings remain pending. Live cutovers blocked; repository verification proceeds independently. No commit/push or Phase 19 under this authorization.

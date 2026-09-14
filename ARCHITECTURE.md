@@ -1,5 +1,9 @@
 # Financial OS Architecture
 
+## Approved deletion/recovery boundary — 2026-09-14
+
+ADR-074 supersedes the historical pending erasure-direction gate, not prior evidence. Ordinary personal financial/audit payloads are erasable; other household members retain independent ownership. Shared copies require explicit privacy redaction/recomputation. A separately durable minimized pseudonymous ledger prevents resurrection; retention derives from actual restorable-copy/replay windows and configured safety margin, not indefinite/default TTL. Backups are filtered/encrypted and token-free, with current ledger replay before release. See PHASE_18_RECOVERY_IMPLEMENTATION.md for implementation limits. No live erasure, new secret, provider action or whole-phase acceptance follows from this approval.
+
 ## Repository hardening package — 2026-09-09
 
 ADR-073 / PHASE_18_HARDENING_PACKAGE.md supplement prior evidence. Common route logger uses fixed category; AI/email console sinks reconstruct bounded telemetry. JSON input is capped during stream consumption. Protected readiness/bindings refuse late-auth probes. Heavy exports reuse actor/scope counters. Deployment-only optional brakes preserve financial reads; no admin finance or mutable control API. Public auth projection unchanged; Gate A and Gate B remain explicitly pending.

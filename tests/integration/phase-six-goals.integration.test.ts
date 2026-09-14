@@ -4,6 +4,7 @@ import { Long, MongoClient, ObjectId, type Db } from "mongodb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Actor } from "@/lib/auth/actor";
+import { debtStrategyRepositoryForDatabase } from "@/lib/debt-strategies/debt-strategy-repository";
 import { budgetRepositoryForDatabase, type BudgetRepository } from "@/lib/budgets/budget-repository";
 import { closeBudgetPeriod, loadBudgetView, saveBudgetPeriod } from "@/lib/budgets/budget-service";
 import { money } from "@/lib/domain/money/money";
@@ -562,6 +563,7 @@ describeWithMongo("Phase 6 deterministic Goal Engine persistence", () => {
     expect(center.goals.every((item) => item.reported.id !== secondGoal.id)).toBe(true);
 
     const exported = await buildFinancialDataExport(firstActor, {
+      debtStrategyRepository: debtStrategyRepositoryForDatabase(database),
       budgetRepository,
       goalRepository,
       netWorthRepository: netWorthRepositoryForDatabase(database),

@@ -4,6 +4,7 @@ import { Long, MongoClient, ObjectId, type Db } from "mongodb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Actor } from "@/lib/auth/actor";
+import { debtStrategyRepositoryForDatabase } from "@/lib/debt-strategies/debt-strategy-repository";
 import {
   budgetRepositoryForDatabase,
   type BudgetRepository,
@@ -336,6 +337,7 @@ describeWithMongo("Phase 7 purchase simulation persistence and isolation", () =>
       await database.collection("financialSnapshots").countDocuments({}),
     ).toBe(snapshotCount);
     const exported = await buildFinancialDataExport(firstActor, {
+      debtStrategyRepository: debtStrategyRepositoryForDatabase(database),
       budgetRepository,
       goalRepository,
       netWorthRepository: netWorthRepositoryForDatabase(database),

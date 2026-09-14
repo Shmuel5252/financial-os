@@ -177,6 +177,7 @@ describeWithMongo("Phase 8 AI persistence, minimization, and isolation", () => {
   });
 
   it("prevents cross-user reads, continuation, and deletion", async () => {
+    const generate = vi.fn(async (): Promise<never> => { throw new Error("Foreign context must never reach a provider"); });
     const owned = (await listAiConversations(firstActor, 10, { repository }))[0];
     expect(owned).toBeDefined();
     expect(await listAiConversations(secondActor, 10, { repository })).toHaveLength(0);
@@ -191,9 +192,10 @@ describeWithMongo("Phase 8 AI persistence, minimization, and isolation", () => {
           includeRecentHistory: false,
           question: "נסה לפתוח שיחה זרה",
         },
-        { repository },
+        { repository, provider: { generate } },
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
+    expect(generate).not.toHaveBeenCalled();
     await expect(
       deleteAiConversation(secondActor, owned?.id ?? "", owned?.version ?? 0, { repository }),
     ).rejects.toBeInstanceOf(NotFoundError);

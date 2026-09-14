@@ -1,5 +1,7 @@
 # Phase 18 repository hardening package — 2026-09-09
 
+2026-09-14 policy supplement: ADR-074 approves erasure/shared redaction/minimal suppression and filtered encrypted backup direction. Implementation evidence is tracked in PHASE_18_RECOVERY_IMPLEMENTATION.md. The historical policy-pending and non-executable descriptions below remain the evidence of this original package, not claims about the later implementation. External backup/durability/retention configuration and full-phase acceptance are still pending.
+
 Subsequent evidence, 2026-09-10: owner accepted deployed Gates A/B on 3c370a2. PHASE_18_PRE_CUTOVER.md supersedes the historical pending-gate status below, preserves unresolved incidents, and defines the separately approved future cutover. This report's original repository-only evidence remains historical; full Phase 18 is not accepted.
 
 Base: `a0d99cddfcd40813d69d30f9d39740aecb81d8ba`. Working-tree changes only; no commit/push, provider/account action, secret change, real backup/restore, data migration, staging load or Phase 19. This supplement preserves historical evidence. Implementation here is NOT Phase 18 acceptance or production readiness.

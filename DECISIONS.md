@@ -1,5 +1,17 @@
 # Financial OS Decision Log
 
+## ADR-074 — Erasure, shared privacy and secret-free recovery (2026-09-14)
+
+Owner-approved: full-account deletion removes owned personal/financial payloads, including personal immutable evidence absent a specifically documented legal/security justification. No indefinite default retention. Any exception requires purpose, minimized fields, access and bounded duration; none is created by this implementation.
+
+Owner deletion ends that owner's sharing, never transfers ownership or deletes another member's independent finance. Shared/derived reports must redact or recompute affected contributions without re-exposure; historical redaction must be explicit, not presented as unchanged accounting evidence.
+
+An independently durable minimal deletion ledger is approved for suppression, not a shadow profile. No financial contents, emails, raw identities or authentication material. Versioned keyed subject discriminators are pseudonymous personal data, not anonymous. Retention is configuration derived from the last restorable copy and outstanding restore/import/replay windows plus a documented safety margin; unknown windows block expiry, not silently authorize permanent retention. No TTL may discard protection while a copy remains restorable. Actual duration/storage/key provisioning remains a separately approved operational step.
+
+Filtered encrypted application backups exclude sessions, verification tokens, bearer credentials, OAuth/provider tokens and replayable authentication material. Keep only necessary token-free identity linkage. Restore applies current deletion/revocation state before use. Whole Atlas snapshots are not automatically approved secret-free backups. RPO <=24h, RTO <=4h and at least 30-day history remain targets, not achieved infrastructure evidence.
+
+Repository implementation and real isolated local synthetic rehearsal are authorized; no real-user erasure, external backup/storage purchase, new deployed secret, infrastructure change or Phase 19. PHASE_18_RECOVERY_IMPLEMENTATION.md tracks executable scope and remaining gates, supplementing the original 52-collection inventory without replacing it. Credential cutover stays technically successful / observation incomplete; no new observation window.
+
 ## Phase 18 evidence update — 2026-09-10 (no new role policy)
 
 Owner accepted deployed Gates A/B on staging revision 3c370a2. Preserve the already locally verified database-scoped readWrite candidate; no atlasAdmin/cross-database grant or untested custom-role substitution. PHASE_18_PRE_CUTOVER.md contains evidence, exact proposed operator actions and separately authorized retirement only after validation, observation and consumer inventory. AUTH_SECRET/OAuth/Financy identity material remains unchanged. Historical InvalidCheck and earlier discrepant bindings report remain unresolved. No live cutover or full Phase 18 acceptance authorized.

@@ -4,6 +4,7 @@ import { Long, MongoClient, ObjectId, type Db } from "mongodb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Actor } from "@/lib/auth/actor";
+import { debtStrategyRepositoryForDatabase } from "@/lib/debt-strategies/debt-strategy-repository";
 import { budgetRepositoryForDatabase } from "@/lib/budgets/budget-repository";
 import { buildFinancialDataExport } from "@/lib/financial-data/financial-data-export-service";
 import { goalRepositoryForDatabase } from "@/lib/goals/goal-repository";
@@ -382,6 +383,7 @@ describeWithMongo("Phase 2 financial data foundation", () => {
 
   it("exports only public owned data and keeps every custom index owner-prefixed", async () => {
     const exported = await buildFinancialDataExport(firstActor, {
+      debtStrategyRepository: debtStrategyRepositoryForDatabase(database),
       budgetRepository: budgetRepositoryForDatabase(database),
       goalRepository: goalRepositoryForDatabase(database),
       netWorthRepository: netWorthRepositoryForDatabase(database),
