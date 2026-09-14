@@ -35,8 +35,11 @@ const uri = process.env.MONGODB_TEST_URI;
         expect(await repository.findInvitationByTokenHash(hash)).not.toBeNull();
         expect(await restored.findInvitationByTokenHash(hash)).toBeNull();
       }
-      expect(await target.database.collection("householdInvitations").listIndexes().toArray())
-        .toEqual(await source.database.collection("householdInvitations").listIndexes().toArray());
+      // Parallel index creation has no stable list order; compare complete definitions by name.
+      const actualIndexes = await target.database.collection("householdInvitations").listIndexes().toArray();
+      const expectedIndexes = await source.database.collection("householdInvitations").listIndexes().toArray();
+      expect(actualIndexes.sort((a, b) => a.name!.localeCompare(b.name!)))
+        .toEqual(expectedIndexes.sort((a, b) => a.name!.localeCompare(b.name!)));
     } finally { await target.dispose(); await source.dispose(); }
   }, 30000);
 });

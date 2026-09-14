@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 historical shared-report provenance — 2026-09-15
+
+Invitation checkpoint `3bd42cfc700f1310aaa8b48276ed68ada74c3772` pushed clean/synchronized. Continued with internal historical report alias-to-owner resolution using actual Phase 11/16 hash rules and canonical ownership; missing/ambiguous provenance fails closed without rewriting money/history. Three new tests; final regression 485 passed / 96 files, one opt-in skip and unchanged external exclusions. Type-check/lint/build/security/index checks passed; audit remains zero vulnerabilities. Corrected the new invitation integration test to compare full index definitions by name rather than nondeterministic creation order. Current-ledger filtering/shared transformations, invitation invitee privacy, saved-report backup schema/integrity and remaining collection coverage are next; full recovery/erasure is not yet accepted. Detailed continuation in PHASE_18_RECOVERY_IMPLEMENTATION.md.
+
 ## Phase 18 token-free invitation recovery — 2026-09-15
 
 Continued from `765c0f7eb2fe993e83bc1597b4a7bd4fd21105fd`. Strict invitation projection strips verifier/active key, and pure isolated restore uses unique non-SHA-256 inert markers; pending invitations are explicitly revoked, accepted history preserved. Real local Mongo verifies two restored invitations under existing indexes and rejects original token lookups. 482 regression tests passed / 95 files, one opt-in skip and unchanged external exclusions; types/lint/build/security/index/audit green. Corrected an existing notification test's accidental UUID/`999` collision using a unique synthetic marker and exact telemetry field allowlist, without runtime notification changes. Next: deletion-aware shared transformations and report provenance; full application erasure/recovery and Phase 18 remain unaccepted. See PHASE_18_RECOVERY_IMPLEMENTATION.md for boundaries and evidence.
