@@ -9,12 +9,12 @@ import { assertRecoveryContent } from "@/lib/operations/recovery-content";
 
 const id = z.instanceof(ObjectId);
 const positive = z.number().int().positive();
-const audit = z.object({ action: z.enum(["household_created", "household_dissolved", "household_settings_updated",
+export const recoveryHouseholdAuditSchema = z.object({ action: z.enum(["household_created", "household_dissolved", "household_settings_updated",
   "invitation_accepted", "invitation_created", "invitation_expired", "invitation_revoked", "member_left",
   "member_removed", "resource_shared", "resource_unshared"]), actorUserId: id.nullable(), at: z.date(),
   changedFields: z.array(z.string()), resourceId: id.nullable(), resourceKind: householdResourceKindSchema.nullable(),
   revision: positive, targetUserId: id.nullable() }).strict();
-const common = { _id: id, auditTrail: z.array(audit), createdAt: z.date(), updatedAt: z.date(), version: positive,
+const common = { _id: id, auditTrail: z.array(recoveryHouseholdAuditSchema), createdAt: z.date(), updatedAt: z.date(), version: positive,
   policyVersion: z.literal(HOUSEHOLD_POLICY_VERSION), schemaVersion: z.literal(HOUSEHOLD_SCHEMA_VERSION) };
 const definitions = {
   households: z.object({ ...common, idempotencyKeyHash: z.string().regex(/^[a-f0-9]{64}$/),

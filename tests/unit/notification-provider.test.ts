@@ -85,7 +85,7 @@ describe("Phase 15 minimized Resend adapter", () => {
     const events: NotificationTelemetryEvent[] = [];
     const provider = new ResendNotificationEmailProvider({
       apiKey: "secret-value",
-      fetchImplementation: vi.fn(async () => new Response(JSON.stringify({ message: "raw provider financial payload 999" }), { status: 429 })) as typeof fetch,
+      fetchImplementation: vi.fn(async () => new Response(JSON.stringify({ message: "SYNTHETIC_PRIVATE_PROVIDER_RESPONSE" }), { status: 429 })) as typeof fetch,
       fromEmail: "Financial OS <onboarding@resend.dev>",
       telemetry: { emit: (event) => events.push(event) },
     });
@@ -93,6 +93,9 @@ describe("Phase 15 minimized Resend adapter", () => {
       message: "The notification provider request failed safely.",
       providerCategory: "RATE_LIMIT",
     }));
-    expect(JSON.stringify(events)).not.toMatch(/secret-value|delivered@resend\.dev|999/);
+    expect(JSON.stringify(events)).not.toMatch(/secret-value|delivered@resend\.dev|SYNTHETIC_PRIVATE_PROVIDER_RESPONSE/);
+    expect(events).toHaveLength(1);
+    expect(Object.keys(events[0]!).sort()).toEqual(["adapterVersion", "durationMs", "errorCategory", "operation",
+      "provider", "requestId", "retryCount", "status"]);
   });
 });

@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 token-free invitation recovery — 2026-09-15
+
+Continued from `765c0f7eb2fe993e83bc1597b4a7bd4fd21105fd`. Strict invitation projection strips verifier/active key, and pure isolated restore uses unique non-SHA-256 inert markers; pending invitations are explicitly revoked, accepted history preserved. Real local Mongo verifies two restored invitations under existing indexes and rejects original token lookups. 482 regression tests passed / 95 files, one opt-in skip and unchanged external exclusions; types/lint/build/security/index/audit green. Corrected an existing notification test's accidental UUID/`999` collision using a unique synthetic marker and exact telemetry field allowlist, without runtime notification changes. Next: deletion-aware shared transformations and report provenance; full application erasure/recovery and Phase 18 remain unaccepted. See PHASE_18_RECOVERY_IMPLEMENTATION.md for boundaries and evidence.
+
 ## Phase 18 household recovery schema increment — 2026-09-15
 
 Schema checkpoint `32e4e36e151689694149b82af5bd1e6d307a2029` pushed and verified clean/synchronized. Subsequent internal reference analysis resolves household/audit/resource contributors and rejects foreign share ownership, missing and duplicate references; it does not release or mutate restored data. Final regression 477 passed / 93 files, one opt-in skip and unchanged exclusions; types/lint/build/security/index checks passed, dependency audit unchanged at zero vulnerabilities. Next: inert invitation representation, deletion-aware shared transformations and report integrity. Full erasure/recovery remains unfinished; no new external gate has been claimed.
