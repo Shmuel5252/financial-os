@@ -1,5 +1,9 @@
 # Financial OS Decision Log
 
+## ADR-075 — Future Decision Cases and bounded automation (2026-09-22)
+
+Owner approves FUTURE_DECISION_ARCHITECTURE.md as planning only: reuse existing engines; explicit evidence/uncertainty, do-nothing and abstention; evaluation from day one; capability-scoped authority; separate recommendation/authorization/execution/settlement/outcome states; durable uncertain-result reconciliation and joint pending-capacity checks. No LLM financial truth or self-authorization, automatic risk/Safety Margin/permission learning, real-money experimentation, or implicit investment/payment delegation. Audit and learning retain separate minimized lifecycles under ADR-074. Phases 21–25 are Decision Foundation & Evaluation, Proactive Decision Support, Human-Approved Execution, Outcome Calibration & Personalization, and Bounded Automation. They enable future growth without weakening boundaries, not an intelligence ceiling. No Phase 21+ implementation or present refactor authorized; Phases 18–20 remain unchanged and unaccepted gates must be completed in order. Resume Phase 18 notification recovery/replay prevention after documentation checkpoint.
+
 ## ADR-074 — Erasure, shared privacy and secret-free recovery (2026-09-14)
 
 Owner-approved: full-account deletion removes owned personal/financial payloads, including personal immutable evidence absent a specifically documented legal/security justification. No indefinite default retention. Any exception requires purpose, minimized fields, access and bounded duration; none is created by this implementation.

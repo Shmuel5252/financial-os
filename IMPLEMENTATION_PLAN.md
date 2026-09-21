@@ -352,7 +352,17 @@ Approved provisional targets/directions: 99.5% eligible core requests / rolling 
 - **Definition of done:** Controlled launch approved with monitoring and incident ownership; the Master Plan's complete definition is demonstrably met.
 - **Risks/migration:** Environment drift, irreversible migrations, launch load, regulatory/support failures.
 
-## Cross-phase acceptance record
+## Approved future phases — planning only, 2026-09-22
+
+ADR-075 and FUTURE_DECISION_ARCHITECTURE.md define the full contracts and acceptance gates. This extends rather than reorders the original Phase 0–20 roadmap; no change to Phases 18–20 scope or acceptance, and no Phase 21+ implementation now.
+
+1. **Phase 21 — Decision Foundation & Evaluation:** reusable Decision Cases, evidence/uncertainty/permission contracts, replay and evaluation from day one.
+2. **Phase 22 — Proactive Decision Support:** reuse existing detection, forecasts and simulations; measured recommendation quality and abstention, no execution.
+3. **Phase 23 — Human-Approved Execution:** separately approved real-provider action catalog, exact scoped approvals, joint pending capacity, durable execution and settlement verification.
+4. **Phase 24 — Outcome Calibration & Personalization:** controlled calibration on evidence collected since Phase 21, offline/shadow promotion, separate privacy lifecycle; no automatic risk/permission changes.
+5. **Phase 25 — Bounded Automation:** revocable per-capability mandates only after action-specific proof; no unrestricted financial agent. Contracts remain extensible beyond these phases without weakening safeguards.
+
+## Cross-phase acceptance evidence
 
 Each phase appends to `PROGRESS.md`:
 

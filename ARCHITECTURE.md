@@ -1,5 +1,9 @@
 # Financial OS Architecture
 
+## Approved future extension — planning only (2026-09-22)
+
+ADR-075 / FUTURE_DECISION_ARCHITECTURE.md define Decision Cases over existing deterministic engines, explicit uncertainty/evidence, evaluation from day one, scoped permissions and resilient verified execution. Reuse precedes new engines; no parallel accounting/forecast truth or current refactor. Separate proposal, authorization, execution, settlement and outcome; do-nothing/abstention, cumulative pending capacity, unknown-result reconciliation, bounded automation and distinct audit/learning lifecycles are mandatory. Future advanced reasoning cannot expand its own authority. Phases 21–25 are planned only, not implemented; Phase 18–20 scope/acceptance and current Phase 18 continuation are unchanged.
+
 ## Approved deletion/recovery boundary — 2026-09-14
 
 Implementation supplement: synthetic-only authenticated package framing binds the full 52-name inventory while requiring explicit trusted schema adapters for every nonempty included class. Initial auth/profile/manual adapters preserve existing validation/money semantics; missing provider/legacy/derived adapters fail closed. Injected deletion receipt persistence uses majority writes and actor-scoped CAS without a runtime DB fallback or new app endpoint. Current ledger completeness, release fencing and full shared erasure are still prerequisites, not supplied by an old package. See PHASE_18_RECOVERY_IMPLEMENTATION.md for actual local evidence and unsupported classes.

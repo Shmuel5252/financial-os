@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Future roadmap planning approved — 2026-09-22
+
+ADR-075 / FUTURE_DECISION_ARCHITECTURE.md record owner-approved Phases 21–25 as future planning only. Existing engines are reused; no code, financial behavior, Phase 18–20 scope or acceptance changes. Decision Cases, explicit evidence/uncertainty, early evaluation, scoped permissions and resilient bounded execution remain extensible without granting AI financial authority. Documentation checkpoint precedes resumption at Phase 18 notification recovery and replay prevention. Phase 18 remains unaccepted; Phase 19 unopened.
+
 ## Phase 18 notification preference quarantine — 2026-09-22
 
 Continued from pushed clean `4c21cc17f7050db2a158cd76fcda81c60368e749`. Strict preference adapter preserves source consent/audit; current-ledger quarantine excludes erased owners and disables restored email without inventing user audit actions. 503 tests passed / 104 files, one opt-in skip and unchanged six external/destructive exclusions, including real local Mongo package/index/ownership verification. Type-check, zero-warning lint, build, security scan (399 files, zero findings), index/diff checks passed; same-day dependency audit zero vulnerabilities. 19/47 schema classes covered, not full recovery. Next exact task: notification delivery schema, replay suppression and source ownership. Full Phase 18 remains unaccepted; external/live state unchanged.

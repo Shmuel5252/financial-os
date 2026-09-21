@@ -1,3 +1,7 @@
+## Approved future roadmap supplement — 2026-09-22 (planning only)
+
+ADR-075 / FUTURE_DECISION_ARCHITECTURE.md extend this original roadmap with Phase 21 — Decision Foundation & Evaluation; Phase 22 — Proactive Decision Support; Phase 23 — Human-Approved Execution; Phase 24 — Outcome Calibration & Personalization; Phase 25 — Bounded Automation. Reuse existing engines, Decision Cases, explicit evidence/uncertainty, early evaluation, capability-scoped authority and resilient verified execution are mandatory. This is an extensible foundation, not an intelligence ceiling or authorization for implementation. Original Phases 18–20 scope/order/acceptance remain unchanged; Phase 18 continues at notification recovery/replay prevention, Phase 19 stays unopened. The original launch plan below is preserved as historical/source scope, not a claim that no later phases are planned.
+
 You are starting a brand-new production-grade application called Financial OS.
 The full Product & Engineering Master Plan is included below.
 Treat that plan as the long-term product source of truth.
