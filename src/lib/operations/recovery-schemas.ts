@@ -34,7 +34,7 @@ function validate<T>(schema: z.ZodType<T>, row: Document): T {
 }
 export const initialRecoverySchemas: RecoverySchemas = {
   ...householdRecoverySchemas,
-  householdInvitations: { version: "invitation-token-free-v1", project: projectRecoveryInvitation },
+  householdInvitations: { version: "invitation-minimized-v2", project: projectRecoveryInvitation },
   financialReports: { version: "saved-report-v1", project: projectRecoveryReport },
   authUsers: { version: "auth-user-v1", project: row => { validate(authUserSchema, row); return row; } },
   profiles: { version: "profile-v1", project: row => { validate(storedProfileSchema.strict(), row); return row; } },

@@ -23,13 +23,18 @@ const uri = process.env.MONGODB_TEST_URI;
       const records: Record<string, Document[]> = Object.fromEntries(recoveryCollections.map(name => [name, []]));
       records.householdInvitations = await source.database.collection("householdInvitations").find().toArray();
       const key = { version: 1, material: randomBytes(32) }; const digest = "a".repeat(64);
+      const previousVersion = { ...initialRecoverySchemas, householdInvitations: { ...initialRecoverySchemas.householdInvitations!, version: "invitation-token-free-v1" } };
+      const previousPackage = createBackupPackage(records, previousVersion, digest, key);
+      expect(() => openBackupPackage(previousPackage, initialRecoverySchemas, digest, key)).toThrow("Backup package validation failed");
       const opened = openBackupPackage(createBackupPackage(records, initialRecoverySchemas, digest, key), initialRecoverySchemas, digest, key);
       for (const row of opened.householdInvitations!) {
         expect(row).not.toHaveProperty("tokenHash");
+        expect(row).not.toHaveProperty("inviteeEmailHash"); expect(row).not.toHaveProperty("inviteeHint");
         await target.database.collection("householdInvitations").insertOne(materializeInertRecoveryInvitation(row, new Date()));
       }
       expect(await target.database.collection("householdInvitations").countDocuments({ status: "revoked" })).toBe(2);
       expect(await target.database.collection("householdInvitations").countDocuments({ activeInviteKey: { $exists: true } })).toBe(0);
+      expect(await target.database.collection("householdInvitations").countDocuments({ inviteeEmailHash: "a".repeat(64) })).toBe(0);
       for (const token of tokens) {
         const hash = createHash("sha256").update(token).digest("hex");
         expect(await repository.findInvitationByTokenHash(hash)).not.toBeNull();

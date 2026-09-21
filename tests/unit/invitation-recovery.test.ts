@@ -11,6 +11,7 @@ describe("token-free invitation recovery", () => {
     const row = fixture(); const source = { ...row, activeInviteKey: `${row.householdId.toHexString()}:${row.inviteeEmailHash}` };
     const before = JSON.stringify(source); const filtered = projectRecoveryInvitation(source);
     expect(filtered).not.toHaveProperty("tokenHash"); expect(filtered).not.toHaveProperty("activeInviteKey");
+    expect(filtered).not.toHaveProperty("inviteeEmailHash"); expect(filtered).not.toHaveProperty("inviteeHint");
     expect(projectRecoveryInvitation(filtered)).toEqual(filtered); expect(JSON.stringify(source)).toBe(before);
   });
   it("revokes pending invitations and generates unique non-hash markers without credentials", () => {
@@ -18,6 +19,8 @@ describe("token-free invitation recovery", () => {
     const result = materializeInertRecoveryInvitation(filtered, new Date(500));
     expect(result.status).toBe("revoked"); expect(result.version).toBe(2);
     expect(result.tokenHash).not.toMatch(/^[a-f0-9]{64}$/);
+    expect(result.inviteeEmailHash).not.toMatch(/^[a-f0-9]{64}$/);
+    expect(result.inviteeHint).not.toBe(row.inviteeHint);
     expect(result.auditTrail).toHaveLength(1); expect(result.auditTrail[0].actorUserId).toBeNull();
     expect(materializeInertRecoveryInvitation(filtered, new Date(500))).toEqual(result);
     const again = materializeInertRecoveryInvitation(projectRecoveryInvitation(result), new Date(600));
@@ -37,5 +40,12 @@ describe("token-free invitation recovery", () => {
       expect(() => projectRecoveryInvitation(altered)).toThrow();
     expect(() => materializeInertRecoveryInvitation(row, new Date(500))).toThrow();
     expect(() => materializeInertRecoveryInvitation(projectRecoveryInvitation(row), new Date(-1))).toThrow();
+  });
+  it("removes recipient data even if the invitee never registered and refuses old filtered shapes", () => {
+    const row = fixture(); const projected = projectRecoveryInvitation({ ...row, inviteeHint: "SYNTHETIC_PRIVATE_RECIPIENT" });
+    expect(JSON.stringify(projected)).not.toContain("SYNTHETIC_PRIVATE_RECIPIENT");
+    expect(JSON.stringify(projected)).not.toContain(row.inviteeEmailHash);
+    expect(() => materializeInertRecoveryInvitation({ ...projected, inviteeHint: row.inviteeHint, inviteeEmailHash: row.inviteeEmailHash }, new Date(500))).toThrow();
+    expect(() => materializeInertRecoveryInvitation({ ...projected, version: Number.MAX_SAFE_INTEGER }, new Date(500))).toThrow();
   });
 });
