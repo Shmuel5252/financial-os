@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 notification replay quarantine — 2026-09-22
+
+Future planning documentation pushed separately at `34b853b375ad53b04fa96eac9fc01e7879bf8b06`, then resumed Phase 18 only. Notification artifact projection omits provider polling IDs; owner-scoped quarantine excludes erased users and disables all claimable retry/scheduling states while retaining terminal history. 507 tests passed / 106 files, one opt-in skip and unchanged six external/destructive exclusions; real local Mongo proves encrypted package/index roundtrip, no claimable restored jobs, no polling references, source preservation and owner isolation. Type-check/lint/build/security/index/diff/audit passed, zero vulnerabilities. Coverage 20/47 schema classes; no full recovery/Phase 18 acceptance. Next exact work: notification source/provenance verification (including unsaved budget references), then remaining adapters and release fencing. No Phase 19 or future-phase code.
+
 ## Future roadmap planning approved — 2026-09-22
 
 ADR-075 / FUTURE_DECISION_ARCHITECTURE.md record owner-approved Phases 21–25 as future planning only. Existing engines are reused; no code, financial behavior, Phase 18–20 scope or acceptance changes. Decision Cases, explicit evidence/uncertainty, early evaluation, scoped permissions and resilient bounded execution remain extensible without granting AI financial authority. Documentation checkpoint precedes resumption at Phase 18 notification recovery and replay prevention. Phase 18 remains unaccepted; Phase 19 unopened.
