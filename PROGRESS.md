@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 invitation/membership closure — 2026-09-22
+
+Checkpoint `062f0902db0e1728ae2940cb2c46d7065cec0370` pushed clean/synchronized. Follow-up proves activation links before and after suppression, rejects missing/foreign/duplicate linkage and flags affected free text for quarantine privacy review. No live sharing or deletion changes. 500 tests passed / 102 files, one opt-in skip and unchanged six external/destructive exclusions; real local Mongo included. Types/lint/build/security (396 files, zero findings)/index/diff checks passed; same-day audit zero vulnerabilities. Remaining collection adapters, full privacy/share-epoch review, independent ledger/fencing and external recovery remain open; Phase 18 unaccepted. Exact continuation in PHASE_18_RECOVERY_IMPLEMENTATION.md.
+
 ## Phase 18 minimized invitation quarantine — 2026-09-22
 
 Continued preserved work from `9559fddba125503823b90473dc5e552d7e5bb6bf`. Invitation artifact schema v2 excludes recipient hints/digests as well as verifier/active key; inert restoration preserves token-free ownership linkage. Current-ledger filtering excludes erased owners/accepted recipients and validates issuer/audit ownership without touching live data. Full non-external regression: 496 passed / 101 files, one opt-in skip and unchanged six external/destructive exclusions, including real local Mongo. Type-check, zero-warning lint, production build, security scan (394 files / zero findings), index check (90/88/2), diff check and fresh dependency audit (zero vulnerabilities) passed. Next: membership/invitation reference closure and conservative shared free-text handling; full recovery/erasure and Phase 18 remain unaccepted. No external mutations.
