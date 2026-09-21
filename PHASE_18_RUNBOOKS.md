@@ -1,5 +1,16 @@
 # Phase 18 operational runbooks — prepared, not executed
 
+## 2026-09-15 quarantine implementation supplement
+
+Current implementation evidence is in PHASE_18_RECOVERY_IMPLEMENTATION.md. The statements below about earlier policy gates and primitive-only work are historical, not a claim that all later recovery work is complete.
+
+- Validate the full signed package and field adapters before using any restored rows. Saved report payload hashes are checked with the unchanged domain repository hash function; never recalculate a hash merely to accept altered evidence.
+- Validate independent ledger environment, key versions/material, revision and freshness even when the selected input is empty. A quarantine decision is a snapshot; repeat ledger verification under a release fence before any eventual application use.
+- Process household references before deleting source maps. Remove erased-owner linkage and audit contributions only after resolving canonical ownership. Preserve other owners' independent canonical data. Partial household output is not proof that invitee hints, arbitrary text, derived reports or the remaining collections are privacy-safe.
+- Filter invitation verifier and active lookup key out of the artifact. In isolated restoration only, use the explicit inert marker transformation; pending invitations are revoked and old tokens must no longer resolve. Recreate existing unique/partial indexes and compare their complete definitions by name, not creation/list order. Do not reactivate old pending invitations or reinterpret a token-free artifact as live authentication.
+- Missing/ambiguous historical share aliases block affected report recovery; never guess ownership from amount, label or date. Do not mutate old report amounts to make a privacy check pass. Full transformation/release and full-account deletion remain disabled until all dependency/privacy/fencing requirements are verified.
+- Local synthetic rehearsals do not establish staging backup consistency, RPO, RTO, 30-day history, independently durable deletion-ledger completeness or operational restore readiness. No live backup/restore/deletion is authorized by these helper implementations.
+
 ## 2026-09-14 recovery policy supplement
 
 ADR-074 approves erasure/shared redaction/minimal ledger and filtered encrypted backup direction; historical pending-policy statements below describe the earlier plan. Use PHASE_18_RECOVERY_IMPLEMENTATION.md for current implementation limits. Cutover observation remains incomplete, no new window.

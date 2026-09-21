@@ -144,7 +144,8 @@ rehearsal("real disposable authenticated MongoDB readWrite rehearsal", () => {
     // Only index creation of the offline utility, never its retirement operation.
     await ensureDevelopmentBaselineIndexes(db);
     expect((await db.listCollections({}, { nameOnly: true }).toArray()).length).toBeGreaterThan(35);
-  });
+    // This is a bulk permissions/index rehearsal, not a five-second request-latency SLO.
+  }, 30000);
 
   it("preserves real application profile ownership and version checks", async () => {
     const repository = profileRepositoryForDatabase(app.db(databaseName)); await repository.ensureIndexes();

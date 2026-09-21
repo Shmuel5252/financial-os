@@ -67,27 +67,44 @@ export function completeLocalDeletion(input: unknown, actor: Actor, env: LedgerE
 /** Both accepted and incomplete deletions suppress restoration. Duplicate/conflicting receipts fail closed.
  * This is a decision primitive, NOT proof the caller enumerated every shared/embedded subject.
  */
-export function restorationDisposition(input: {
-  ownerId: string; contributingSubjectIds: readonly string[]; receipts: readonly unknown[];
+export type RestorationLedgerContext = Readonly<{
+  receipts: readonly unknown[];
   environment: LedgerEnvironment; keys: readonly LedgerKey[];
   now: number; ledgerReadAt: number; maxLedgerAgeMs: number;
   authoritativeRevision: number; suppliedRevision: number;
-}): "preserve" | "exclude-owner" | "redact-shared-before-release" {
+}>;
+
+/** Validate even an empty graph/ledger before filtering. Trusted storage supplies freshness/revision. */
+export function restorationSuppression(input: RestorationLedgerContext): Readonly<{ isSuppressed: (userId: string) => boolean }> {
   const { now, ledgerReadAt, maxLedgerAgeMs, authoritativeRevision, suppliedRevision } = input;
   if (![now, ledgerReadAt].every(v => instant.safeParse(v).success) || !Number.isSafeInteger(maxLedgerAgeMs) || maxLedgerAgeMs < 0
     || ledgerReadAt > now || now - ledgerReadAt > maxLedgerAgeMs || !Number.isSafeInteger(authoritativeRevision)
     || authoritativeRevision < 0 || suppliedRevision !== authoritativeRevision || input.keys.length === 0) return fail();
+  parse(environment, input.environment);
+  if (new Set(input.keys.map(key => key.version)).size !== input.keys.length) return fail();
+  // Snapshot key material so caller mutation cannot alter an already validated decision context.
+  const keys = input.keys.map(key => {
+    if (!Number.isSafeInteger(key.version) || key.version < 1 || key.material.length !== 32) return fail();
+    return { version: key.version, material: Uint8Array.from(key.material) };
+  });
+  const env = input.environment;
   const seenSubjects = new Set<string>();
-  const receipts = input.receipts.map(r => validateDeletionReceipt(r, input.environment, input.keys));
+  const receipts = input.receipts.map(r => validateDeletionReceipt(r, env, keys));
   for (const r of receipts) {
     const subjectKey = `${r.keyVersion}:${r.subject}`;
     // Idempotency keys are subject-scoped; reuse by a different actor cannot invalidate their ledger.
     if (seenSubjects.has(subjectKey) || r.acceptedAt > ledgerReadAt) return fail();
     seenSubjects.add(subjectKey);
   }
-  const suppressed = (id: string) => input.keys.some(key => seenSubjects.has(`${key.version}:${deletionSubject(id, input.environment, key)}`));
-  if (suppressed(input.ownerId)) return "exclude-owner";
-  if (input.contributingSubjectIds.some(suppressed)) return "redact-shared-before-release";
+  return Object.freeze({ isSuppressed: (id: string) => keys.some(key => seenSubjects.has(`${key.version}:${deletionSubject(id, env, key)}`)) });
+}
+
+export function restorationDisposition(input: RestorationLedgerContext & {
+  ownerId: string; contributingSubjectIds: readonly string[];
+}): "preserve" | "exclude-owner" | "redact-shared-before-release" {
+  const { isSuppressed } = restorationSuppression(input);
+  if (isSuppressed(input.ownerId)) return "exclude-owner";
+  if (input.contributingSubjectIds.some(isSuppressed)) return "redact-shared-before-release";
   return "preserve";
 }
 

@@ -55,7 +55,7 @@ function hash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(stableSerializableDomainValue(value)), "utf8").digest("hex");
 }
 
-function reportPayloadHash(report: FinancialReport, reportVersion: number, restatementReason: string | null, supersedesId: string | null): string {
+export function reportPayloadHash(report: FinancialReport, reportVersion: number, restatementReason: string | null, supersedesId: string | null): string {
   return hash({ report: { ...report, generatedAt: "request-time" }, reportVersion, restatementReason, supersedesId });
 }
 

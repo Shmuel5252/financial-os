@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { beginDeletion, completeLocalDeletion, deletionRetention, deletionSubject, restorationDisposition, validateDeletionReceipt } from "@/lib/operations/deletion-ledger";
+import { beginDeletion, completeLocalDeletion, deletionRetention, deletionSubject, restorationDisposition, restorationSuppression, validateDeletionReceipt } from "@/lib/operations/deletion-ledger";
 
 const actor = { kind: "user", userId: "100000000000000000000001" } as const;
 const other = { kind: "user", userId: "100000000000000000000002" } as const;
@@ -12,6 +12,15 @@ const decision = (receipts: readonly unknown[]) => ({ ownerId: other.userId, con
   authoritativeRevision: 1, suppliedRevision: 1 });
 
 describe("minimal deletion ledger", () => {
+  it("validates empty ledger configuration and snapshots suppression key material", () => {
+    for (const keys of [[key, key], [{ version: 0, material: randomBytes(32) }], [{ version: 1, material: randomBytes(1) }]])
+      expect(() => restorationSuppression({ ...decision([]), keys })).toThrow();
+    const localKey = { version: 1, material: randomBytes(32) };
+    const receipt = beginDeletion(actor, "isolated-test", randomUUID(), at, localKey);
+    const state = restorationSuppression({ ...decision([receipt]), keys: [localKey] });
+    localKey.material.fill(0);
+    expect(state.isSuppressed(actor.userId)).toBe(true); expect(state.isSuppressed(other.userId)).toBe(false);
+  });
   it("emits a strict minimized receipt with no raw actor or financial/auth payload", () => {
     const r = make();
     expect(Object.keys(r).sort()).toEqual(["policy", "environment", "keyVersion", "operationId", "subject", "acceptedAt", "completedAt", "status", "revision", "signature"].sort());
