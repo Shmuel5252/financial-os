@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 notification preference quarantine — 2026-09-22
+
+Continued from pushed clean `4c21cc17f7050db2a158cd76fcda81c60368e749`. Strict preference adapter preserves source consent/audit; current-ledger quarantine excludes erased owners and disables restored email without inventing user audit actions. 503 tests passed / 104 files, one opt-in skip and unchanged six external/destructive exclusions, including real local Mongo package/index/ownership verification. Type-check, zero-warning lint, build, security scan (399 files, zero findings), index/diff checks passed; same-day dependency audit zero vulnerabilities. 19/47 schema classes covered, not full recovery. Next exact task: notification delivery schema, replay suppression and source ownership. Full Phase 18 remains unaccepted; external/live state unchanged.
+
 ## Phase 18 invitation/membership closure — 2026-09-22
 
 Checkpoint `062f0902db0e1728ae2940cb2c46d7065cec0370` pushed clean/synchronized. Follow-up proves activation links before and after suppression, rejects missing/foreign/duplicate linkage and flags affected free text for quarantine privacy review. No live sharing or deletion changes. 500 tests passed / 102 files, one opt-in skip and unchanged six external/destructive exclusions; real local Mongo included. Types/lint/build/security (396 files, zero findings)/index/diff checks passed; same-day audit zero vulnerabilities. Remaining collection adapters, full privacy/share-epoch review, independent ledger/fencing and external recovery remain open; Phase 18 unaccepted. Exact continuation in PHASE_18_RECOVERY_IMPLEMENTATION.md.
