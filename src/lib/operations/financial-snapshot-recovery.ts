@@ -6,6 +6,7 @@ import { storedFinancialSnapshotSourceSchema } from "@/lib/financial-snapshots/f
 import { storedFinancialEngineResultSchema } from "@/lib/financial-engine/financial-engine-snapshot";
 import { fromStoredDomainValue, stableSerializableDomainValue, toStoredDomainValue } from "@/lib/db/domain-value-mapper";
 import { assertRecoveryContent } from "@/lib/operations/recovery-content";
+import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/operations/forecast-recovery";
 
 const id = z.instanceof(ObjectId); const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const common = { _id: id, userId: id, idempotencyKeyHash: hash, schemaVersion: z.literal(1) };
@@ -45,5 +46,41 @@ export function projectRecoveryFinancialSnapshot(input: Document): Document {
     }
     // Schema fidelity is not inputHash reconstruction, cross-record closure or permission to release.
     return input;
+  } catch { return fail(); }
+}
+
+/** Direct identity/ownership edges only, not historical arithmetic or transitive release proof. */
+export function inspectForecastRecoveryLinks(
+  snapshots: readonly Document[], forecasts: readonly Document[], scenarios: readonly Document[],
+) {
+  try {
+    const index = (rows: readonly Document[], project: (row: Document) => Document) => {
+      const entries = new Map<string, Document>();
+      for (const input of rows) {
+        const row = project(input); const key = row._id.toHexString();
+        if (entries.has(key)) return fail();
+        entries.set(key, row);
+      }
+      return entries;
+    };
+    const snapshotIndex = index(snapshots, projectRecoveryFinancialSnapshot);
+    const forecastIndex = index(forecasts, projectRecoveryForecast);
+    const scenarioIndex = index(scenarios, projectRecoveryForecastScenario);
+    let verifiedLinks = 0; let missingLinks = 0; let unreviewedIntelligence = 0;
+    const link = (row: Document, target: Document | undefined, kind?: string) => {
+      if (!target) { missingLinks++; return; }
+      if (!row.userId.equals(target.userId) || (kind !== undefined && target.kind !== kind)) return fail();
+      verifiedLinks++;
+    };
+    for (const row of snapshotIndex.values()) {
+      if (row.kind === "engine_result") link(row, snapshotIndex.get(row.sourceManifestId.toHexString()), "source_manifest");
+    }
+    for (const row of forecastIndex.values()) {
+      link(row, snapshotIndex.get(row.sourceSnapshotId.toHexString()), "engine_result");
+      if (row.intelligenceRunId !== null) unreviewedIntelligence++;
+    }
+    for (const row of scenarioIndex.values()) link(row, forecastIndex.get(row.forecastId.toHexString()));
+    return { releaseAllowed: false as const, policy: "forecast-recovery-links-v1" as const,
+      verifiedLinks, missingLinks, unreviewedIntelligence };
   } catch { return fail(); }
 }

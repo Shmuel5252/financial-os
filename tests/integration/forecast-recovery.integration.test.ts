@@ -12,6 +12,7 @@ import { createBackupPackage, openBackupPackage } from "@/lib/operations/backup-
 import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
 import { recoveryCollections } from "@/lib/operations/recovery-plan";
 import { beginDeletion, restorationSuppression } from "@/lib/operations/deletion-ledger";
+import { inspectForecastRecoveryLinks as inspect } from "@/lib/operations/financial-snapshot-recovery";
 
 const uri = process.env.MONGODB_TEST_URI;
 (uri ? describe : describe.skip)("real isolated forecast evidence recovery", () => {
@@ -43,6 +44,24 @@ const uri = process.env.MONGODB_TEST_URI;
       const forecasts = await source.database.collection("forecastSnapshots").find().sort({ _id: 1 }).toArray();
       const scenarios = await source.database.collection("forecastScenarios").find().sort({ _id: 1 }).toArray();
       const snapshots = await source.database.collection("financialSnapshots").find().sort({ _id: 1 }).toArray();
+      expect(inspect?.(snapshots, forecasts, scenarios)).toEqual({ releaseAllowed: false, policy: "forecast-recovery-links-v1", verifiedLinks: 6, missingLinks: 0, unreviewedIntelligence: 0 });
+      expect(inspect?.(snapshots.filter(row => row.kind !== "engine_result"), forecasts, scenarios))
+        .toEqual({ releaseAllowed: false, policy: "forecast-recovery-links-v1", verifiedLinks: 2, missingLinks: 2, unreviewedIntelligence: 0 });
+      expect(() => inspect?.([...snapshots, snapshots[0]!], forecasts, scenarios)).toThrow();
+      expect(() => inspect(snapshots, [...forecasts, forecasts[0]!], scenarios)).toThrow("Financial snapshot recovery requires review");
+      expect(() => inspect(snapshots, forecasts, [...scenarios, scenarios[0]!])).toThrow("Financial snapshot recovery requires review");
+      const manifestRow = snapshots.find(row => row.kind === "source_manifest")!;
+      expect(() => inspect(snapshots, [{ ...forecasts[0], sourceSnapshotId: manifestRow._id }], []))
+        .toThrow("Financial snapshot recovery requires review");
+      expect(inspect([], [], scenarios)).toEqual({ releaseAllowed: false, policy: "forecast-recovery-links-v1", verifiedLinks: 0, missingLinks: 2, unreviewedIntelligence: 0 });
+      const foreignScenario = BSON.deserialize(BSON.serialize(scenarios[0]!), { promoteLongs: false });
+      foreignScenario.userId = new ObjectId(); foreignScenario.auditTrail[0].actorUserId = foreignScenario.userId;
+      expect(() => inspect(snapshots, forecasts, [foreignScenario])).toThrow("Financial snapshot recovery requires review");
+      const wrongOwner = BSON.deserialize(BSON.serialize(forecasts[0]!), { promoteLongs: false });
+      wrongOwner.userId = new ObjectId(); wrongOwner.auditTrail[0].actorUserId = wrongOwner.userId;
+      expect(() => inspect?.(snapshots, [wrongOwner], [])).toThrow();
+      expect(inspect?.(snapshots, [{ ...forecasts[0], intelligenceRunId: new ObjectId() }], []))
+        .toEqual({ releaseAllowed: false, policy: "forecast-recovery-links-v1", verifiedLinks: 3, missingLinks: 0, unreviewedIntelligence: 1 });
       const before = BSON.serialize({ forecasts, scenarios, snapshots }); const key = { version: 1, material: randomBytes(32) };
       const records = { ...Object.fromEntries(recoveryCollections.map(name => [name, []])), authUsers: users, forecastSnapshots: forecasts, forecastScenarios: scenarios, financialSnapshots: snapshots };
       const artifact = createBackupPackage(records, initialRecoverySchemas, "a".repeat(64), key);
@@ -59,6 +78,9 @@ const uri = process.env.MONGODB_TEST_URI;
         .toEqual(BSON.serialize({ rows: snapshots.filter(row => row.userId.equals(users[0]!._id)) }));
       const survivingEngine = survivingSnapshots.find(row => row.kind === "engine_result")!;
       expect(survivingSnapshots.some(row => row.kind === "source_manifest" && row._id.equals(survivingEngine.sourceManifestId))).toBe(true);
+      expect(inspect?.(survivingSnapshots, opened.forecastSnapshots!.filter(row => !isSuppressed(row.userId.toHexString())),
+        opened.forecastScenarios!.filter(row => !isSuppressed(row.userId.toHexString()))))
+        .toEqual({ releaseAllowed: false, policy: "forecast-recovery-links-v1", verifiedLinks: 3, missingLinks: 0, unreviewedIntelligence: 0 });
       for (const name of ["forecastSnapshots", "forecastScenarios"]) {
         const surviving = opened[name]!.filter(row => !isSuppressed(row.userId.toHexString()));
         await target.database.collection(name).insertMany(surviving);
