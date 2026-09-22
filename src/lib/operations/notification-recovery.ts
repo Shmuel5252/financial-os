@@ -65,3 +65,55 @@ export function quarantineNotifications(rows: readonly Document[], authUsers: re
   return { releaseAllowed: false as const, preserved, evidence: { policy: "notification-quarantine-v1" as const,
     ledgerRevision: ledger.authoritativeRevision, evaluatedAt: ledger.now, excluded, replayDisabled } };
 }
+
+type NotificationRecoverySources = Readonly<{
+  budgetPeriods: readonly Document[]; forecastSnapshots: readonly Document[]; goalProgress: readonly Document[];
+}>;
+
+/** Reference-only inspection over trusted, schema-reviewed source collections in quarantine.
+ * Matching metadata does NOT prove trigger arithmetic, snapshot completeness or release eligibility.
+ * Missing/changed/unsaved sources remain unresolved; never substitute present-day financial truth.
+ */
+export function inspectNotificationRecoverySources(rows: readonly Document[], sources: NotificationRecoverySources) {
+  const invalid = (): never => { throw new Error("Notification source recovery requires review"); };
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/;
+  const text = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 200;
+  const validDate = (value: unknown): value is Date => value instanceof Date && Number.isFinite(value.getTime());
+  const index = new Map<string, { owner: string; version: string }>();
+  for (const [kind, documents] of [["budget", sources.budgetPeriods], ["forecast", sources.forecastSnapshots], ["goal_progress", sources.goalProgress]] as const) {
+    for (const source of documents) {
+      if (!(source._id instanceof ObjectId) || !(source.userId instanceof ObjectId)) return invalid();
+      const key = `${kind}:${source._id.toHexString()}`; if (index.has(key)) return invalid();
+      let version: string;
+      if (kind === "budget") {
+        if (!Number.isSafeInteger(source.version) || source.version < 1 || typeof source.calendarMonth !== "string" || !month.test(source.calendarMonth)) return invalid();
+        version = `${source.version}/${source.calendarMonth}`;
+      } else {
+        const engine = kind === "forecast" ? source.result?.engineVersion : source.engineVersion;
+        const policy = kind === "forecast" ? source.result?.policyVersion : source.policyVersion;
+        const at = kind === "forecast" ? source.calculatedAt : source.evaluatedAt;
+        if (!text(engine) || !text(policy) || !validDate(at)) return invalid();
+        version = [engine, policy, at.toISOString()].join("/");
+      }
+      index.set(key, { owner: source.userId.toHexString(), version });
+    }
+  }
+  const seen = new Set<string>(); let matched = 0;
+  const unresolved = { missing: 0, changedVersion: 0, unsavedBudget: 0 };
+  for (const input of rows) {
+    const row = projectRecoveryNotification(input); const id = row._id.toHexString();
+    if (seen.has(id)) return invalid(); seen.add(id);
+    if (row.sourceKind === "budget" && row.sourceReference.startsWith("period:")) {
+      const calendarMonth = row.sourceReference.slice(7);
+      if (!month.test(calendarMonth) || row.sourceVersion !== `0/${calendarMonth}`) return invalid();
+      unresolved.unsavedBudget++; continue;
+    }
+    if (!/^[a-f0-9]{24}$/.test(row.sourceReference)) return invalid();
+    const source = index.get(`${row.sourceKind}:${row.sourceReference}`);
+    if (!source) { unresolved.missing++; continue; }
+    if (source.owner !== row.userId.toHexString()) return invalid();
+    if (source.version !== row.sourceVersion) { unresolved.changedVersion++; continue; }
+    matched++;
+  }
+  return { releaseAllowed: false as const, policy: "notification-source-review-v1" as const, matched, unresolved };
+}

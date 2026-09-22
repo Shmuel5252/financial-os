@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 notification source evidence — 2026-09-22
+
+Continued from `eede165a2962d5b020205caed7f31fc97220b865`. Quarantine-only inspection now compares exact source kind/ID, owner and service version; missing, changed and unsaved-budget evidence remains unresolved. No historical financial reconstruction or release authorization. Four new tests; full non-external regression 511 passed / 107 files, one opt-in skip and unchanged six external/destructive exclusions; real local Mongo included. Type-check, zero-warning lint, production build, security scan (404 files, zero findings), index check (90/88/2), diff check and fresh dependency audit (zero vulnerabilities) passed. Independent review found no blocking issue in the bounded metadata-only scope. Full source schemas, trigger arithmetic and release fencing are not proved by this inspection. Next: strict source adapters, beginning with budget periods. Phase 18 remains unaccepted; no external mutation or Phase 19.
+
 ## Phase 18 notification replay quarantine — 2026-09-22
 
 Future planning documentation pushed separately at `34b853b375ad53b04fa96eac9fc01e7879bf8b06`, then resumed Phase 18 only. Notification artifact projection omits provider polling IDs; owner-scoped quarantine excludes erased users and disables all claimable retry/scheduling states while retaining terminal history. 507 tests passed / 106 files, one opt-in skip and unchanged six external/destructive exclusions; real local Mongo proves encrypted package/index roundtrip, no claimable restored jobs, no polling references, source preservation and owner isolation. Type-check/lint/build/security/index/diff/audit passed, zero vulnerabilities. Coverage 20/47 schema classes; no full recovery/Phase 18 acceptance. Next exact work: notification source/provenance verification (including unsaved budget references), then remaining adapters and release fencing. No Phase 19 or future-phase code.
