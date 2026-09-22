@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 immutable goal recovery evidence — 2026-09-22
+
+Continued from pushed clean `4712370ef7aec01ac4500aadbdb79afabf689148`. Goal definition/progress/receipt adapters reuse existing schemas and preserve exact BSON, manual-unverified versus verified status and idempotency evidence. Real local synthetic recovery verifies erased-owner filtering, surviving-owner reads, indexes, source non-mutation and retry without duplicate definitions. 534 tests / 113 files passed, one opt-in skip and unchanged six external/destructive exclusions. Type-check/lint/build/security/index/diff/audit passed; zero vulnerabilities. Independent review found no blocker; stronger nested/unsigned-money tests passed afterward. Runtime goal calculations/mappings are unchanged. 26/47 schemas supported; 21 still unsupported when nonempty. Next: financialSnapshots variants and dependency closure, not full restore release. Phase 18 remains unaccepted; no external change or Phase 19.
+
 ## Phase 18 forecast/scenario recovery evidence — 2026-09-22
 
 Continued from clean pushed `bec310cdcb2014c3041bc081b1c0c4df1b8e4fbf`. Strict adapters preserve operational forecast versus hypothetical scenario records, exact BSON, source references and owner audit. Real local synthetic repository/package/index test verifies two-user separation and current deletion filtering; no historical recalculation or complete-backup claim. 525 tests / 111 files passed, one opt-in skip and unchanged six external/destructive exclusions. Types/lint/build/security/index/diff/audit passed; zero vulnerabilities. Independent review had no blocking finding; stronger nested-evidence/cleanup tests passed afterward (7 focused tests plus type-check). 23/47 schemas supported; 24 remain fail-closed when nonempty. Next: goal evidence adapters and source closure. Phase 18 remains unaccepted; external state unchanged.

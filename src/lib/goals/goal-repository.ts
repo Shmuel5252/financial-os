@@ -109,6 +109,10 @@ const sourceReferenceSchema = z.object({
   version: z.number().int().min(1).nullable(),
 });
 
+// Share existing stored-domain contracts with offline recovery; runtime mapping is unchanged.
+export { resultSchema as storedGoalProgressResultSchema, reportedEvidenceSchema as storedGoalReportedEvidenceSchema,
+  metricFactSchema as storedGoalMetricFactSchema, sourceReferenceSchema as storedGoalSourceReferenceSchema };
+
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }

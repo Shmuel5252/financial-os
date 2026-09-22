@@ -15,6 +15,7 @@ import { projectRecoveryNotificationPreference } from "@/lib/operations/notifica
 import { projectRecoveryNotification } from "@/lib/operations/notification-recovery";
 import { projectRecoveryBudgetPeriod } from "@/lib/operations/budget-period-recovery";
 import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/operations/forecast-recovery";
+import { projectRecoveryGoalDefinition, projectRecoveryGoalProgress, projectRecoveryGoalReceipt } from "@/lib/operations/goal-recovery";
 
 const fail = (): never => { throw new Error("Recovery schema requires review"); };
 const manualSchema = z.object({ _id: z.instanceof(ObjectId), userId: z.instanceof(ObjectId),
@@ -45,6 +46,9 @@ export const initialRecoverySchemas: RecoverySchemas = {
   budgetPeriods: { version: "budget-period-v1", project: projectRecoveryBudgetPeriod },
   forecastSnapshots: { version: "forecast-snapshot-v1", project: projectRecoveryForecast },
   forecastScenarios: { version: "forecast-scenario-v1", project: projectRecoveryForecastScenario },
+  goalDefinitions: { version: "goal-definition-v1", project: projectRecoveryGoalDefinition },
+  goalProgress: { version: "goal-progress-v1", project: projectRecoveryGoalProgress },
+  goalCommandReceipts: { version: "goal-receipt-v1", project: projectRecoveryGoalReceipt },
   authUsers: { version: "auth-user-v1", project: row => { validate(authUserSchema, row); return row; } },
   profiles: { version: "profile-v1", project: row => { validate(storedProfileSchema.strict(), row); return row; } },
   ...Object.fromEntries(manualSectionSchema.options.map(section => [sectionCollections[section], {
