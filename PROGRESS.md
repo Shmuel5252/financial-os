@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 budget-period recovery evidence — 2026-09-22
+
+Source-inspection checkpoint `508362eac3104b57eb848403eaa1927ca85a1a14` was pushed clean/synchronized. Strict budget-period backup adapter now preserves exact BSON money, allocation/audit revision chains and closed evidence. Real local synthetic package recovery verifies open/updated/closed records, deletion suppression, owner isolation, exact money and unique indexes without altering source data. 518 tests / 109 files passed, one opt-in skip and unchanged six external/destructive exclusions; type-check/lint/build/security/index/diff/audit passed. Independent review had no blocking issue; strengthened chain tests passed afterward (7 focused tests and type-check). Schema coverage 21/47; 26 unsupported nonempty classes remain fail-closed. No complete financial recomputation, live recovery or Phase 18 acceptance. Next: forecast/goal source schemas. External state unchanged; Phase 19 unopened.
+
 ## Phase 18 notification source evidence — 2026-09-22
 
 Continued from `eede165a2962d5b020205caed7f31fc97220b865`. Quarantine-only inspection now compares exact source kind/ID, owner and service version; missing, changed and unsaved-budget evidence remains unresolved. No historical financial reconstruction or release authorization. Four new tests; full non-external regression 511 passed / 107 files, one opt-in skip and unchanged six external/destructive exclusions; real local Mongo included. Type-check, zero-warning lint, production build, security scan (404 files, zero findings), index check (90/88/2), diff check and fresh dependency audit (zero vulnerabilities) passed. Independent review found no blocking issue in the bounded metadata-only scope. Full source schemas, trigger arithmetic and release fencing are not proved by this inspection. Next: strict source adapters, beginning with budget periods. Phase 18 remains unaccepted; no external mutation or Phase 19.

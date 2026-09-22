@@ -13,6 +13,7 @@ import { projectRecoveryInvitation } from "@/lib/operations/invitation-recovery"
 import { projectRecoveryReport } from "@/lib/operations/report-recovery-schema";
 import { projectRecoveryNotificationPreference } from "@/lib/operations/notification-preference-recovery";
 import { projectRecoveryNotification } from "@/lib/operations/notification-recovery";
+import { projectRecoveryBudgetPeriod } from "@/lib/operations/budget-period-recovery";
 
 const fail = (): never => { throw new Error("Recovery schema requires review"); };
 const manualSchema = z.object({ _id: z.instanceof(ObjectId), userId: z.instanceof(ObjectId),
@@ -40,6 +41,7 @@ export const initialRecoverySchemas: RecoverySchemas = {
   financialReports: { version: "saved-report-v1", project: projectRecoveryReport },
   notificationPreferences: { version: "notification-preference-v1", project: projectRecoveryNotificationPreference },
   notifications: { version: "notification-filtered-v1", project: projectRecoveryNotification },
+  budgetPeriods: { version: "budget-period-v1", project: projectRecoveryBudgetPeriod },
   authUsers: { version: "auth-user-v1", project: row => { validate(authUserSchema, row); return row; } },
   profiles: { version: "profile-v1", project: row => { validate(storedProfileSchema.strict(), row); return row; } },
   ...Object.fromEntries(manualSectionSchema.options.map(section => [sectionCollections[section], {
