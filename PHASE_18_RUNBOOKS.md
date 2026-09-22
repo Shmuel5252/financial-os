@@ -2,6 +2,8 @@
 
 ## 2026-09-15 quarantine implementation supplement
 
+2026-09-22 evidence adapters: notification source matching reports missing/changed/unsaved references as unresolved and never releases data. Budget periods preserve strict stored allocation/audit history; forecast/scenario adapters preserve distinct truth classes, exact BSON and source IDs. These are artifact/schema checks, not historical recomputation, complete source closure or application release. Current deletion suppression and final independent ledger fence still apply. Unsupported populated classes fail closed. See PHASE_18_RECOVERY_IMPLEMENTATION.md for exact coverage and verification; do not infer full backup support from an isolated partial-collection rehearsal.
+
 Current implementation evidence is in PHASE_18_RECOVERY_IMPLEMENTATION.md. The statements below about earlier policy gates and primitive-only work are historical, not a claim that all later recovery work is complete.
 
 - Validate the full signed package and field adapters before using any restored rows. Saved report payload hashes are checked with the unchanged domain repository hash function; never recalculate a hash merely to accept altered evidence.

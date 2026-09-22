@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 forecast/scenario recovery evidence — 2026-09-22
+
+Continued from clean pushed `bec310cdcb2014c3041bc081b1c0c4df1b8e4fbf`. Strict adapters preserve operational forecast versus hypothetical scenario records, exact BSON, source references and owner audit. Real local synthetic repository/package/index test verifies two-user separation and current deletion filtering; no historical recalculation or complete-backup claim. 525 tests / 111 files passed, one opt-in skip and unchanged six external/destructive exclusions. Types/lint/build/security/index/diff/audit passed; zero vulnerabilities. Independent review had no blocking finding; stronger nested-evidence/cleanup tests passed afterward (7 focused tests plus type-check). 23/47 schemas supported; 24 remain fail-closed when nonempty. Next: goal evidence adapters and source closure. Phase 18 remains unaccepted; external state unchanged.
+
 ## Phase 18 budget-period recovery evidence — 2026-09-22
 
 Source-inspection checkpoint `508362eac3104b57eb848403eaa1927ca85a1a14` was pushed clean/synchronized. Strict budget-period backup adapter now preserves exact BSON money, allocation/audit revision chains and closed evidence. Real local synthetic package recovery verifies open/updated/closed records, deletion suppression, owner isolation, exact money and unique indexes without altering source data. 518 tests / 109 files passed, one opt-in skip and unchanged six external/destructive exclusions; type-check/lint/build/security/index/diff/audit passed. Independent review had no blocking issue; strengthened chain tests passed afterward (7 focused tests and type-check). Schema coverage 21/47; 26 unsupported nonempty classes remain fail-closed. No complete financial recomputation, live recovery or Phase 18 acceptance. Next: forecast/goal source schemas. External state unchanged; Phase 19 unopened.
