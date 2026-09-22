@@ -42,14 +42,23 @@ const uri = process.env.MONGODB_TEST_URI;
       }
       const forecasts = await source.database.collection("forecastSnapshots").find().sort({ _id: 1 }).toArray();
       const scenarios = await source.database.collection("forecastScenarios").find().sort({ _id: 1 }).toArray();
-      const before = BSON.serialize({ forecasts, scenarios }); const key = { version: 1, material: randomBytes(32) };
-      const records = { ...Object.fromEntries(recoveryCollections.map(name => [name, []])), authUsers: users, forecastSnapshots: forecasts, forecastScenarios: scenarios };
+      const snapshots = await source.database.collection("financialSnapshots").find().sort({ _id: 1 }).toArray();
+      const before = BSON.serialize({ forecasts, scenarios, snapshots }); const key = { version: 1, material: randomBytes(32) };
+      const records = { ...Object.fromEntries(recoveryCollections.map(name => [name, []])), authUsers: users, forecastSnapshots: forecasts, forecastScenarios: scenarios, financialSnapshots: snapshots };
       const artifact = createBackupPackage(records, initialRecoverySchemas, "a".repeat(64), key);
       expect(artifact.manifest.releaseAllowed).toBe(false);
       const opened = openBackupPackage(artifact, initialRecoverySchemas, "a".repeat(64), key); const now = Date.now();
       const { isSuppressed } = restorationSuppression({ environment: "isolated-test", keys: [key], now, ledgerReadAt: now, maxLedgerAgeMs: 0,
         authoritativeRevision: 1, suppliedRevision: 1, receipts: [beginDeletion(erased, "isolated-test", randomUUID(), now, key)] });
       const restored = forecastRepositoryForDatabase(target.database); await restored.ensureIndexes();
+      await financialSnapshotRepositoryForDatabase(target.database).ensureIndexes();
+      await financialEngineSnapshotRepositoryForDatabase(target.database).ensureIndexes();
+      const survivingSnapshots = opened.financialSnapshots!.filter(row => !isSuppressed(row.userId.toHexString()));
+      await target.database.collection("financialSnapshots").insertMany(survivingSnapshots);
+      expect(BSON.serialize({ rows: await target.database.collection("financialSnapshots").find().sort({ _id: 1 }).toArray() }))
+        .toEqual(BSON.serialize({ rows: snapshots.filter(row => row.userId.equals(users[0]!._id)) }));
+      const survivingEngine = survivingSnapshots.find(row => row.kind === "engine_result")!;
+      expect(survivingSnapshots.some(row => row.kind === "source_manifest" && row._id.equals(survivingEngine.sourceManifestId))).toBe(true);
       for (const name of ["forecastSnapshots", "forecastScenarios"]) {
         const surviving = opened[name]!.filter(row => !isSuppressed(row.userId.toHexString()));
         await target.database.collection(name).insertMany(surviving);
@@ -62,7 +71,8 @@ const uri = process.env.MONGODB_TEST_URI;
       expect(await restored.listForecastsForActor(erased)).toEqual([]); expect(await restored.listScenariosForActor(erased)).toEqual([]);
       expect(await restored.findForecastForActor(erased, forecasts[0]!._id.toHexString())).toBeNull();
       expect(BSON.serialize({ forecasts: await source.database.collection("forecastSnapshots").find().sort({ _id: 1 }).toArray(),
-        scenarios: await source.database.collection("forecastScenarios").find().sort({ _id: 1 }).toArray() })).toEqual(before);
+        scenarios: await source.database.collection("forecastScenarios").find().sort({ _id: 1 }).toArray(),
+        snapshots: await source.database.collection("financialSnapshots").find().sort({ _id: 1 }).toArray() })).toEqual(before);
     } finally { try { await target?.dispose(); } finally { await source.dispose(); } }
   }, 30000);
 });
