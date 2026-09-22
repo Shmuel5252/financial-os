@@ -9,6 +9,7 @@ import { createBackupPackage, openBackupPackage } from "@/lib/operations/backup-
 import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
 import { recoveryCollections } from "@/lib/operations/recovery-plan";
 import { beginDeletion, restorationSuppression } from "@/lib/operations/deletion-ledger";
+import { inspectGoalRecoveryLinks } from "@/lib/operations/goal-recovery";
 
 const uri = process.env.MONGODB_TEST_URI;
 (uri ? describe : describe.skip)("real isolated goal evidence recovery", () => {
@@ -36,6 +37,9 @@ const uri = process.env.MONGODB_TEST_URI;
       }
       const names = ["goalDefinitions", "goalProgress", "goalCommandReceipts"];
       const rows = Object.fromEntries(await Promise.all(names.map(async name => [name, await source.database.collection(name).find().sort({ _id: 1 }).toArray()] as const)));
+      expect(inspectGoalRecoveryLinks(rows.goalDefinitions!, rows.goalProgress!, rows.goalCommandReceipts!))
+        .toEqual({ policy: "goal-recovery-links-v1", releaseAllowed: false, verifiedLinks: 6, missingLinks: 0,
+          unreviewedSourceReferences: 2, unreviewedDefinitionReceipts: 2 });
       const before = BSON.serialize(rows); const key = { version: 1, material: randomBytes(32) };
       const records = { ...Object.fromEntries(recoveryCollections.map(name => [name, []])), authUsers: owners.map(_id => ({ _id })), ...rows };
       const artifact = createBackupPackage(records, initialRecoverySchemas, "a".repeat(64), key); expect(artifact.manifest.releaseAllowed).toBe(false);
@@ -51,6 +55,11 @@ const uri = process.env.MONGODB_TEST_URI;
         await expect(target.database.collection(name).insertOne({ ...surviving[0], _id: new ObjectId() })).rejects.toThrow();
       }
       const evidence = await restored.findProgressByIdempotencyKeyForActor(actor, progressReceiptKey);
+      const restoredDatabase = target.database;
+      const survivingRows = Object.fromEntries(await Promise.all(names.map(async name => [name, await restoredDatabase.collection(name).find().toArray()] as const)));
+      expect(inspectGoalRecoveryLinks(survivingRows.goalDefinitions!, survivingRows.goalProgress!, survivingRows.goalCommandReceipts!))
+        .toEqual({ policy: "goal-recovery-links-v1", releaseAllowed: false, verifiedLinks: 3, missingLinks: 0,
+          unreviewedSourceReferences: 1, unreviewedDefinitionReceipts: 1 });
       expect(evidence?.result.verification).toBe("manual_unverified"); expect(evidence?.result.targetValue.amountMinor).toBe(9007199254740993n);
       expect(await restored.findProgressByIdempotencyKeyForActor(erased, progressReceiptKey)).toBeNull();
       expect(await restored.findLatestDefinitionForActor(erased, goalId)).toBeNull();

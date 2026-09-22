@@ -5,6 +5,7 @@ import { money } from "@/lib/domain/money/money";
 import { GOAL_ENGINE_VERSION, GOAL_POLICY_VERSION } from "@/lib/goals/goal";
 import { toStoredDomainValue } from "@/lib/db/domain-value-mapper";
 import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
+import { inspectGoalRecoveryLinks as inspect } from "@/lib/operations/goal-recovery";
 
 const names = ["goalDefinitions", "goalProgress", "goalCommandReceipts"] as const;
 function fixtures(): Record<typeof names[number], Document> {
@@ -58,5 +59,35 @@ describe("goal recovery nested evidence", () => {
     expect(() => project({ ...row, sourceReferences: [{ ...row.sourceReferences[0], unexpected: true }] })).toThrow();
     row.result.currentValue.amountMinor = 1;
     expect(() => project(row)).toThrow();
+  });
+});
+
+describe("goal recovery direct links", () => {
+  it("preserves evidence and returns only bounded direct-link assertions", () => {
+    const rows = fixtures(); const { goalDefinitions: d, goalProgress: p, goalCommandReceipts: r } = rows;
+    const before = BSON.serialize(rows);
+    expect(inspect([d], [p], [r])).toEqual({ policy: "goal-recovery-links-v1", releaseAllowed: false,
+      verifiedLinks: 2, missingLinks: 0, unreviewedSourceReferences: 1, unreviewedDefinitionReceipts: 1 });
+    expect(BSON.serialize(rows)).toEqual(before);
+    expect(inspect([], [p], [r])).toEqual({ policy: "goal-recovery-links-v1", releaseAllowed: false,
+      verifiedLinks: 0, missingLinks: 2, unreviewedSourceReferences: 1, unreviewedDefinitionReceipts: 1 });
+  });
+  it("rejects foreign ownership, mismatched goal/version and duplicate identities", () => {
+    const { goalDefinitions: d, goalProgress: p, goalCommandReceipts: r } = fixtures();
+    for (const change of [{ userId: new ObjectId() }, { goalId: new ObjectId() }, { goalVersion: 2 }]) {
+      expect(() => inspect([d], [{ ...p, ...change }], [])).toThrow("Goal recovery requires review");
+    }
+    expect(() => inspect([d], [], [{ ...r, userId: new ObjectId() }])).toThrow("Goal recovery requires review");
+    expect(() => inspect([d, d], [], [])).toThrow("Goal recovery requires review");
+    expect(() => inspect([d], [p, p], [])).toThrow("Goal recovery requires review");
+    expect(() => inspect([d], [], [r, r])).toThrow("Goal recovery requires review");
+  });
+  it("verifies progress receipt evidence hash without replaying its command", () => {
+    const { goalDefinitions: d, goalProgress: p, goalCommandReceipts: r } = fixtures();
+    const receipt = { ...r, commandKind: "progress", recordId: p._id, payloadHash: p.evidenceHash };
+    expect(inspect([d], [p], [receipt])).toEqual({ policy: "goal-recovery-links-v1", releaseAllowed: false,
+      verifiedLinks: 2, missingLinks: 0, unreviewedSourceReferences: 1, unreviewedDefinitionReceipts: 0 });
+    expect(() => inspect([d], [p], [{ ...receipt, payloadHash: "a".repeat(64) }])).toThrow("Goal recovery requires review");
+    expect(() => inspect([], [{ ...p, unexpected: "synthetic-private-marker" }], [])).toThrow("Goal recovery requires review");
   });
 });

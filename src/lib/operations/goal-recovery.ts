@@ -57,3 +57,41 @@ export function projectRecoveryGoalProgress(input: Document): Document {
 export function projectRecoveryGoalReceipt(input: Document): Document {
   try { assertRecoveryContent(input); receiptSchema.parse(input); return input; } catch { return fail(); }
 }
+
+/** Internal direct-edge inspection, never command replay or complete historical evidence proof. */
+export function inspectGoalRecoveryLinks(
+  definitions: readonly Document[], progress: readonly Document[], receipts: readonly Document[],
+) {
+  try {
+    const index = (rows: readonly Document[], project: (row: Document) => Document) => {
+      const entries = new Map<string, Document>();
+      for (const input of rows) {
+        const row = project(input); const key = row._id.toHexString();
+        if (entries.has(key)) return fail();
+        entries.set(key, row);
+      }
+      return entries;
+    };
+    const definitionIndex = index(definitions, projectRecoveryGoalDefinition);
+    const progressIndex = index(progress, projectRecoveryGoalProgress);
+    const receiptIndex = index(receipts, projectRecoveryGoalReceipt);
+    let verifiedLinks = 0; let missingLinks = 0; let unreviewedSourceReferences = 0; let unreviewedDefinitionReceipts = 0;
+    for (const row of progressIndex.values()) {
+      unreviewedSourceReferences += row.sourceReferences.length;
+      const target = definitionIndex.get(row.goalDefinitionId.toHexString());
+      if (!target) { missingLinks++; continue; }
+      if (!target.userId.equals(row.userId) || !target.goalId.equals(row.goalId) || target.version !== row.goalVersion) return fail();
+      verifiedLinks++;
+    }
+    for (const row of receiptIndex.values()) {
+      // Definition request hashes include original expected-version input unavailable in the receipt.
+      if (row.commandKind === "definition") unreviewedDefinitionReceipts++;
+      const target = (row.commandKind === "definition" ? definitionIndex : progressIndex).get(row.recordId.toHexString());
+      if (!target) { missingLinks++; continue; }
+      if (!target.userId.equals(row.userId) || (row.commandKind === "progress" && row.payloadHash !== target.evidenceHash)) return fail();
+      verifiedLinks++;
+    }
+    return { policy: "goal-recovery-links-v1" as const, releaseAllowed: false as const,
+      verifiedLinks, missingLinks, unreviewedSourceReferences, unreviewedDefinitionReceipts };
+  } catch { return fail(); }
+}
