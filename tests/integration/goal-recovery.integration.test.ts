@@ -10,6 +10,8 @@ import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
 import { recoveryCollections } from "@/lib/operations/recovery-plan";
 import { beginDeletion, restorationSuppression } from "@/lib/operations/deletion-ledger";
 import { inspectGoalRecoveryLinks } from "@/lib/operations/goal-recovery";
+import { inspectGoalRecoverySources } from "@/lib/operations/goal-source-recovery";
+import { manualRecordRepositoryForDatabase } from "@/lib/onboarding/manual-record-repository";
 
 const uri = process.env.MONGODB_TEST_URI;
 (uri ? describe : describe.skip)("real isolated goal evidence recovery", () => {
@@ -18,14 +20,19 @@ const uri = process.env.MONGODB_TEST_URI;
     let target: Awaited<ReturnType<typeof createIsolatedRecoveryTarget>> | undefined;
     try {
       target = await createIsolatedRecoveryTarget(uri!);
-      const owners = [new ObjectId(), new ObjectId()]; const goalId = new ObjectId().toHexString(); const at = new Date("2026-09-22T00:00:00Z");
+      const owners = [new ObjectId(), new ObjectId()]; const at = new Date("2026-09-22T00:00:00Z");
+      const goalIds = new Map<string, string>();
       const actor = { kind: "user" as const, userId: owners[0]!.toHexString() }; const erased = { kind: "user" as const, userId: owners[1]!.toHexString() };
       const repo = goalRepositoryForDatabase(source.database); await repo.ensureIndexes();
+      const canonical = manualRecordRepositoryForDatabase(source.database, "goals"); await canonical.ensureIndexes();
       const zero = money(0n, "ILS"); const high = money(9007199254740993n, "ILS");
       const configuration = { kind: "custom" as const, direction: "increase" as const, metricLabel: "Synthetic", targetAmount: high };
       const reportedEvidence = { capturedAt: at, currentValue: zero, startingValue: zero, targetAmount: high, goalRecordVersion: 1 };
       const receiptKey = randomUUID(); const progressReceiptKey = randomUUID();
       for (const user of [actor, erased]) {
+        const goal = await canonical.createForActor(user, { title: "Synthetic", type: "custom", priority: 1, targetDate: null,
+          currentValue: zero, startingValue: zero, targetAmount: high }, randomUUID());
+        const goalId = goal.id; goalIds.set(user.userId, goalId);
         const definition = await repo.createDefinitionVersionForActor(user, { configuration, expectedDefinitionVersion: null, goalId, reportedEvidence, targetDate: null }, randomUUID());
         await repo.createDefinitionVersionForActor(user, { configuration, expectedDefinitionVersion: 1, goalId, reportedEvidence, targetDate: null }, receiptKey);
         const progress = { evaluatedAt: at, evaluationDate: "2026-09-22", evidenceHash: "a".repeat(64), goalDefinitionId: definition.id, goalId,
@@ -35,11 +42,15 @@ const uri = process.env.MONGODB_TEST_URI;
           sourceReferences: [{ id: goalId, kind: "goal_record" as const, version: 1 }], timeZone: "Asia/Jerusalem" };
         await repo.createProgressForActor(user, progress, randomUUID()); await repo.createProgressForActor(user, progress, progressReceiptKey);
       }
-      const names = ["goalDefinitions", "goalProgress", "goalCommandReceipts"];
+      const goalId = goalIds.get(actor.userId)!;
+      const names = ["goalDefinitions", "goalProgress", "goalCommandReceipts", "goals"];
       const rows = Object.fromEntries(await Promise.all(names.map(async name => [name, await source.database.collection(name).find().sort({ _id: 1 }).toArray()] as const)));
       expect(inspectGoalRecoveryLinks(rows.goalDefinitions!, rows.goalProgress!, rows.goalCommandReceipts!))
         .toEqual({ policy: "goal-recovery-links-v1", releaseAllowed: false, verifiedLinks: 6, missingLinks: 0,
           unreviewedSourceReferences: 2, unreviewedDefinitionReceipts: 2 });
+      expect(inspectGoalRecoverySources(rows.goalProgress!, { goals: rows.goals! }))
+        .toEqual({ policy: "goal-recovery-sources-v1", releaseAllowed: false, matched: 2,
+          unresolved: { missing: 0, changed: 0, inactive: 0, unversioned: 0, ambiguous: 0 } });
       const before = BSON.serialize(rows); const key = { version: 1, material: randomBytes(32) };
       const records = { ...Object.fromEntries(recoveryCollections.map(name => [name, []])), authUsers: owners.map(_id => ({ _id })), ...rows };
       const artifact = createBackupPackage(records, initialRecoverySchemas, "a".repeat(64), key); expect(artifact.manifest.releaseAllowed).toBe(false);
@@ -47,6 +58,7 @@ const uri = process.env.MONGODB_TEST_URI;
       const { isSuppressed } = restorationSuppression({ environment: "isolated-test", keys: [key], now, ledgerReadAt: now, maxLedgerAgeMs: 0,
         authoritativeRevision: 1, suppliedRevision: 1, receipts: [beginDeletion(erased, "isolated-test", randomUUID(), now, key)] });
       const restored = goalRepositoryForDatabase(target.database); await restored.ensureIndexes();
+      await manualRecordRepositoryForDatabase(target.database, "goals").ensureIndexes();
       for (const name of names) {
         const surviving = opened[name]!.filter(row => !isSuppressed(row.userId.toHexString()));
         await target.database.collection(name).insertMany(surviving);
@@ -60,6 +72,9 @@ const uri = process.env.MONGODB_TEST_URI;
       expect(inspectGoalRecoveryLinks(survivingRows.goalDefinitions!, survivingRows.goalProgress!, survivingRows.goalCommandReceipts!))
         .toEqual({ policy: "goal-recovery-links-v1", releaseAllowed: false, verifiedLinks: 3, missingLinks: 0,
           unreviewedSourceReferences: 1, unreviewedDefinitionReceipts: 1 });
+      expect(inspectGoalRecoverySources(survivingRows.goalProgress!, { goals: survivingRows.goals! }))
+        .toEqual({ policy: "goal-recovery-sources-v1", releaseAllowed: false, matched: 1,
+          unresolved: { missing: 0, changed: 0, inactive: 0, unversioned: 0, ambiguous: 0 } });
       expect(evidence?.result.verification).toBe("manual_unverified"); expect(evidence?.result.targetValue.amountMinor).toBe(9007199254740993n);
       expect(await restored.findProgressByIdempotencyKeyForActor(erased, progressReceiptKey)).toBeNull();
       expect(await restored.findLatestDefinitionForActor(erased, goalId)).toBeNull();

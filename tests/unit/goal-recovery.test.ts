@@ -1,11 +1,13 @@
 import { BSON, Long, ObjectId, type Document } from "mongodb";
 import { describe, expect, it } from "vitest";
 import { calculateGoalProgress } from "@/lib/domain/goals/goal-engine";
+import { calculateFinancialEngine } from "@/lib/domain/financial-engine/financial-engine";
 import { money } from "@/lib/domain/money/money";
 import { GOAL_ENGINE_VERSION, GOAL_POLICY_VERSION } from "@/lib/goals/goal";
 import { toStoredDomainValue } from "@/lib/db/domain-value-mapper";
 import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
 import { inspectGoalRecoveryLinks as inspect } from "@/lib/operations/goal-recovery";
+import { inspectGoalRecoverySources as inspectSources } from "@/lib/operations/goal-source-recovery";
 
 const names = ["goalDefinitions", "goalProgress", "goalCommandReceipts"] as const;
 function fixtures(): Record<typeof names[number], Document> {
@@ -89,5 +91,71 @@ describe("goal recovery direct links", () => {
       verifiedLinks: 2, missingLinks: 0, unreviewedSourceReferences: 1, unreviewedDefinitionReceipts: 0 });
     expect(() => inspect([d], [p], [{ ...receipt, payloadHash: "a".repeat(64) }])).toThrow("Goal recovery requires review");
     expect(() => inspect([], [{ ...p, unexpected: "synthetic-private-marker" }], [])).toThrow("Goal recovery requires review");
+  });
+});
+
+describe("goal recovery source metadata", () => {
+  function sourceFixture() {
+    const { goalDefinitions: d, goalProgress: p } = fixtures(); const evidence = d.reportedEvidence;
+    const row: Document = { _id: p.goalId, userId: p.userId, version: 1, schemaVersion: 2, createdAt: d.createdAt, updatedAt: d.createdAt, deletedAt: null,
+      source: { kind: "manual" }, auditTrail: [], fields: { title: "Synthetic", priority: 1, targetDate: null, type: "custom",
+        currentValue: evidence.currentValue, startingValue: evidence.startingValue, targetAmount: evidence.targetAmount } };
+    return { p, row };
+  }
+  it("matches an owner/versioned goal source without authorizing release", () => {
+    const { p, row } = sourceFixture();
+    expect(inspectSources([p], { goals: [row] })).toEqual({ policy: "goal-recovery-sources-v1", releaseAllowed: false, matched: 1,
+      unresolved: { missing: 0, changed: 0, inactive: 0, unversioned: 0, ambiguous: 0 } });
+  });
+  it("keeps absent/changed/inactive and unversioned activity evidence unresolved", () => {
+    const { p, row } = sourceFixture();
+    for (const [progress, records, key] of [
+      [p, {}, "missing"], [p, { goals: [{ ...row, version: 2 }] }, "changed"],
+      [p, { goals: [{ ...row, deletedAt: row.updatedAt }] }, "inactive"],
+      [{ ...p, sourceReferences: [{ ...p.sourceReferences[0], kind: "manual_record", version: null }] }, { goals: [row] }, "unversioned"],
+    ] as const) {
+      expect(inspectSources([progress], records)).toEqual({ policy: "goal-recovery-sources-v1", releaseAllowed: false, matched: 0,
+        unresolved: { missing: 0, changed: 0, inactive: 0, unversioned: 0, ambiguous: 0, [key]: 1 } });
+    }
+  });
+  it("rejects foreign and unrelated goal sources and malformed/unreviewed inventories", () => {
+    const { p, row } = sourceFixture();
+    expect(() => inspectSources([p], { goals: [{ ...row, userId: new ObjectId() }] })).toThrow("Goal source recovery requires review");
+    const otherId = new ObjectId();
+    expect(() => inspectSources([{ ...p, sourceReferences: [{ ...p.sourceReferences[0], id: otherId.toHexString() }] }],
+      { goals: [{ ...row, _id: otherId }] })).toThrow("Goal source recovery requires review");
+    expect(() => inspectSources([p], { unreviewed: [] })).toThrow("Goal source recovery requires review");
+    expect(() => inspectSources([p], { goals: [row, row] })).toThrow("Goal source recovery requires review");
+    expect(() => inspectSources([p, p], {})).toThrow("Goal source recovery requires review");
+  });
+  it("does not choose among multiple manual collections with the same external reference shape", () => {
+    const { p, row } = sourceFixture();
+    const account = { ...row, fields: { name: "Synthetic", type: "bank", balance: row.fields.currentValue } };
+    const progress = { ...p, sourceReferences: [{ ...p.sourceReferences[0], kind: "manual_record" }] };
+    expect(inspectSources([progress], { goals: [row], accounts: [account] })).toEqual({ policy: "goal-recovery-sources-v1", releaseAllowed: false, matched: 0,
+      unresolved: { missing: 0, changed: 0, inactive: 0, unversioned: 0, ambiguous: 1 } });
+  });
+  it("checks budget revisions and immutable engine kind without claiming calculation closure", () => {
+    const { p, row } = sourceFixture(); const at = row.createdAt; const userId = row.userId;
+    const budget: Document = { _id: new ObjectId(), userId, allocations: [], carryIn: [], calendarMonth: "2026-09", currency: "ILS",
+      closedAt: null, closingSnapshot: null, createdAt: at, updatedAt: at, status: "open", version: 1,
+      auditTrail: [{ action: "created", actorUserId: userId, allocationsAfter: [], allocationsBefore: null, at, revision: 1 }] };
+    const zero = money(0n, "ILS");
+    const result = calculateFinancialEngine({ accountBalance: zero, availableCash: zero, actualMonthlyExpenses: zero, actualMonthlyIncome: zero,
+      asOf: at.toISOString(), creditLimit: zero, creditUsed: zero, currency: "ILS", debtBalance: zero, events: [], horizonDays: 30,
+      monthlyConfirmedIncomeBasis: [], safetyMargin: { amount: zero, kind: "fixed" }, savingsBalance: zero, timeZone: "Asia/Jerusalem" });
+    const engine: Document = { _id: new ObjectId(), userId, schemaVersion: 1, idempotencyKeyHash: "a".repeat(64), kind: "engine_result",
+      calculatedAt: at, engineVersion: result.engineVersion, policyVersion: result.policyVersion, inputHash: "b".repeat(64), sourceManifestId: new ObjectId(), result: toStoredDomainValue(result),
+      auditTrail: [{ action: "calculated", actorUserId: userId, at, changedFields: ["inputHash", "result", "sourceManifestId"], revision: 1, source: "financial_engine" }] };
+    const progress = { ...p, sourceReferences: [{ kind: "budget_period", id: budget._id.toHexString(), version: 1 },
+      { kind: "engine_snapshot", id: engine._id.toHexString(), version: null }] };
+    const before = BSON.serialize({ budget, engine, progress });
+    expect(inspectSources([progress], { budgetPeriods: [budget], financialSnapshots: [engine] })).toEqual({ policy: "goal-recovery-sources-v1", releaseAllowed: false, matched: 2,
+      unresolved: { missing: 0, changed: 0, inactive: 0, unversioned: 0, ambiguous: 0 } });
+    expect(BSON.serialize({ budget, engine, progress })).toEqual(before);
+    expect(() => inspectSources([{ ...p, sourceReferences: [{ kind: "engine_snapshot", id: engine._id.toHexString(), version: 1 }] }],
+      { financialSnapshots: [engine] })).toThrow("Goal source recovery requires review");
+    expect(() => inspectSources([{ ...p, sourceReferences: [{ kind: "engine_snapshot", id: engine._id.toHexString(), version: 1 }] }],
+      {})).toThrow("Goal source recovery requires review");
   });
 });
