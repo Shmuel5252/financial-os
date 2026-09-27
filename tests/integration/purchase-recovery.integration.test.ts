@@ -14,6 +14,8 @@ import { recoveryCollections } from "@/lib/operations/recovery-plan";
 import { beginDeletion, restorationSuppression } from "@/lib/operations/deletion-ledger";
 import { fromStoredDomainValue } from "@/lib/db/domain-value-mapper";
 import { purchaseSimulationEvaluationDomainSchema, purchaseSimulationParametersDomainSchema } from "@/lib/purchase-simulations/purchase-simulation";
+import * as recovery from "@/lib/operations/purchase-recovery";
+import { budgetRepositoryForDatabase } from "@/lib/budgets/budget-repository";
 
 const uri = process.env.MONGODB_TEST_URI;
 (uri ? describe : describe.skip)("real isolated saved purchase simulation recovery", () => {
@@ -26,6 +28,7 @@ const uri = process.env.MONGODB_TEST_URI;
       const manifests = financialSnapshotRepositoryForDatabase(source.database);
       const engines = financialEngineSnapshotRepositoryForDatabase(source.database);
       const simulations = purchaseSimulationRepositoryForDatabase(source.database);
+      const budgets = budgetRepositoryForDatabase(source.database); await budgets.ensureIndexes();
       await manifests.ensureIndexes(); await engines.ensureIndexes(); await simulations.ensureIndexes();
       const zero = money(0n, "ILS"); const balance = money(9007199254740993n, "ILS");
       const engine = calculateFinancialEngine({ accountBalance: balance, availableCash: balance, actualMonthlyExpenses: zero,
@@ -35,26 +38,33 @@ const uri = process.env.MONGODB_TEST_URI;
       for (const actor of actors) {
         const manifest = await manifests.createForActor(actor, "ILS", [], randomUUID());
         const baseline = await engines.createForActor(actor, "a".repeat(64), engine, manifest.id, randomUUID());
+        const period = await budgets.savePeriodForActor(actor, { allocations: [], carryIn: [], calendarMonth: "2026-09", currency: "ILS", expectedVersion: null });
         const input = { charges: [{ amount: money(1n, "ILS"), kind: "fee" as const, label: "Synthetic fee",
           provenance: { kind: "user_reported" as const, note: null } }], inputMode: "installments" as const, installmentCount: 3,
           installmentFrequency: "monthly" as const, proposedDate: "2026-09-01", sourceSnapshotId: baseline.id, totalPurchasePrice: money(100n, "ILS") };
         const result = calculatePurchaseSimulation({ ...input, baseline: baseline.result, evaluationHorizonDays: 120, saferDateSearchDays: 90 });
-        await simulations.saveForActor(actor, input, { budgetPeriodReference: null, dataFreshness: "STALE", freshnessReasons: ["new_calendar_day"],
+        await simulations.saveForActor(actor, input, { budgetPeriodReference: { id: period.id, calendarMonth: period.calendarMonth, version: period.version }, dataFreshness: "STALE", freshnessReasons: ["new_calendar_day"],
           result, timeZone: "Asia/Jerusalem", sourceSnapshot: { id: baseline.id, calculatedAt: baseline.calculatedAt, engineVersion: engine.engineVersion,
             policyVersion: engine.policyVersion, inputHash: baseline.inputHash, sourceManifestId: manifest.id } }, { idempotencyKey: retryKey, name: "Synthetic simulation", note: null });
       }
       const records: Record<string, Document[]> = Object.fromEntries(recoveryCollections.map(name => [name, []]));
-      const names = ["financialSnapshots", "purchaseSimulations"];
+      const names = ["financialSnapshots", "budgetPeriods", "purchaseSimulations"];
       for (const name of names) records[name] = await source.database.collection(name).find().sort({ _id: 1 }).toArray();
       const key = { version: 1, material: randomBytes(32) };
       const pack = createBackupPackage(records, initialRecoverySchemas, "a".repeat(64), key);
       expect(pack.manifest.releaseAllowed).toBe(false);
       const opened = openBackupPackage(pack, initialRecoverySchemas, "a".repeat(64), key); const now = Date.now();
+      const inspect = recovery.inspectPurchaseRecoveryLinks;
+      expect(inspect?.(opened.purchaseSimulations!, opened.financialSnapshots!, opened.budgetPeriods!)).toEqual({ policy: "purchase-recovery-links-v1",
+        releaseAllowed: false, matched: 4, unresolved: { missing: 0, changed: 0, historicalEvaluations: 2 } });
+      expect(inspect?.(opened.purchaseSimulations!, [], opened.budgetPeriods!)).toEqual({ policy: "purchase-recovery-links-v1",
+        releaseAllowed: false, matched: 2, unresolved: { missing: 2, changed: 0, historicalEvaluations: 2 } });
       const { isSuppressed } = restorationSuppression({ environment: "isolated-test", keys: [key], now, ledgerReadAt: now, maxLedgerAgeMs: 0,
         authoritativeRevision: 1, suppliedRevision: 1, receipts: [beginDeletion(actors[0]!, "isolated-test", randomUUID(), now, key)] });
       const restored = purchaseSimulationRepositoryForDatabase(target.database); await restored.ensureIndexes();
       await financialSnapshotRepositoryForDatabase(target.database).ensureIndexes();
       await financialEngineSnapshotRepositoryForDatabase(target.database).ensureIndexes();
+      await budgetRepositoryForDatabase(target.database).ensureIndexes();
       for (const name of names) {
         const survivors = opened[name]!.filter(row => !isSuppressed(row.userId.toHexString()));
         await target.database.collection(name).insertMany(survivors);
@@ -64,6 +74,19 @@ const uri = process.env.MONGODB_TEST_URI;
         expect(BSON.serialize({ rows: await source.database.collection(name).find().sort({ _id: 1 }).toArray() })).toEqual(BSON.serialize({ rows: records[name] }));
       }
       const row = (await target.database.collection("purchaseSimulations").findOne())!;
+      const snapshots = await target.database.collection("financialSnapshots").find().toArray();
+      const periods = await target.database.collection("budgetPeriods").find().toArray();
+      expect(inspect?.([row], snapshots, periods)).toEqual({ policy: "purchase-recovery-links-v1", releaseAllowed: false,
+        matched: 2, unresolved: { missing: 0, changed: 0, historicalEvaluations: 1 } });
+      const changed = BSON.deserialize(BSON.serialize(row), { promoteLongs: false });
+      changed.evaluation.budgetPeriodReference.version++;
+      expect(inspect?.([changed], snapshots, periods)).toEqual({ policy: "purchase-recovery-links-v1", releaseAllowed: false,
+        matched: 1, unresolved: { missing: 0, changed: 1, historicalEvaluations: 1 } });
+      const foreign = BSON.deserialize(BSON.serialize(row), { promoteLongs: false });
+      foreign.userId = new ObjectId(); foreign.auditTrail[0].actorUserId = foreign.userId;
+      expect(() => inspect?.([foreign], snapshots, periods)).toThrow();
+      expect(() => inspect?.([row, row], snapshots, periods)).toThrow();
+      expect(() => inspect?.([row, { ...row, _id: new ObjectId() }], snapshots, periods)).toThrow();
       expect(row.evaluation.result.openingConfirmedBalance.amountMinor).toBeInstanceOf(Long);
       expect(row.evaluation.result.openingConfirmedBalance.amountMinor.toString()).toBe("9007199254740993");
       expect(await restored.findForActor(actors[0]!, row._id.toHexString())).toBeNull();

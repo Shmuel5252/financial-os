@@ -6,6 +6,8 @@ import { purchaseSimulationParametersDomainSchema, purchaseSimulationEvaluationD
 import { generateInstallmentSchedule } from "@/lib/domain/purchase-simulations/purchase-simulation-engine";
 import { fromStoredDomainValue, toStoredDomainValue, stableSerializableDomainValue } from "@/lib/db/domain-value-mapper";
 import { assertRecoveryContent } from "@/lib/operations/recovery-content";
+import { projectRecoveryFinancialSnapshot } from "@/lib/operations/financial-snapshot-recovery";
+import { projectRecoveryBudgetPeriod } from "@/lib/operations/budget-period-recovery";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const schema = z.object({ _id: z.instanceof(ObjectId), userId: z.instanceof(ObjectId), sourceSnapshotId: z.instanceof(ObjectId),
@@ -44,5 +46,50 @@ export function projectRecoveryPurchaseSimulation(document: Document): Document 
     if (stable(result.installmentSchedule) !== stable(generateInstallmentSchedule(result.trueFinancedCost, input.proposedDate, input.installmentCount))) return fail();
     // These local evidence invariants do not reconstruct the historical baseline, classification or source hash.
     return document;
+  } catch { return fail(); }
+}
+
+/** Direct metadata/owner checks; no historical risk recomputation or transitive release proof. */
+export function inspectPurchaseRecoveryLinks(simulations: readonly Document[], snapshots: readonly Document[], periods: readonly Document[]) {
+  try {
+    const index = (rows: readonly Document[], project: (row: Document) => Document) => {
+      const result = new Map<string, Document>();
+      for (const input of rows) {
+        const row = project(input); const id = row._id.toHexString();
+        if (result.has(id)) return fail(); result.set(id, row);
+      }
+      return result;
+    };
+    const saved = index(simulations, projectRecoveryPurchaseSimulation);
+    const engines = index(snapshots, projectRecoveryFinancialSnapshot);
+    const budgets = index(periods, projectRecoveryBudgetPeriod);
+    const retries = new Set<string>(); let matched = 0;
+    const unresolved = { missing: 0, changed: 0, historicalEvaluations: saved.size };
+    for (const row of saved.values()) {
+      const key = `${row.userId.toHexString()}:${row.idempotencyKeyHash}`;
+      if (retries.has(key)) return fail(); retries.add(key);
+      const target = engines.get(row.sourceSnapshotId.toHexString());
+      const reference = row.evaluation.sourceSnapshot;
+      if (!target) unresolved.missing++;
+      else {
+        if (target.kind !== "engine_result" || !target.userId.equals(row.userId)) return fail();
+        if (target.inputHash !== reference.inputHash || target.engineVersion !== reference.engineVersion
+          || target.policyVersion !== reference.policyVersion || target.calculatedAt.getTime() !== reference.calculatedAt.getTime()
+          || target.sourceManifestId.toHexString() !== reference.sourceManifestId
+          || target.result.currency !== row.input.totalPurchasePrice.currency) unresolved.changed++;
+        else matched++;
+      }
+      const period = row.evaluation.budgetPeriodReference;
+      if (period !== null) {
+        const budget = budgets.get(period.id.toLowerCase());
+        if (!budget) unresolved.missing++;
+        else {
+          if (!budget.userId.equals(row.userId)) return fail();
+          if (budget.calendarMonth !== period.calendarMonth || budget.version !== period.version) unresolved.changed++;
+          else matched++;
+        }
+      }
+    }
+    return { policy: "purchase-recovery-links-v1" as const, releaseAllowed: false as const, matched, unresolved };
   } catch { return fail(); }
 }
