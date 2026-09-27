@@ -14,6 +14,7 @@ import { projectRecoveryReport } from "@/lib/operations/report-recovery-schema";
 import { projectRecoveryNotificationPreference } from "@/lib/operations/notification-preference-recovery";
 import { projectRecoveryNotification } from "@/lib/operations/notification-recovery";
 import { projectRecoveryBudgetPeriod } from "@/lib/operations/budget-period-recovery";
+import { projectRecoveryBudgetCategory, projectRecoveryBudgetCorrection } from "@/lib/operations/budget-category-recovery";
 import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/operations/forecast-recovery";
 import { projectRecoveryGoalDefinition, projectRecoveryGoalProgress, projectRecoveryGoalReceipt } from "@/lib/operations/goal-recovery";
 import { projectRecoveryFinancialSnapshot } from "@/lib/operations/financial-snapshot-recovery";
@@ -45,6 +46,8 @@ export const initialRecoverySchemas: RecoverySchemas = {
   notificationPreferences: { version: "notification-preference-v1", project: projectRecoveryNotificationPreference },
   notifications: { version: "notification-filtered-v1", project: projectRecoveryNotification },
   budgetPeriods: { version: "budget-period-v1", project: projectRecoveryBudgetPeriod },
+  budgetCategories: { version: "budget-category-v1", project: projectRecoveryBudgetCategory },
+  budgetCategoryCorrections: { version: "budget-correction-v1", project: projectRecoveryBudgetCorrection },
   forecastSnapshots: { version: "forecast-snapshot-v1", project: projectRecoveryForecast },
   forecastScenarios: { version: "forecast-scenario-v1", project: projectRecoveryForecastScenario },
   goalDefinitions: { version: "goal-definition-v1", project: projectRecoveryGoalDefinition },
