@@ -14,6 +14,7 @@ import { projectRecoveryReport } from "@/lib/operations/report-recovery-schema";
 import { projectRecoveryNotificationPreference } from "@/lib/operations/notification-preference-recovery";
 import { projectRecoveryNotification } from "@/lib/operations/notification-recovery";
 import { projectRecoveryBudgetPeriod } from "@/lib/operations/budget-period-recovery";
+import { projectRecoveryNetWorthItem, projectRecoveryNetWorthSnapshot } from "@/lib/operations/net-worth-recovery";
 import { projectRecoveryDebtStrategy } from "@/lib/operations/debt-recovery";
 import { projectRecoveryBudgetCategory, projectRecoveryBudgetCorrection } from "@/lib/operations/budget-category-recovery";
 import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/operations/forecast-recovery";
@@ -48,6 +49,8 @@ export const initialRecoverySchemas: RecoverySchemas = {
   notificationPreferences: { version: "notification-preference-v1", project: projectRecoveryNotificationPreference },
   notifications: { version: "notification-filtered-v1", project: projectRecoveryNotification },
   budgetPeriods: { version: "budget-period-v1", project: projectRecoveryBudgetPeriod },
+  netWorthItems: { version: "net-worth-item-v1", project: projectRecoveryNetWorthItem },
+  netWorthSnapshots: { version: "net-worth-snapshot-v1", project: projectRecoveryNetWorthSnapshot },
   debtStrategyScenarios: { version: "debt-strategy-v1", project: projectRecoveryDebtStrategy },
   budgetCategories: { version: "budget-category-v1", project: projectRecoveryBudgetCategory },
   budgetCategoryCorrections: { version: "budget-correction-v1", project: projectRecoveryBudgetCorrection },
