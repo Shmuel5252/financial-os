@@ -8,9 +8,9 @@ import { TRANSACTION_INTELLIGENCE_ENGINE_VERSION, TRANSACTION_INTELLIGENCE_POLIC
   TRANSACTION_INTELLIGENCE_RULESET_VERSION, TRANSACTION_INTELLIGENCE_REVIEW_THRESHOLD_BPS } from "@/lib/transaction-intelligence/transaction-intelligence";
 
 export const intelligenceDigest = (value: string) => createHash("sha256").update(value).digest("hex");
-export function intelligenceRecoveryFixture(owner = new ObjectId()) {
-  const at = new Date("2026-09-28T00:00:00Z"); const accountId = new ObjectId().toHexString();
-  const inputs = [new ObjectId(), new ObjectId()].map(id => ({ id: id.toHexString(), accountId, amount: money(9007199254740993n, "ILS"),
+export function intelligenceRecoveryFixture(owner = new ObjectId(), transactionIds = [new ObjectId(), new ObjectId()], accountId = new ObjectId().toHexString()) {
+  const at = new Date("2026-09-28T00:00:00Z");
+  const inputs = transactionIds.map(id => ({ id: id.toHexString(), accountId, amount: money(9007199254740993n, "ILS"),
     confirmedCategoryId: "system:other", date: "2026-09-28", merchant: "Synthetic merchant", sourceKind: "manual" as const,
     type: "expense" as const, updatedAt: at.toISOString(), version: 1 }));
   const calculation = calculateTransactionIntelligence(inputs);
