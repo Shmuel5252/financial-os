@@ -12,6 +12,7 @@ import { createBackupPackage, openBackupPackage } from "@/lib/operations/backup-
 import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
 import { recoveryCollections } from "@/lib/operations/recovery-plan";
 import { beginDeletion, restorationSuppression } from "@/lib/operations/deletion-ledger";
+import { inspectDebtRecoveryLinks } from "@/lib/operations/debt-recovery-links";
 
 const uri = process.env.MONGODB_TEST_URI;
 (uri ? describe : describe.skip)("real isolated saved debt evidence recovery", () => {
@@ -39,6 +40,8 @@ const uri = process.env.MONGODB_TEST_URI;
       const pack = createBackupPackage(records, initialRecoverySchemas, "a".repeat(64), key);
       expect(pack.manifest.releaseAllowed).toBe(false);
       const opened = openBackupPackage(pack, initialRecoverySchemas, "a".repeat(64), key); const now = Date.now();
+      expect(inspectDebtRecoveryLinks(opened.debtStrategyScenarios!, opened.loans!)).toEqual({ policy: "debt-recovery-links-v1",
+        releaseAllowed: false, matched: 2, unresolved: { missing: 0, changed: 0, inactive: 0, historicalScenarios: 2 } });
       const { isSuppressed } = restorationSuppression({ environment: "isolated-test", keys: [key], now, ledgerReadAt: now, maxLedgerAgeMs: 0,
         authoritativeRevision: 1, suppliedRevision: 1, receipts: [beginDeletion(actors[0]!, "isolated-test", randomUUID(), now, key)] });
       const restored = debtStrategyRepositoryForDatabase(target.database); await restored.ensureIndexes();
@@ -53,6 +56,8 @@ const uri = process.env.MONGODB_TEST_URI;
         expect(BSON.serialize({ rows: await source.database.collection(name).find().sort({ _id: 1 }).toArray() })).toEqual(BSON.serialize({ rows: records[name] }));
       }
       const row = (await target.database.collection("debtStrategyScenarios").findOne())!;
+      expect(inspectDebtRecoveryLinks([row], await target.database.collection("loans").find().toArray())).toEqual({ policy: "debt-recovery-links-v1",
+        releaseAllowed: false, matched: 1, unresolved: { missing: 0, changed: 0, inactive: 0, historicalScenarios: 1 } });
       expect(row.input.debts[0].balance.amountMinor).toBeInstanceOf(Long);
       expect(row.input.debts[0].balance.amountMinor.toString()).toBe("9007199254740993");
       expect(await restored.listAllForActor(actors[0]!)).toEqual([]);
