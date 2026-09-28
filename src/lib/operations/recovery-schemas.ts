@@ -16,6 +16,7 @@ import { projectRecoveryNotification } from "@/lib/operations/notification-recov
 import { projectRecoveryBudgetPeriod } from "@/lib/operations/budget-period-recovery";
 import { projectRecoveryNetWorthItem, projectRecoveryNetWorthSnapshot } from "@/lib/operations/net-worth-recovery";
 import { projectRecoveryIntelligenceRun, projectRecoveryIntelligenceReview } from "@/lib/operations/intelligence-recovery";
+import { projectRecoveryProgressEvent, projectRecoveryProgressPreference } from "@/lib/operations/progress-recovery";
 import { projectRecoveryDebtStrategy } from "@/lib/operations/debt-recovery";
 import { projectRecoveryBudgetCategory, projectRecoveryBudgetCorrection } from "@/lib/operations/budget-category-recovery";
 import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/operations/forecast-recovery";
@@ -54,6 +55,8 @@ export const initialRecoverySchemas: RecoverySchemas = {
   netWorthSnapshots: { version: "net-worth-snapshot-v1", project: projectRecoveryNetWorthSnapshot },
   transactionIntelligenceRuns: { version: "intelligence-run-v1", project: projectRecoveryIntelligenceRun },
   transactionIntelligenceReviews: { version: "intelligence-review-v1", project: projectRecoveryIntelligenceReview },
+  progressJourneyEvents: { version: "progress-event-v1", project: projectRecoveryProgressEvent },
+  progressJourneyPreferences: { version: "progress-preference-v1", project: projectRecoveryProgressPreference },
   debtStrategyScenarios: { version: "debt-strategy-v1", project: projectRecoveryDebtStrategy },
   budgetCategories: { version: "budget-category-v1", project: projectRecoveryBudgetCategory },
   budgetCategoryCorrections: { version: "budget-correction-v1", project: projectRecoveryBudgetCorrection },
