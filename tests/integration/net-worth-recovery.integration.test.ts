@@ -3,6 +3,8 @@ import { BSON, Long, ObjectId, type Document } from "mongodb";
 import { describe, expect, it } from "vitest";
 import { netWorthSnapshotFixture } from "../helpers/net-worth-recovery-fixture";
 import { netWorthRepositoryForDatabase } from "@/lib/net-worth/net-worth-repository";
+import { manualRecordRepositoryForDatabase } from "@/lib/onboarding/manual-record-repository";
+import { inspectNetWorthRecoveryLinks } from "@/lib/operations/net-worth-recovery-links";
 import { netWorthStatementDomainSchema } from "@/lib/net-worth/net-worth";
 import { fromStoredDomainValue } from "@/lib/db/domain-value-mapper";
 import { money } from "@/lib/domain/money/money";
@@ -20,6 +22,7 @@ const uri = process.env.MONGODB_TEST_URI;
     try {
       target = await createIsolatedRecoveryTarget(uri!);
       const repo = netWorthRepositoryForDatabase(source.database); await repo.ensureIndexes();
+      const accounts = manualRecordRepositoryForDatabase(source.database, "accounts"); await accounts.ensureIndexes();
       const actors = [new ObjectId(), new ObjectId()].map(id => ({ kind: "user" as const, userId: id.toHexString() }));
       const retryKey = randomUUID();
       const fields = { amount: money(9007199254740993n, "ILS"), category: "other_asset" as const,
@@ -30,20 +33,25 @@ const uri = process.env.MONGODB_TEST_URI;
         await repo.updateItemForActor(actor, item.id, 1, fields);
         const deleted = await repo.createItemForActor(actor, { ...fields, label: "Synthetic deleted item" }, randomUUID());
         await repo.deleteItemForActor(actor, deleted.id, 1);
-        const fixture = netWorthSnapshotFixture(new ObjectId(actor.userId), new ObjectId(item.id));
+        const account = await accounts.createForActor(actor, { name: "Synthetic second currency", type: "bank", balance: money(7n, "USD") }, randomUUID());
+        const fixture = netWorthSnapshotFixture(new ObjectId(actor.userId), new ObjectId(item.id), 2, new ObjectId(account.id));
         const statement = netWorthStatementDomainSchema.parse(fromStoredDomainValue(fixture.statement));
         await repo.captureSnapshotForActor(actor, statement, "material_change");
       }
       const records: Record<string, Document[]> = Object.fromEntries(recoveryCollections.map(name => [name, []]));
-      const names = ["netWorthItems", "netWorthSnapshots"];
+      const names = ["netWorthItems", "netWorthSnapshots", "accounts"];
       for (const name of names) records[name] = await source.database.collection(name).find().sort({ _id: 1 }).toArray();
       const key = { version: 1, material: randomBytes(32) };
       const pack = createBackupPackage(records, initialRecoverySchemas, "a".repeat(64), key);
       expect(pack.manifest.releaseAllowed).toBe(false);
       const opened = openBackupPackage(pack, initialRecoverySchemas, "a".repeat(64), key); const now = Date.now();
+      expect(inspectNetWorthRecoveryLinks(opened.netWorthSnapshots!, { netWorthItems: opened.netWorthItems!, accounts: opened.accounts! }))
+        .toEqual({ policy: "net-worth-recovery-links-v1", releaseAllowed: false, matched: 4,
+          unresolved: { missing: 0, changed: 0, inactive: 0, unversioned: 0, historicalStatements: 2 } });
       const { isSuppressed } = restorationSuppression({ environment: "isolated-test", keys: [key], now, ledgerReadAt: now, maxLedgerAgeMs: 0,
         authoritativeRevision: 1, suppliedRevision: 1, receipts: [beginDeletion(actors[0]!, "isolated-test", randomUUID(), now, key)] });
       const restored = netWorthRepositoryForDatabase(target.database); await restored.ensureIndexes();
+      await manualRecordRepositoryForDatabase(target.database, "accounts").ensureIndexes();
       for (const name of names) {
         const survivors = opened[name]!.filter(row => !isSuppressed(row.userId.toHexString()));
         await target.database.collection(name).insertMany(survivors);
@@ -61,11 +69,14 @@ const uri = process.env.MONGODB_TEST_URI;
       expect((await restored.listItemsForActor(actors[1]!)).map(item => item.id)).toEqual([row._id.toHexString()]);
       expect((await restored.createItemForActor(actors[1]!, fields, retryKey)).id).toBe(row._id.toHexString());
       const snapshot = (await target.database.collection("netWorthSnapshots").findOne())!;
+      expect(inspectNetWorthRecoveryLinks([snapshot], { netWorthItems: await target.database.collection("netWorthItems").find().toArray(),
+        accounts: await target.database.collection("accounts").find().toArray() })).toEqual({ policy: "net-worth-recovery-links-v1",
+        releaseAllowed: false, matched: 2, unresolved: { missing: 0, changed: 0, inactive: 0, unversioned: 0, historicalStatements: 1 } });
       expect((await restored.captureSnapshotForActor(actors[1]!, netWorthStatementDomainSchema.parse(fromStoredDomainValue(snapshot.statement)), "material_change")).id)
         .toBe(snapshot._id.toHexString());
       expect(await target.database.collection("netWorthItems").countDocuments()).toBe(2);
       expect(await target.database.collection("netWorthSnapshots").countDocuments()).toBe(1);
-      // This schema rehearsal does not prove all statement source links or historical valuations.
+      // Direct identity/revision matches do not reconstruct historical valuations.
     } finally { if (target) await target.dispose(); await source.dispose(); }
   }, 30000);
 });
