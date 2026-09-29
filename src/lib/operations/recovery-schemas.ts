@@ -24,6 +24,7 @@ import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/
 import { projectRecoveryGoalDefinition, projectRecoveryGoalProgress, projectRecoveryGoalReceipt } from "@/lib/operations/goal-recovery";
 import { projectRecoveryFinancialSnapshot } from "@/lib/operations/financial-snapshot-recovery";
 import { projectRecoveryPurchaseSimulation } from "@/lib/operations/purchase-recovery";
+import { projectRecoveryBankBinding, projectRecoveryBankConnection, projectRecoveryBankLifecycle, projectRecoveryBankSyncRun } from "@/lib/operations/bank-control-recovery";
 
 const fail = (): never => { throw new Error("Recovery schema requires review"); };
 const manualSchema = z.object({ _id: z.instanceof(ObjectId), userId: z.instanceof(ObjectId),
@@ -70,6 +71,10 @@ export const initialRecoverySchemas: RecoverySchemas = {
   goalCommandReceipts: { version: "goal-receipt-v1", project: projectRecoveryGoalReceipt },
   financialSnapshots: { version: "financial-snapshot-v1", project: projectRecoveryFinancialSnapshot },
   purchaseSimulations: { version: "purchase-simulation-v1", project: projectRecoveryPurchaseSimulation },
+  bankProviderBindings: { version: "bank-binding-v1", project: projectRecoveryBankBinding },
+  bankConnections: { version: "bank-connection-v1", project: projectRecoveryBankConnection },
+  bankSyncRuns: { version: "bank-sync-run-v1", project: projectRecoveryBankSyncRun },
+  bankLifecycleCommands: { version: "bank-lifecycle-v1", project: projectRecoveryBankLifecycle },
   authUsers: { version: "auth-user-v1", project: row => { validate(authUserSchema, row); return row; } },
   profiles: { version: "profile-v1", project: row => { validate(storedProfileSchema.strict(), row); return row; } },
   ...Object.fromEntries(manualSectionSchema.options.map(section => [sectionCollections[section], {

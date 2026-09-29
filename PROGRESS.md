@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 bank control-plane recovery — verified 2026-09-29
+
+Strict recovery adapters for provider bindings, connections, sync runs and lifecycle commands (coverage 43/47), a no-replay inspector and `quarantineBankControl`. The repository now refuses to restart or finish a restored non-completed sync/command under its old key; completed outcomes are returned as recorded. Review's two Important issues (lease resumption / failed-disconnect re-send after restore; undercounted unknown outcomes) fixed and verified RED→GREEN with a real-Mongo rehearsal including an unfenced control. Full 659 tests/137 files, one opt-in skip, six unchanged exclusions; types, lint, build, security461/zero, index90/88/2, diff, audit zero. Key continuity, consent revalidation, erased-subject reimport blocking and unknown-outcome review remain release barriers. Details: `PHASE_18_RECOVERY_IMPLEMENTATION.md`.
+
 ## Phase 18 AI-history source links — verified 2026-09-29
 
 The handed-off link unit is accepted as a repository checkpoint (not Phase 18 acceptance). Review found no Critical/Important issue; budget/purchase foreign-owner cases were added and shown RED without the owner check. A pre-existing index-order nondeterminism in six recovery integration tests was fixed by order-independent comparison, with no runtime change. Final full non-external regression 643 tests/135 files passed, one opt-in skip, six unchanged exclusions; focused 26 with actual local Mongo; types, zero-warning lint, production build, security458/zero, index90/88/2, diff check and audit zero passed. Details and deferred minors: `PHASE_18_RECOVERY_IMPLEMENTATION.md`. Coverage 39/47; next the eight provider recovery classes.

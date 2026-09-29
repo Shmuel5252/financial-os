@@ -149,6 +149,7 @@ type SyncRunDocument = SyncCounts & {
   leaseExpiresAt: Date;
   policyVersion: string;
   provider: typeof OPEN_BANKING_PROVIDER;
+  recoveryQuarantinedAt?: Date;
   startedAt: Date;
   status: "completed" | "failed" | "partial" | "running";
   updatedAt: Date;
@@ -162,6 +163,7 @@ type LifecycleDocument = {
   idempotencyKeyHash: string;
   kind: "disconnect" | "refresh";
   provider: typeof OPEN_BANKING_PROVIDER;
+  recoveryQuarantinedAt?: Date;
   resultStatus: string | null;
   startedAt: Date;
   status: "completed" | "failed" | "running";
@@ -392,6 +394,8 @@ export class OpenBankingRepository {
     const existing = await this.collections.runs.findOne({ userId: owner, provider: OPEN_BANKING_PROVIDER, idempotencyKeyHash });
     const now = this.now();
     if (existing?.status === "completed") return { alreadyCompleted: true, run: runView(existing) };
+    // A restored interrupted run is evidence only; its old key never resumes a lease.
+    if (existing?.recoveryQuarantinedAt !== undefined) throw new ConflictError("This restored bank synchronization cannot be resumed. Start a new synchronization.");
     if (existing?.status === "running" && existing.leaseExpiresAt > now) throw new ConflictError("A bank synchronization is already running.");
     if (existing !== null) {
       const updated = await this.collections.runs.findOneAndUpdate(
@@ -460,6 +464,8 @@ export class OpenBankingRepository {
     const idempotencyKeyHash = hash(idempotencyKey);
     const existing = await this.collections.lifecycle.findOne({ userId: owner, provider: OPEN_BANKING_PROVIDER, kind, idempotencyKeyHash });
     if (existing?.status === "completed") return { completed: true, id: existing._id.toHexString(), resultStatus: existing.resultStatus };
+    // Restored non-completed commands have an unknown external outcome; never repeat them under the old key.
+    if (existing?.recoveryQuarantinedAt !== undefined) throw new ConflictError("This restored bank action cannot be repeated. A new explicit request is required.");
     if (existing?.status === "running") throw new ConflictError("This bank lifecycle action is already running.");
     if (existing?.status === "failed" && kind === "refresh") {
       throw new ConflictError("This paid refresh was already attempted. A new explicit authorization is required.");
@@ -498,7 +504,7 @@ export class OpenBankingRepository {
   ): Promise<void> {
     const now = this.now();
     const result = await this.collections.lifecycle.updateOne(
-      { _id: parseObjectId(id), userId: userId(actor), status: "running" },
+      { _id: parseObjectId(id), userId: userId(actor), status: "running", recoveryQuarantinedAt: { $exists: false } },
       { $set: { completedAt: now, resultStatus, status, updatedAt: now } },
     );
     if (result.modifiedCount !== 1) throw new ConflictError();
@@ -524,7 +530,7 @@ export class OpenBankingRepository {
     });
     if (current === null) throw new ConflictError();
     const updated = await this.collections.runs.findOneAndUpdate(
-      { _id: current._id, status: "running", userId: current.userId, version: current.version },
+      { _id: current._id, status: "running", userId: current.userId, version: current.version, recoveryQuarantinedAt: { $exists: false } },
       {
         $inc: { version: 1 },
         $push: { auditTrail: { action: status, actorUserId: current.userId, at: now, changedFields: ["status", "counts"], revision: current.version + 1, source: "open_banking" } },
