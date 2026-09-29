@@ -56,7 +56,7 @@ const uri = process.env.MONGODB_TEST_URI;
         const rows = await target.database.collection(name).find().sort({ _id: 1 }).toArray();
         expect(BSON.serialize({ rows })).toEqual(BSON.serialize({ rows: records[name]!.filter(row => row.userId.toHexString() === actors[1]!.userId) }));
         expect(await target.database.collection(name).countDocuments({ userId: new ObjectId(actors[0]!.userId) })).toBe(0);
-        expect(await target.database.collection(name).listIndexes().toArray()).toEqual(await source.database.collection(name).listIndexes().toArray());
+        expect((await target.database.collection(name).listIndexes().toArray()).sort((a, b) => String(a.name).localeCompare(String(b.name)))).toEqual((await source.database.collection(name).listIndexes().toArray()).sort((a, b) => String(a.name).localeCompare(String(b.name))));
         await expect(target.database.collection(name).insertOne({ ...surviving[0], _id: new ObjectId() })).rejects.toMatchObject({ code: 11000 });
         expect(BSON.serialize({ rows: await source.database.collection(name).find().sort({ _id: 1 }).toArray() })).toEqual(BSON.serialize({ rows: records[name] }));
       }

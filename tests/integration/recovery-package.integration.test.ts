@@ -59,8 +59,8 @@ realMongo("reviewed application profile/manual schemas in isolated recovery pack
       expect(BSON.serialize(raw)).toEqual(BSON.serialize(input.accounts!.find(r => r.userId.toHexString() === actors[1]!.userId)!));
       expect(await source.database.collection("accounts").countDocuments()).toBe(2);
       expect(await target.database.collection("authSessions").countDocuments()).toBe(0);
-      const expectedIndexes = await source.database.collection("accounts").listIndexes().toArray();
-      expect(await target.database.collection("accounts").listIndexes().toArray()).toEqual(expectedIndexes);
+      const expectedIndexes = (await source.database.collection("accounts").listIndexes().toArray()).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      expect((await target.database.collection("accounts").listIndexes().toArray()).sort((a, b) => String(a.name).localeCompare(String(b.name)))).toEqual(expectedIndexes);
       await expect(target.database.collection("accounts").insertOne(raw)).rejects.toMatchObject({ code: 11000 });
       const bad = { ...raw, fields: { ...raw.fields, unknownSensitiveField: "synthetic" } };
       expect(() => initialRecoverySchemas.accounts!.project(bad)).toThrow("Recovery schema requires review");
