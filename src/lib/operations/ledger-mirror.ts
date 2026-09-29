@@ -25,9 +25,10 @@ export async function mirrorLedger(input: Readonly<{ ledger: Readonly<{ snapshot
   return { name, head: snapshot.head };
 }
 
-/** Highest head among verified mirror exports (0 when none). Any unverifiable export fails closed rather than being skipped. */
-export async function highestMirroredHead(store: BackupObjectStore, environment: LedgerEnvironment, keys: readonly LedgerKey[]): Promise<number> {
-  let highest = 0;
+/** Every verified mirror export: how many, the highest head, and each mirrored receipt subject with its provider-subject markers.
+ * Any unverifiable export fails closed rather than being skipped. */
+export async function verifiedMirrors(store: BackupObjectStore, environment: LedgerEnvironment, keys: readonly LedgerKey[]) {
+  let highest = 0; let count = 0; const subjects = new Map<string, readonly string[]>();
   for (const name of await store.list(prefix)) {
     const bytes = await store.get(name) ?? fail();
     let document; try { document = BSON.deserialize(bytes); } catch { return fail(); }
@@ -38,7 +39,8 @@ export async function highestMirroredHead(store: BackupObjectStore, environment:
     const expected = Buffer.from(seal(key, environment, document.head, document.exportedAt, receipts), "hex");
     const actual = Buffer.from(typeof document.signature === "string" ? document.signature : "", "hex");
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return fail();
-    highest = Math.max(highest, document.head);
+    highest = Math.max(highest, document.head); count++;
+    for (const receipt of receipts) subjects.set(receipt.subject, [...new Set([...(subjects.get(receipt.subject) ?? []), ...receipt.providerSubjects])]);
   }
-  return highest;
+  return { count, head: highest, subjects } as const;
 }

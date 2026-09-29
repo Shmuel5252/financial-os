@@ -21,7 +21,11 @@ for (const file of files("src")) {
   }
   visit(source);
 }
-if (process.argv.includes("--check")) {
+if (process.argv.includes("--digest")) {
+  // Order-independent (directory listing order differs across platforms): binds backup packages to this index manifest.
+  const entries = definitions.map(item => `${item.source.slice("src/".length)}:${item.definitionDigest}`).sort();
+  console.log(createHash("sha256").update(JSON.stringify(["index-source-manifest-v1", entries])).digest("hex"));
+} else if (process.argv.includes("--check")) {
   if (definitions.length !== 90 || definitions.filter(item => item.classification === "offline-migration").length !== 2) throw new Error("Index inventory requires review");
   console.info("Index manifest: 90 source definitions; 88 runtime, 2 offline; no DB operation");
 } else console.info(JSON.stringify({ version: "index-source-manifest-v1", executable: false, requiresCollectionResolution: true, definitions }, null, 2));

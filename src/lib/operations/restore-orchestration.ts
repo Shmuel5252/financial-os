@@ -16,7 +16,7 @@ import { filterHouseholdDeletionQuarantine } from "@/lib/operations/household-de
 import { filterInvitationDeletionQuarantine } from "@/lib/operations/invitation-deletion-quarantine";
 import { materializeInertRecoveryInvitation } from "@/lib/operations/invitation-recovery";
 import { filterSharedReportDeletionQuarantine } from "@/lib/operations/shared-report-deletion-quarantine";
-import { highestMirroredHead } from "@/lib/operations/ledger-mirror";
+import { verifiedMirrors } from "@/lib/operations/ledger-mirror";
 
 type Key = Readonly<{ version: number; material: Uint8Array }>;
 /** ledgerKeys verify receipts, mirror exports and the signed release state; stateKey (the operator's active ledger key) signs state. */
@@ -42,9 +42,18 @@ async function readState(target: Db, keys: readonly LedgerKey[]): Promise<Releas
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return fail("release state tampered");
   return row;
 }
-async function ledgerNotBehindMirror(input: LedgerInput, head: number) {
-  let mirrored: number; try { mirrored = await highestMirroredHead(input.mirror, input.environment, input.ledgerKeys); } catch { return fail("ledger mirror unverifiable"); }
-  if (head < mirrored) fail("ledger older than its mirror");
+/** The live ledger must be at or past every signed mirror and still hold every mirrored receipt with at least its markers: a head
+ * check alone misses receipts deleted without lowering the head. The worker mirrors before every capture, so no mirror = refuse. */
+async function ledgerNotBehindMirror(input: LedgerInput, snapshot: LedgerSnapshot) {
+  let mirrored: Awaited<ReturnType<typeof verifiedMirrors>>;
+  try { mirrored = await verifiedMirrors(input.mirror, input.environment, input.ledgerKeys); } catch { return fail("ledger mirror unverifiable"); }
+  if (mirrored.count === 0) return fail("ledger mirror missing");
+  if (snapshot.head < mirrored.head) return fail("ledger older than its mirror");
+  const live = new Map(snapshot.receipts.map(receipt => [receipt.subject, new Set(receipt.providerSubjects)]));
+  for (const [subject, markers] of mirrored.subjects) {
+    const current = live.get(subject);
+    if (current === undefined || markers.some(marker => !current.has(marker))) return fail("ledger missing mirrored receipts");
+  }
 }
 
 async function ledgerContext(input: LedgerInput): Promise<Readonly<{ snapshot: LedgerSnapshot; context: RestorationLedgerContext }>> {
@@ -102,7 +111,7 @@ export async function restoreIntoQuarantine(input: LedgerInput & Readonly<{ stor
   const { snapshot, context } = await ledgerContext(input);
   // The backup saw a newer ledger than the one now offered: the ledger was rolled back.
   if (snapshot.head < recoveryPoint.ledgerHead) return fail("ledger older than backup");
-  await ledgerNotBehindMirror(input, snapshot.head);
+  await ledgerNotBehindMirror(input, snapshot);
   const records = quarantineRestoredRecords(opened, context, new Date(input.now()));
   await input.ensureIndexes(input.target);
   const counts: Record<string, number> = {};
@@ -119,7 +128,10 @@ export async function restoreIntoQuarantine(input: LedgerInput & Readonly<{ stor
 async function scan(target: Db, context: RestorationLedgerContext, counts: Record<string, number> | null) {
   const { isSuppressed, isProviderSubjectSuppressed } = restorationSuppression(context);
   const names = (await target.listCollections({}, { nameOnly: true }).toArray()).map(item => item.name).filter(name => name !== "recoveryQuarantine" && !name.startsWith("system."));
-  if (names.some(name => !recoveryCollections.includes(name) || excluded.has(name))) return fail("unexpected collection");
+  if (names.some(name => !recoveryCollections.includes(name))) return fail("unexpected collection");
+  // At the fence, excluded/rebuilt collections (sessions, tokens, archive, rate limits, search) may exist only empty (e.g. recreated
+  // with their indexes). After release they are live state: still deep-scanned below for erased subjects like every collection.
+  if (counts !== null) for (const name of names.filter(item => excluded.has(item))) if (await target.collection(name).countDocuments() !== 0) return fail("excluded collection not empty");
   if (counts !== null) for (const name of new Set([...names, ...Object.keys(counts)])) {
     if (await target.collection(name).countDocuments() !== (counts[name] ?? 0)) return fail("restored counts changed");
   }
@@ -163,7 +175,7 @@ export async function verifyReleaseWatermark(input: LedgerInput & Readonly<{ tar
   if (state?.state !== "fenced" || state.watermark === null) return fail("restore watermark missing");
   const { snapshot, context } = await ledgerContext(input);
   if (snapshot.head < state.watermark) return fail("ledger rolled back");
-  await ledgerNotBehindMirror(input, snapshot.head);
+  await ledgerNotBehindMirror(input, snapshot);
   await scan(input.target, context, null);
   return { watermark: state.watermark, head: snapshot.head, delta: snapshot.head - state.watermark } as const;
 }

@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 C1–C7 repository work and provisioning decision sheet — 2026-09-29
+
+Infrastructure template, Lambda backup worker, write-once S3 adapter, ledger bootstrap/probe, configured ledger as the default claim guard, restore-drill tooling, CI worker build and synthetic end-to-end rehearsal (worker → drill → fence). Costs, cheaper equivalents, Flex assessment and app→ledger options in `PHASE_18_PROVISIONING_DECISION_SHEET.md`. No provisioning, secrets, network or deployment change.
+
 ## Phase 18 A+B built and rehearsed locally — 2026-09-29
 
 Independent ledger (head, snapshot, keyring, signed mirror), ledger-first erasure, snapshot-session capture, quarantine restore, signed release fence/watermark and claim anti-resurrection guard, proven fail-closed on a synthetic loopback replica set with adversarial mutation testing. Region/runtime recommendations and minimum external actions in `PHASE_18_BACKUP_LEDGER_PROPOSAL.md` §11–12. Nothing provisioned.

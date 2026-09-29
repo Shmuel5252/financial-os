@@ -1,0 +1,248 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Financial OS backup storage, worker, least-privilege roles and alarms (PHASE_18_PROVISIONING_RUNBOOK.md S3-S8). Deploy only after owner approval. Holds no secrets: worker secrets live in SSM SecureString parameters under /financial-os/<environment>.",
+  "Parameters": {
+    "Environment": { "Type": "String", "AllowedValues": ["staging", "production"] },
+    "AlarmEmail": { "Type": "String", "AllowedPattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" },
+    "WorkerCodeBucket": { "Type": "String", "Description": "Artifact bucket holding the zipped .build/backup-worker bundle" },
+    "WorkerCodeKey": { "Type": "String" },
+    "AppDatabase": { "Type": "String", "AllowedPattern": "^[A-Za-z0-9_-]{1,63}$" },
+    "LedgerDatabase": { "Type": "String", "AllowedPattern": "^[A-Za-z0-9_-]{1,63}$", "Default": "deletion_ledger" },
+    "UseKms": { "Type": "String", "AllowedValues": ["true", "false"], "Default": "true", "Description": "D3: SSE-KMS customer key (true) or SSE-S3 (false)" },
+    "EgressMode": { "Type": "String", "AllowedValues": ["nat-gateway", "none"], "Default": "nat-gateway", "Description": "D5: nat-gateway = static Elastic IP for Atlas allowlists; none = no VPC (only while the Atlas access lists are already open, e.g. staging)" },
+    "OperatorPrincipalArn": { "Type": "String", "Description": "IAM Identity Center role/user ARN allowed to assume the restore-operator role (MFA required)" },
+    "BreakGlassPrincipalArn": { "Type": "String", "Description": "ARN allowed to assume the break-glass role (MFA required)" },
+    "OperatorSignIn": { "Type": "String", "AllowedValues": ["identity-center", "iam-user-mfa"], "Default": "identity-center", "Description": "identity-center: MFA is enforced at every IAM Identity Center sign-in (its sessions carry no aws:MultiFactorAuthPresent); iam-user-mfa: the role trust additionally requires aws:MultiFactorAuthPresent" },
+    "ScheduleExpression": { "Type": "String", "Default": "cron(0 3 * * ? *)" },
+    "ScheduleTimezone": { "Type": "String", "Default": "Asia/Jerusalem" },
+    "VpcCidr": { "Type": "String", "Default": "10.40.0.0/24" },
+    "MonthlyBudgetUsd": { "Type": "Number", "Default": 100 }
+  },
+  "Conditions": {
+    "UseKms": { "Fn::Equals": [{ "Ref": "UseKms" }, "true"] },
+    "UseVpc": { "Fn::Equals": [{ "Ref": "EgressMode" }, "nat-gateway"] },
+    "RequireStsMfa": { "Fn::Equals": [{ "Ref": "OperatorSignIn" }, "iam-user-mfa"] }
+  },
+  "Resources": {
+    "BackupKey": {
+      "Type": "AWS::KMS::Key", "Condition": "UseKms", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Description": { "Fn::Sub": "financial-os ${Environment} backup packages" }, "EnableKeyRotation": true,
+        "KeyPolicy": { "Version": "2012-10-17", "Statement": [
+          { "Sid": "AccountAdministersKeyThroughIam", "Effect": "Allow", "Principal": { "AWS": { "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root" } }, "Action": "kms:*", "Resource": "*" }
+        ] }
+      }
+    },
+    "BackupKeyAlias": { "Type": "AWS::KMS::Alias", "Condition": "UseKms", "Properties": { "AliasName": { "Fn::Sub": "alias/financial-os-${Environment}-backups" }, "TargetKeyId": { "Ref": "BackupKey" } } },
+    "BackupBucket": {
+      "Type": "AWS::S3::Bucket", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "ObjectLockEnabled": true,
+        "ObjectLockConfiguration": { "ObjectLockEnabled": "Enabled", "Rule": { "DefaultRetention": { "Mode": "GOVERNANCE", "Days": 35 } } },
+        "VersioningConfiguration": { "Status": "Enabled" },
+        "PublicAccessBlockConfiguration": { "BlockPublicAcls": true, "BlockPublicPolicy": true, "IgnorePublicAcls": true, "RestrictPublicBuckets": true },
+        "OwnershipControls": { "Rules": [{ "ObjectOwnership": "BucketOwnerEnforced" }] },
+        "BucketEncryption": { "ServerSideEncryptionConfiguration": [{ "BucketKeyEnabled": true, "ServerSideEncryptionByDefault": { "Fn::If": ["UseKms",
+          { "SSEAlgorithm": "aws:kms", "KMSMasterKeyID": { "Fn::GetAtt": ["BackupKey", "Arn"] } }, { "SSEAlgorithm": "AES256" }] } }] },
+        "LifecycleConfiguration": { "Rules": [
+          { "Id": "ExpireAfterRetention", "Status": "Enabled", "ExpirationInDays": 36, "NoncurrentVersionExpiration": { "NoncurrentDays": 1 } },
+          { "Id": "RemoveExpiredDeleteMarkers", "Status": "Enabled", "ExpiredObjectDeleteMarker": true },
+          { "Id": "AbortIncompleteUploads", "Status": "Enabled", "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 } }
+        ] }
+      }
+    },
+    "BackupBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain",
+      "Properties": { "Bucket": { "Ref": "BackupBucket" }, "PolicyDocument": { "Version": "2012-10-17", "Statement": [
+        { "Sid": "DenyInsecureTransport", "Effect": "Deny", "Principal": "*", "Action": "s3:*",
+          "Resource": [{ "Fn::GetAtt": ["BackupBucket", "Arn"] }, { "Fn::Sub": "${BackupBucket.Arn}/*" }], "Condition": { "Bool": { "aws:SecureTransport": "false" } } },
+        { "Sid": "RequireWriteOnce", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": { "Fn::Sub": "${BackupBucket.Arn}/*" },
+          "Condition": { "Null": { "s3:if-none-match": "true" } } },
+        { "Sid": "OnlyBreakGlassMayDeleteOrWeakenProtection", "Effect": "Deny", "Principal": "*",
+          "Action": ["s3:DeleteObject", "s3:DeleteObjectVersion", "s3:BypassGovernanceRetention", "s3:PutObjectRetention", "s3:PutObjectLegalHold",
+            "s3:PutBucketObjectLockConfiguration", "s3:PutLifecycleConfiguration", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy", "s3:PutBucketVersioning"],
+          "Resource": [{ "Fn::GetAtt": ["BackupBucket", "Arn"] }, { "Fn::Sub": "${BackupBucket.Arn}/*" }],
+          "Condition": { "ArnNotEquals": { "aws:PrincipalArn": { "Fn::GetAtt": ["BreakGlassRole", "Arn"] } } } }
+      ] } }
+    },
+    "Vpc": { "Type": "AWS::EC2::VPC", "Condition": "UseVpc", "Properties": { "CidrBlock": { "Ref": "VpcCidr" }, "EnableDnsHostnames": true, "EnableDnsSupport": true } },
+    "PublicSubnet": { "Type": "AWS::EC2::Subnet", "Condition": "UseVpc", "Properties": { "VpcId": { "Ref": "Vpc" }, "CidrBlock": { "Fn::Select": [0, { "Fn::Cidr": [{ "Ref": "VpcCidr" }, 2, 7] }] }, "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] } } },
+    "PrivateSubnet": { "Type": "AWS::EC2::Subnet", "Condition": "UseVpc", "Properties": { "VpcId": { "Ref": "Vpc" }, "CidrBlock": { "Fn::Select": [1, { "Fn::Cidr": [{ "Ref": "VpcCidr" }, 2, 7] }] }, "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] } } },
+    "InternetGateway": { "Type": "AWS::EC2::InternetGateway", "Condition": "UseVpc" },
+    "InternetGatewayAttachment": { "Type": "AWS::EC2::VPCGatewayAttachment", "Condition": "UseVpc", "Properties": { "VpcId": { "Ref": "Vpc" }, "InternetGatewayId": { "Ref": "InternetGateway" } } },
+    "NatEip": { "Type": "AWS::EC2::EIP", "Condition": "UseVpc", "DependsOn": "InternetGatewayAttachment", "Properties": { "Domain": "vpc" } },
+    "NatGateway": { "Type": "AWS::EC2::NatGateway", "Condition": "UseVpc", "Properties": { "AllocationId": { "Fn::GetAtt": ["NatEip", "AllocationId"] }, "SubnetId": { "Ref": "PublicSubnet" } } },
+    "PublicRouteTable": { "Type": "AWS::EC2::RouteTable", "Condition": "UseVpc", "Properties": { "VpcId": { "Ref": "Vpc" } } },
+    "PublicDefaultRoute": { "Type": "AWS::EC2::Route", "Condition": "UseVpc", "DependsOn": "InternetGatewayAttachment", "Properties": { "RouteTableId": { "Ref": "PublicRouteTable" }, "DestinationCidrBlock": "0.0.0.0/0", "GatewayId": { "Ref": "InternetGateway" } } },
+    "PublicSubnetRoutes": { "Type": "AWS::EC2::SubnetRouteTableAssociation", "Condition": "UseVpc", "Properties": { "SubnetId": { "Ref": "PublicSubnet" }, "RouteTableId": { "Ref": "PublicRouteTable" } } },
+    "PrivateRouteTable": { "Type": "AWS::EC2::RouteTable", "Condition": "UseVpc", "Properties": { "VpcId": { "Ref": "Vpc" } } },
+    "PrivateDefaultRoute": { "Type": "AWS::EC2::Route", "Condition": "UseVpc", "Properties": { "RouteTableId": { "Ref": "PrivateRouteTable" }, "DestinationCidrBlock": "0.0.0.0/0", "NatGatewayId": { "Ref": "NatGateway" } } },
+    "PrivateSubnetRoutes": { "Type": "AWS::EC2::SubnetRouteTableAssociation", "Condition": "UseVpc", "Properties": { "SubnetId": { "Ref": "PrivateSubnet" }, "RouteTableId": { "Ref": "PrivateRouteTable" } } },
+    "WorkerSecurityGroup": { "Type": "AWS::EC2::SecurityGroup", "Condition": "UseVpc", "Properties": {
+      "GroupDescription": "Backup worker: outbound HTTPS (AWS APIs) and MongoDB Atlas only; no inbound", "VpcId": { "Ref": "Vpc" },
+      "SecurityGroupEgress": [
+        { "IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "CidrIp": "0.0.0.0/0" },
+        { "IpProtocol": "tcp", "FromPort": 27015, "ToPort": 27017, "CidrIp": "0.0.0.0/0" }
+      ] } },
+    "WorkerDeadLetterQueue": { "Type": "AWS::SQS::Queue", "Properties": { "SqsManagedSseEnabled": true, "MessageRetentionPeriod": 1209600 } },
+    "WorkerLogGroup": { "Type": "AWS::Logs::LogGroup", "Properties": { "LogGroupName": { "Fn::Sub": "/aws/lambda/financial-os-${Environment}-backup-worker" }, "RetentionInDays": 30 } },
+    "WorkerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow", "Principal": { "Service": "lambda.amazonaws.com" }, "Action": "sts:AssumeRole" }] },
+        "ManagedPolicyArns": [{ "Fn::If": ["UseVpc", { "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole" },
+          { "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" }] }],
+        "Policies": [{ "PolicyName": "backup-worker-least-privilege", "PolicyDocument": { "Version": "2012-10-17", "Statement": [
+          { "Sid": "WriteOnceObjectsOnly", "Effect": "Allow", "Action": "s3:PutObject",
+            "Resource": [{ "Fn::Sub": "${BackupBucket.Arn}/packages/*" }, { "Fn::Sub": "${BackupBucket.Arn}/ledger-mirror/*" }] },
+          { "Fn::If": ["UseKms", { "Sid": "EncryptWithBackupKey", "Effect": "Allow", "Action": ["kms:GenerateDataKey", "kms:Encrypt"], "Resource": { "Fn::GetAtt": ["BackupKey", "Arn"] } }, { "Ref": "AWS::NoValue" }] },
+          { "Sid": "ReadOwnSecureParameters", "Effect": "Allow", "Action": "ssm:GetParametersByPath",
+            "Resource": [{ "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/financial-os/${Environment}" },
+              { "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/financial-os/${Environment}/*" }] },
+          { "Sid": "DecryptParametersViaSsmOnly", "Effect": "Allow", "Action": "kms:Decrypt", "Resource": "*",
+            "Condition": { "StringEquals": { "kms:ViaService": { "Fn::Sub": "ssm.${AWS::Region}.amazonaws.com" } } } },
+          { "Sid": "PublishBackupMetricOnly", "Effect": "Allow", "Action": "cloudwatch:PutMetricData", "Resource": "*",
+            "Condition": { "StringEquals": { "cloudwatch:namespace": "FinancialOS/Backup" } } }
+        ] } }]
+      }
+    },
+    "WorkerFunction": {
+      "Type": "AWS::Lambda::Function", "DependsOn": ["WorkerLogGroup"],
+      "Properties": {
+        "FunctionName": { "Fn::Sub": "financial-os-${Environment}-backup-worker" },
+        "Runtime": "nodejs22.x", "Handler": "index.handler", "Architectures": ["arm64"],
+        "Code": { "S3Bucket": { "Ref": "WorkerCodeBucket" }, "S3Key": { "Ref": "WorkerCodeKey" } },
+        "Role": { "Fn::GetAtt": ["WorkerRole", "Arn"] }, "MemorySize": 1024, "Timeout": 600, "ReservedConcurrentExecutions": 1,
+        "VpcConfig": { "Fn::If": ["UseVpc", { "SubnetIds": [{ "Ref": "PrivateSubnet" }], "SecurityGroupIds": [{ "Ref": "WorkerSecurityGroup" }] }, { "Ref": "AWS::NoValue" }] },
+        "Environment": { "Variables": {
+          "FINANCIAL_OS_ENVIRONMENT": { "Ref": "Environment" },
+          "FINANCIAL_OS_SSM_PREFIX": { "Fn::Sub": "/financial-os/${Environment}" },
+          "FINANCIAL_OS_BACKUP_BUCKET": { "Ref": "BackupBucket" },
+          "FINANCIAL_OS_BACKUP_KMS_KEY_ID": { "Fn::If": ["UseKms", { "Fn::GetAtt": ["BackupKey", "Arn"] }, ""] },
+          "FINANCIAL_OS_APP_DATABASE": { "Ref": "AppDatabase" },
+          "FINANCIAL_OS_LEDGER_DATABASE": { "Ref": "LedgerDatabase" },
+          "FINANCIAL_OS_CAPTURE_MAX_MS": "240000"
+        } }
+      }
+    },
+    "SchedulerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow", "Principal": { "Service": "scheduler.amazonaws.com" }, "Action": "sts:AssumeRole",
+          "Condition": { "StringEquals": { "aws:SourceAccount": { "Ref": "AWS::AccountId" } } } }] },
+        "Policies": [{ "PolicyName": "invoke-backup-worker", "PolicyDocument": { "Version": "2012-10-17", "Statement": [
+          { "Effect": "Allow", "Action": "lambda:InvokeFunction", "Resource": { "Fn::GetAtt": ["WorkerFunction", "Arn"] } },
+          { "Effect": "Allow", "Action": "sqs:SendMessage", "Resource": { "Fn::GetAtt": ["WorkerDeadLetterQueue", "Arn"] } }
+        ] } }]
+      }
+    },
+    "WorkerSchedule": {
+      "Type": "AWS::Scheduler::Schedule",
+      "Properties": {
+        "ScheduleExpression": { "Ref": "ScheduleExpression" }, "ScheduleExpressionTimezone": { "Ref": "ScheduleTimezone" }, "FlexibleTimeWindow": { "Mode": "OFF" },
+        "Target": { "Arn": { "Fn::GetAtt": ["WorkerFunction", "Arn"] }, "RoleArn": { "Fn::GetAtt": ["SchedulerRole", "Arn"] },
+          "RetryPolicy": { "MaximumRetryAttempts": 2, "MaximumEventAgeInSeconds": 3600 }, "DeadLetterConfig": { "Arn": { "Fn::GetAtt": ["WorkerDeadLetterQueue", "Arn"] } } }
+      }
+    },
+    "AlarmTopic": { "Type": "AWS::SNS::Topic", "Properties": { "TopicName": { "Fn::Sub": "financial-os-${Environment}-backup-alarms" } } },
+    "AlarmSubscription": { "Type": "AWS::SNS::Subscription", "Properties": { "TopicArn": { "Ref": "AlarmTopic" }, "Protocol": "email", "Endpoint": { "Ref": "AlarmEmail" } } },
+    "AlarmTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": { "Topics": [{ "Ref": "AlarmTopic" }], "PolicyDocument": { "Version": "2012-10-17", "Statement": [
+        { "Sid": "EventBridgeProtectionAlerts", "Effect": "Allow", "Principal": { "Service": "events.amazonaws.com" }, "Action": "sns:Publish", "Resource": { "Ref": "AlarmTopic" },
+          "Condition": { "ArnEquals": { "aws:SourceArn": [{ "Fn::GetAtt": ["BreakGlassAssumedRule", "Arn"] }, { "Fn::GetAtt": ["ProtectedBucketChangeRule", "Arn"] }] } } },
+        { "Sid": "CloudWatchAlarms", "Effect": "Allow", "Principal": { "Service": "cloudwatch.amazonaws.com" }, "Action": "sns:Publish", "Resource": { "Ref": "AlarmTopic" },
+          "Condition": { "StringEquals": { "aws:SourceAccount": { "Ref": "AWS::AccountId" } },
+            "ArnLike": { "aws:SourceArn": { "Fn::Sub": "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:*" } } } }
+      ] } }
+    },
+    "MissingBackupAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "No successful backup for 26 hours (RPO 24h + margin); missing data counts as failure",
+        "Namespace": "FinancialOS/Backup", "MetricName": "BackupSucceeded", "Dimensions": [{ "Name": "Environment", "Value": { "Ref": "Environment" } }],
+        "Statistic": "Sum", "Period": 3600, "EvaluationPeriods": 26, "DatapointsToAlarm": 26, "Threshold": 1,
+        "ComparisonOperator": "LessThanThreshold", "TreatMissingData": "breaching", "AlarmActions": [{ "Ref": "AlarmTopic" }], "OKActions": [{ "Ref": "AlarmTopic" }]
+      }
+    },
+    "WorkerErrorsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": { "AlarmDescription": "Backup worker invocation failed", "Namespace": "AWS/Lambda", "MetricName": "Errors",
+        "Dimensions": [{ "Name": "FunctionName", "Value": { "Ref": "WorkerFunction" } }], "Statistic": "Sum", "Period": 3600, "EvaluationPeriods": 1,
+        "Threshold": 0, "ComparisonOperator": "GreaterThanThreshold", "TreatMissingData": "notBreaching", "AlarmActions": [{ "Ref": "AlarmTopic" }] }
+    },
+    "WorkerDurationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": { "AlarmDescription": "Backup worker above 80% of its timeout", "Namespace": "AWS/Lambda", "MetricName": "Duration",
+        "Dimensions": [{ "Name": "FunctionName", "Value": { "Ref": "WorkerFunction" } }], "Statistic": "Maximum", "Period": 3600, "EvaluationPeriods": 1,
+        "Threshold": 480000, "ComparisonOperator": "GreaterThanThreshold", "TreatMissingData": "notBreaching", "AlarmActions": [{ "Ref": "AlarmTopic" }] }
+    },
+    "DeadLetterAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": { "AlarmDescription": "A scheduled backup invocation could not be delivered", "Namespace": "AWS/SQS", "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [{ "Name": "QueueName", "Value": { "Fn::GetAtt": ["WorkerDeadLetterQueue", "QueueName"] } }], "Statistic": "Maximum", "Period": 300, "EvaluationPeriods": 1,
+        "Threshold": 0, "ComparisonOperator": "GreaterThanThreshold", "TreatMissingData": "notBreaching", "AlarmActions": [{ "Ref": "AlarmTopic" }] }
+    },
+    "RestoreOperatorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow", "Principal": { "AWS": { "Ref": "OperatorPrincipalArn" } }, "Action": "sts:AssumeRole",
+          "Condition": { "Fn::If": ["RequireStsMfa", { "Bool": { "aws:MultiFactorAuthPresent": "true" } }, { "Ref": "AWS::NoValue" }] } }] },
+        "Policies": [{ "PolicyName": "restore-read-only", "PolicyDocument": { "Version": "2012-10-17", "Statement": [
+          { "Effect": "Allow", "Action": "s3:GetObject", "Resource": { "Fn::Sub": "${BackupBucket.Arn}/*" } },
+          { "Effect": "Allow", "Action": "s3:ListBucket", "Resource": { "Fn::GetAtt": ["BackupBucket", "Arn"] } },
+          { "Fn::If": ["UseKms", { "Effect": "Allow", "Action": "kms:Decrypt", "Resource": { "Fn::GetAtt": ["BackupKey", "Arn"] } }, { "Ref": "AWS::NoValue" }] }
+        ] } }]
+      }
+    },
+    "BreakGlassRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow", "Principal": { "AWS": { "Ref": "BreakGlassPrincipalArn" } }, "Action": "sts:AssumeRole",
+          "Condition": { "Fn::If": ["RequireStsMfa", { "Bool": { "aws:MultiFactorAuthPresent": "true" } }, { "Ref": "AWS::NoValue" }] } }] },
+        "Policies": [{ "PolicyName": "governance-bypass-for-legal-deletion", "PolicyDocument": { "Version": "2012-10-17", "Statement": [
+          { "Effect": "Allow", "Action": ["s3:BypassGovernanceRetention", "s3:DeleteObjectVersion", "s3:PutObjectRetention", "s3:GetObjectRetention", "s3:GetObjectVersion"], "Resource": { "Fn::Sub": "${BackupBucket.Arn}/*" } },
+          { "Effect": "Allow", "Action": ["s3:ListBucketVersions", "s3:PutBucketPolicy", "s3:PutLifecycleConfiguration"], "Resource": { "Fn::GetAtt": ["BackupBucket", "Arn"] } }
+        ] } }]
+      }
+    },
+    "BreakGlassAssumedRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Alert on every assumption of the break-glass role (CloudTrail trail from runbook S0; regional STS endpoint - global-endpoint calls are logged in us-east-1)",
+        "EventPattern": { "source": ["aws.sts"], "detail-type": ["AWS API Call via CloudTrail"],
+          "detail": { "eventName": ["AssumeRole"], "requestParameters": { "roleArn": [{ "Fn::GetAtt": ["BreakGlassRole", "Arn"] }] } } },
+        "Targets": [{ "Id": "alarm-topic", "Arn": { "Ref": "AlarmTopic" } }]
+      }
+    },
+    "ProtectedBucketChangeRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Alert on any deletion, retention change or protection change on the backup bucket (object-level names need CloudTrail S3 data events, runbook S0)",
+        "EventPattern": { "source": ["aws.s3"], "detail-type": ["AWS API Call via CloudTrail"],
+          "detail": { "eventSource": ["s3.amazonaws.com"], "requestParameters": { "bucketName": [{ "Ref": "BackupBucket" }] },
+            "eventName": ["DeleteObject", "DeleteObjects", "PutObjectRetention", "PutObjectLegalHold", "PutBucketPolicy", "DeleteBucketPolicy",
+              "PutBucketLifecycle", "DeleteBucketLifecycle", "PutBucketVersioning", "PutObjectLockConfiguration"] } },
+        "Targets": [{ "Id": "alarm-topic", "Arn": { "Ref": "AlarmTopic" } }]
+      }
+    },
+    "MonthlyBudget": {
+      "Type": "AWS::Budgets::Budget",
+      "Properties": {
+        "Budget": { "BudgetType": "COST", "TimeUnit": "MONTHLY", "BudgetLimit": { "Amount": { "Ref": "MonthlyBudgetUsd" }, "Unit": "USD" } },
+        "NotificationsWithSubscribers": [{ "Notification": { "NotificationType": "ACTUAL", "ComparisonOperator": "GREATER_THAN", "Threshold": 80, "ThresholdType": "PERCENTAGE" },
+          "Subscribers": [{ "SubscriptionType": "EMAIL", "Address": { "Ref": "AlarmEmail" } }] }]
+      }
+    }
+  },
+  "Outputs": {
+    "BackupBucketName": { "Value": { "Ref": "BackupBucket" } },
+    "WorkerFunctionName": { "Value": { "Ref": "WorkerFunction" } },
+    "WorkerEgressIp": { "Condition": "UseVpc", "Value": { "Ref": "NatEip" }, "Description": "Add to both Atlas access lists (runbook S4)" },
+    "RestoreOperatorRoleArn": { "Value": { "Fn::GetAtt": ["RestoreOperatorRole", "Arn"] } },
+    "BreakGlassRoleArn": { "Value": { "Fn::GetAtt": ["BreakGlassRole", "Arn"] } },
+    "AlarmTopicArn": { "Value": { "Ref": "AlarmTopic" } }
+  }
+}

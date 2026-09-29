@@ -78,3 +78,11 @@ jobs:
 
       - name: Build production application
         run: npm run build
+
+      - name: Build backup worker and restore-drill bundles
+        run: npm run workers:build
+
+      - name: Smoke-test worker bundles fail closed without configuration
+        run: |
+          node --input-type=module -e "const m = await import('./.build/backup-worker/index.mjs'); if (typeof m.handler !== 'function') process.exit(1); try { await m.handler(); process.exit(1); } catch (e) { if (!/failed closed/.test(e.message)) process.exit(1); }"
+          env -u FINANCIAL_OS_ENVIRONMENT node .build/restore-drill/index.mjs --store /nonexistent 2>&1 | grep -q "FINANCIAL_OS_ENVIRONMENT missing"

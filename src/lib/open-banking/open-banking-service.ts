@@ -12,6 +12,7 @@ import {
 } from "@/lib/config/server-env";
 import { calendarDateAtInstant } from "@/lib/domain/financial-engine/financial-calendar";
 import { money } from "@/lib/domain/money/money";
+import { getDeletionLedger } from "@/lib/operations/deletion-ledger-runtime";
 import {
   ConfigurationError,
   ConflictError,
@@ -52,7 +53,7 @@ type SyncCounts = {
 
 export type OpenBankingDependencies = Readonly<{
   /** ADR-076 C3: true when a retained deletion receipt marks this provider subject; errors fail closed.
-   * Wired to the independent deletion ledger once it is provisioned (A/B); until then no erasure can exist to mark a subject. */
+   * Defaults to the configured independent ledger (deletion-ledger-runtime); tests may inject their own. */
   erasedProviderSubject?: (subjectAlias: string) => Promise<boolean>;
   now?: () => Date;
   profileRepository?: UserProfileRepository;
@@ -209,6 +210,12 @@ function assertSubjectScope(connections: readonly OpenBankingConnectionObservati
   }
 }
 
+/** The configured independent ledger's marker check; undefined only when no ledger is configured outside production. */
+async function configuredErasureGuard(): Promise<((subjectAlias: string) => Promise<boolean>) | undefined> {
+  const ledger = await getDeletionLedger();
+  return ledger === null ? undefined : (subjectAlias) => ledger.isProviderSubjectErased(subjectAlias);
+}
+
 export async function claimConfiguredOpenBankingSubject(
   actor: Actor,
   dependenciesInput?: OpenBankingDependencies,
@@ -223,7 +230,7 @@ export async function claimConfiguredOpenBankingSubject(
   }
   // Anti-resurrection: an erased owner's provider subject is not rebound (and its data not reimported) during receipt retention.
   // Checked right before and again right after the claim, so an erasure completing in between cannot leave a new binding.
-  const guard = dependenciesInput?.erasedProviderSubject;
+  const guard = dependenciesInput?.erasedProviderSubject ?? await configuredErasureGuard();
   const refused = () => new ConflictError("This bank connection belongs to an erased account and requires review before it can be linked again.");
   if (guard !== undefined && await guard(subjectAlias())) throw refused();
   await resolved.repository.claimBinding(actor, subjectAlias());

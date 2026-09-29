@@ -17,7 +17,8 @@
     "test:integration": "vitest run tests/integration",
     "security:audit": "npm audit --audit-level=high",
     "security:check": "node scripts/security-check.mjs",
-    "operations:index-check": "node scripts/index-manifest.mjs --check"
+    "operations:index-check": "node scripts/index-manifest.mjs --check",
+    "workers:build": "node scripts/build-workers.mjs"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "3.11.3",
@@ -38,6 +39,7 @@
     "eslint-config-next": "16.3.3",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
+    "vite": "8.2.2",
     "vitest": "4.1.11"
   }
 }

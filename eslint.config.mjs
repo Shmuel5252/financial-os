@@ -8,6 +8,7 @@ export default defineConfig([
   { rules: { "no-eval": "error", "no-implied-eval": "error", "no-new-func": "error" } },
   globalIgnores([
     ".next/**",
+    ".build/**",
     "coverage/**",
     "node_modules/**",
     "out/**",
