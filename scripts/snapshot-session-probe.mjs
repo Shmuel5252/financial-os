@@ -6,8 +6,10 @@ import { MongoClient } from "mongodb";
 
 const uri = process.env.PROBE_MONGODB_URI; const database = process.env.PROBE_DATABASE;
 if (!uri || !database) { console.log("unsupported: PROBE_MONGODB_URI and PROBE_DATABASE are required"); process.exit(2); }
-const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
+// Constructed inside try: a malformed URI's parse error embeds the URI (password included); only its name is printed.
+let client;
 try {
+  client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
   await client.connect();
   const db = client.db(database);
   const names = (await db.listCollections({}, { nameOnly: true }).toArray()).map(item => item.name).filter(name => !name.startsWith("system."));
@@ -28,4 +30,4 @@ try {
 } catch (error) {
   console.log(`unsupported: ${error?.codeName ?? error?.name ?? "error"}`);
   process.exitCode = 1;
-} finally { await client.close(); }
+} finally { await client?.close(); }

@@ -80,11 +80,35 @@ For Vercel, pipe the variable into `vercel env add <NAME> production` in the sam
 
 ### S1 — Ledger cluster (B1) [OWNER]
 1. Create Atlas project `financial-os-ledger-<env>`; cluster tier per D6 in AWS Frankfurt (`eu-central-1`).
-2. Database users: `ledger-app` → custom role with only `find`, `insert`, `update` on `deletion_ledger` (no `remove`/`dropCollection`: the ledger never deletes receipts); `ledger-mirror` → `read@deletion_ledger`; a temporary `ledger-probe` user → `readWrite@ledger_probe` for step 5 only, deleted afterwards. No other roles. (Restore also refuses a live ledger missing any mirrored receipt.)
+2. Database users: `ledger-app` → custom role `ledgerAppNoRemove` with only `find`, `insert`, `update` on **the two collections** `deletion_ledger.deletionReceipts` and `deletion_ledger.deletionLedgerHead` (not database-wide: MongoDB authorizes collection creation with `insert`, so a database-wide grant could create collections; no `remove`/`dropCollection`: the ledger never deletes receipts), restricted to the ledger cluster, permanent, password only in your password manager until S9; `ledger-mirror` → `read@deletion_ledger`; a temporary `ledger-probe` user → `readWrite@ledger_probe` for step 5 only, deleted afterwards. No other roles. (Restore also refuses a live ledger missing any mirrored receipt.)
 3. Network: add the worker's Elastic IP after S4; app path per D8. Enable TLS-only (default).
 4. Atlas alerts → D9 recipients (probe P4): `node scripts/atlas-alerts.mjs --role ledger --cluster <name> --email <you> --out <dir>` then `atlas alerts settings create --projectId <id> --file <each file>` (or recreate them in the UI). Free/Flex offer only Connections, Logical Size, Network and Opscounter conditions; outages are also caught by the worker's Errors and missing-success alarms (it mirrors the ledger first) and claims fail closed.
-5. [CLAUDE-prepared, OWNER-run] Temporarily allowlist your current IP (one hour), then in your shell: `$env:PROBE_MONGODB_URI = Read-Host "uri"; node scripts/ledger-probe.mjs` (needs only readWrite on `ledger_probe`; creates and drops only its own `ledger_probe_<run>_*` collections and verifies the cleanup) — **P1**, PASS/FAIL in the decision sheet §4 — then delete the `ledger-probe` user, and (**P2**) with a temporary `ledger-admin` user (`readWrite` + `dbAdmin` on `deletion_ledger`, deleted right after): `$env:LEDGER_BOOTSTRAP_URI='<ledger-admin uri>'; $env:LEDGER_BOOTSTRAP_DATABASE='deletion_ledger'; node scripts/ledger-bootstrap.mjs` (idempotent; `ledger-app` cannot create collections by design). Remove the temporary IP. Neither script prints a URI or document.
-- Verify: P1 PASS (two `supported` lines and `cleanup: done`, exit 0; exit 3 = cleanup incomplete, not a PASS); P2 PASS (bootstrap `ok … head revision 0`, a delete attempt as `ledger-app` is unauthorized); users have only the listed roles. P1 FAIL on a capability → ledger on Flex and re-run P1.
+5. [CLAUDE-prepared, OWNER-run] Temporarily allowlist your current IP (one hour), then in your shell: `$env:PROBE_MONGODB_URI = Read-Host "uri"; node scripts/ledger-probe.mjs` (needs only readWrite on `ledger_probe`; creates and drops only its own `ledger_probe_<run>_*` collections and verifies the cleanup) — **P1**, PASS/FAIL in the decision sheet §4 — then delete the `ledger-probe` user, and (**P2**) with a temporary `ledger-admin` user (**`readWrite@deletion_ledger` only** — the bootstrap needs no `dbAdmin`; cluster-restricted, 6 hours, deleted right after): `node scripts/ledger-bootstrap.mjs` twice (idempotent; `ledger-app` cannot create collections by design), then as `ledger-app`: `node scripts/ledger-privilege-check.mjs` (positive checks inside an always-aborted transaction; negative checks only against names that do not exist; state must be unchanged). URIs are built in the shell from a hidden password prompt. Remove the temporary IP. Neither script prints a URI or document.
+  P2 commands (PowerShell; passwords only in a hidden prompt, URL-encoded, never in files, history or chat; host from the Atlas Connect dialog):
+  ```powershell
+  & {
+    Set-Location <repository checkout>
+    $secure = Read-Host "ledger-admin password" -AsSecureString
+    $plain = [System.Net.NetworkCredential]::new("", $secure).Password
+    $env:LEDGER_BOOTSTRAP_URI = "mongodb+srv://ledger-admin:$([uri]::EscapeDataString($plain))@<cluster host>/?appName=ledger-staging"
+    Remove-Variable plain, secure
+    $env:LEDGER_BOOTSTRAP_DATABASE = "deletion_ledger"
+    node scripts/ledger-bootstrap.mjs; "exit code: $LASTEXITCODE"
+    node scripts/ledger-bootstrap.mjs; "exit code: $LASTEXITCODE"
+    Remove-Item Env:LEDGER_BOOTSTRAP_URI, Env:LEDGER_BOOTSTRAP_DATABASE
+  }
+  & {
+    Set-Location <repository checkout>
+    $secure = Read-Host "ledger-app password" -AsSecureString
+    $plain = [System.Net.NetworkCredential]::new("", $secure).Password
+    $env:LEDGER_CHECK_URI = "mongodb+srv://ledger-app:$([uri]::EscapeDataString($plain))@<cluster host>/?appName=ledger-staging"
+    Remove-Variable plain, secure
+    $env:LEDGER_CHECK_DATABASE = "deletion_ledger"
+    node scripts/ledger-privilege-check.mjs; "exit code: $LASTEXITCODE"
+    Remove-Item Env:LEDGER_CHECK_URI, Env:LEDGER_CHECK_DATABASE
+  }
+  ```
+- Verify: P1 PASS (two `supported` lines and `cleanup: done`, exit 0; exit 3 = cleanup incomplete, not a PASS); P2 PASS = both bootstrap runs print `ok: ledger collections present; head revision 0` (exit 0) **and** the privilege check prints two `allowed … — pass`, four `denied … — pass (Unauthorized)` and `state: unchanged (receipts 0, head revision 0) — pass` (exit 0) — full criteria in the decision sheet §4; users have only the listed roles. P1 FAIL on a capability → ledger on Flex and re-run P1.
 - Rollback: delete the project (no data yet).
 
 ### S2 — Snapshot probe on the main cluster [OWNER, early and cheap]

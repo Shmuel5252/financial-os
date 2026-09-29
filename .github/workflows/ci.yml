@@ -67,6 +67,17 @@ jobs:
           for i in $(seq 1 30); do docker exec mongo-rs mongosh --quiet --port 27018 --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)' && break; sleep 1; done
           docker exec mongo-rs mongosh --quiet --port 27018 --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'
 
+      - name: Start authenticated single-node replica set for least-privilege checks
+        run: |
+          ADMIN_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)
+          echo "::add-mask::$ADMIN_PASSWORD"
+          docker run -d --name mongo-auth --network host --entrypoint bash mongo:8.0 -c 'head -c 756 /dev/urandom | base64 -w0 > /tmp/keyfile && chmod 400 /tmp/keyfile && exec mongod --replSet rsa --port 27019 --bind_ip 127.0.0.1 --auth --keyFile /tmp/keyfile'
+          for i in $(seq 1 30); do docker exec mongo-auth mongosh --quiet --port 27019 --eval 'db.adminCommand({ ping: 1 })' && break; sleep 1; done
+          docker exec mongo-auth mongosh --quiet --port 27019 --eval 'rs.initiate({ _id: "rsa", members: [{ _id: 0, host: "127.0.0.1:27019" }] })'
+          for i in $(seq 1 30); do docker exec mongo-auth mongosh --quiet --port 27019 --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)' && break; sleep 1; done
+          docker exec mongo-auth mongosh --quiet --port 27019 --eval "db.getSiblingDB('admin').createUser({ user: 'ci-admin', pwd: '$ADMIN_PASSWORD', roles: ['root'] })"
+          echo "MONGODB_TEST_AUTH_REPLICA_URI=mongodb://ci-admin:$ADMIN_PASSWORD@127.0.0.1:27019/?authSource=admin&directConnection=true" >> "$GITHUB_ENV"
+
       - name: Run unit and available integration tests
         run: npm test
 

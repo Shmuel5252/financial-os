@@ -62,8 +62,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   if (!uri || !/^[A-Za-z0-9_-]{1,38}$/.test(database) || ["deletion_ledger", "admin", "local", "config"].includes(database)) {
     console.log("failed: PROBE_MONGODB_URI and a valid, dedicated PROBE_DATABASE are required"); process.exit(2);
   }
-  const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
+  // Constructed inside try: a malformed URI's parse error embeds the URI (password included); only its name is printed.
+  let client;
   try {
+    client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
     await client.connect();
     const outcome = await runLedgerProbe({ client, database });
     for (const line of outcome.lines) console.log(line);
@@ -71,5 +73,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   } catch (error) {
     // Nothing was created without a connection.
     console.log(`unsupported: connection — fail (${code(error)})`); console.log("cleanup: done"); process.exitCode = 1;
-  } finally { await client.close(); }
+  } finally { await client?.close(); }
 }

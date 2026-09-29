@@ -6,8 +6,10 @@ import { MongoClient } from "mongodb";
 
 const uri = process.env.LEDGER_BOOTSTRAP_URI; const database = process.env.LEDGER_BOOTSTRAP_DATABASE;
 if (!uri || !database || !/^[A-Za-z0-9_-]{1,63}$/.test(database)) { console.log("failed: LEDGER_BOOTSTRAP_URI and a valid LEDGER_BOOTSTRAP_DATABASE are required"); process.exit(2); }
-const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
+// Constructed inside try: a malformed URI's parse error embeds the URI (password included); only its name is printed.
+let client;
 try {
+  client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
   const db = client.db(database);
   const existing = new Set((await db.listCollections({}, { nameOnly: true }).toArray()).map(item => item.name));
   const unexpected = [...existing].filter(name => !["deletionReceipts", "deletionLedgerHead"].includes(name) && !name.startsWith("system."));
@@ -21,4 +23,4 @@ try {
   }
 } catch (error) {
   console.log(`failed: ${error?.codeName ?? error?.name ?? "error"}`); process.exitCode = 1;
-} finally { await client.close(); }
+} finally { await client?.close(); }

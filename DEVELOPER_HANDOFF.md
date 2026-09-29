@@ -191,6 +191,8 @@ $env:MONGODB_TEST_REPLICA_URI='mongodb://127.0.0.1:27018'
 
 Include it in the full regression alongside `MONGODB_TEST_URI`; shut the node down and delete its data directory afterwards.
 
+**Auth-enforced replica set (added 2026-09-30)** for the P2 least-privilege suite (`tests/integration/ledger-privileges.integration.test.ts`): a second loopback node with `--auth --keyFile <random keyfile>` on port 27019, `rs.initiate` through the localhost exception, then a synthetic root user with a random password; set `MONGODB_TEST_AUTH_REPLICA_URI=mongodb://<user>:<password>@127.0.0.1:27019/?authSource=admin&directConnection=true` in the shell only. CI does the same in a container with a per-run masked password. Delete the keyfile and data directory afterwards.
+
 Run commands separately and inspect each exit code; PowerShell does not automatically stop after a failed native command. Run build after regression, not concurrently. Missing Mongo means real integration is unverified, not passed. Excluded provider tests require actual provider authorization/configuration; development cutover tests may be destructive and are not routine regression permission. Do not enable flags to improve counts. A local synthetic rehearsal is real Mongo evidence, not real financial/provider/staging evidence.
 
 `security:check` is a bounded repository secret/private-file guard, not exhaustive SAST or certification of arbitrary historical text. `security:audit` requires registry access; network/reviewer denial is a reported blocker, never a zero-vulnerability result. Follow applicable installed skills/tool safety instructions, but no particular model, plugin, conversation, agent ID or vanished process is necessary to reconstruct the task.
