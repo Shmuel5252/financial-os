@@ -151,7 +151,8 @@ function canonicalAccountFields(
   }[account.accountType] as "bank" | "credit_card" | "loan" | "savings";
   return {
     balance,
-    name: safeText(account.displayName) ?? "חשבון בנקאי",
+    // Canonical names share the manual account domain limit (100, trimmed); the revision keeps the full minimized label.
+    name: safeText(account.displayName, 100)?.trimEnd() ?? "חשבון בנקאי",
     type,
   } as ManualFields;
 }

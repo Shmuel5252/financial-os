@@ -19,6 +19,14 @@ describe("manifest source recovery metadata", () => {
       unresolved: { missing: 0, changed: 0, inactive: 0 } });
     expect(BSON.serialize({ row, manifest })).toEqual(before);
   });
+  it("matches bank-sourced canonical accounts through the reviewed dual-variant adapter", () => {
+    const { row, manifest } = fixture(); const at = row.createdAt as Date; const alias = "b".repeat(64);
+    const fields = { balance: row.fields.balance, name: "Synthetic", type: "bank" };
+    const bank = { ...row, schemaVersion: 3, fields, source: { connectionAlias: alias, kind: "open_banking", observationFingerprint: alias, observedAt: at,
+      provider: "financy", recordAlias: alias }, auditTrail: [{ ...row.auditTrail[0], changedFields: Object.keys(fields), source: "open_banking" }] };
+    expect(inspect([manifest], { accounts: [bank] })).toMatchObject({ releaseAllowed: false, matched: 1 });
+    expect(() => inspect([manifest], { accounts: [{ ...bank, source: { ...bank.source, provider: "other" } }] })).toThrow("Manifest source recovery requires review");
+  });
   it("does not substitute missing, updated or deleted current records for historical evidence", () => {
     const { row, manifest } = fixture();
     for (const [records, unresolved] of [

@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 bank record recovery — verified 2026-09-29
+
+Strict adapters for bank record revisions, reconciliation ledgers and bank-sourced canonical accounts/transactions (coverage 45/47) with a link inspector. Review's Critical (cross-now() timestamp equality rejected every production bank row) and a real Phase 9 writer defect (bank account names up to 120 characters vs the 100-character domain limit, breaking the reader) were both reproduced RED in a real-Mongo service rehearsal and fixed. Full 679 tests/139 files, one opt-in skip, six unchanged exclusions; types, lint, build, security464/zero, index90/88/2, diff, audit zero. Details and limitations: `PHASE_18_RECOVERY_IMPLEMENTATION.md`.
+
 ## Phase 18 bank control-plane recovery — verified 2026-09-29
 
 Strict recovery adapters for provider bindings, connections, sync runs and lifecycle commands (coverage 43/47), a no-replay inspector and `quarantineBankControl`. The repository now refuses to restart or finish a restored non-completed sync/command under its old key; completed outcomes are returned as recorded. Review's two Important issues (lease resumption / failed-disconnect re-send after restore; undercounted unknown outcomes) fixed and verified RED→GREEN with a real-Mongo rehearsal including an unfenced control. Full 659 tests/137 files, one opt-in skip, six unchanged exclusions; types, lint, build, security461/zero, index90/88/2, diff, audit zero. Key continuity, consent revalidation, erased-subject reimport blocking and unknown-outcome review remain release barriers. Details: `PHASE_18_RECOVERY_IMPLEMENTATION.md`.

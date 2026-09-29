@@ -24,6 +24,7 @@ import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/
 import { projectRecoveryGoalDefinition, projectRecoveryGoalProgress, projectRecoveryGoalReceipt } from "@/lib/operations/goal-recovery";
 import { projectRecoveryFinancialSnapshot } from "@/lib/operations/financial-snapshot-recovery";
 import { projectRecoveryPurchaseSimulation } from "@/lib/operations/purchase-recovery";
+import { projectRecoveryBankReconciliation, projectRecoveryBankRecordRevision, projectRecoveryOpenBankingRecord } from "@/lib/operations/bank-record-recovery";
 import { projectRecoveryBankBinding, projectRecoveryBankConnection, projectRecoveryBankLifecycle, projectRecoveryBankSyncRun } from "@/lib/operations/bank-control-recovery";
 
 const fail = (): never => { throw new Error("Recovery schema requires review"); };
@@ -75,10 +76,12 @@ export const initialRecoverySchemas: RecoverySchemas = {
   bankConnections: { version: "bank-connection-v1", project: projectRecoveryBankConnection },
   bankSyncRuns: { version: "bank-sync-run-v1", project: projectRecoveryBankSyncRun },
   bankLifecycleCommands: { version: "bank-lifecycle-v1", project: projectRecoveryBankLifecycle },
+  bankRecordRevisions: { version: "bank-revision-v1", project: projectRecoveryBankRecordRevision },
+  bankAccountReconciliations: { version: "bank-reconciliation-v1", project: projectRecoveryBankReconciliation },
   authUsers: { version: "auth-user-v1", project: row => { validate(authUserSchema, row); return row; } },
   profiles: { version: "profile-v1", project: row => { validate(storedProfileSchema.strict(), row); return row; } },
-  ...Object.fromEntries(manualSectionSchema.options.map(section => [sectionCollections[section], {
-    version: "manual-v2", project: (row: Document) => {
+  ...Object.fromEntries(manualSectionSchema.options.map(section => {
+    const manual = (row: Document) => {
       const stored = validate(manualSchema, row);
       if (stored.auditTrail.some(event => !event.actorUserId.equals(stored.userId))) return fail();
       const fields = fromStoredDomainValue(stored.fields);
@@ -86,6 +89,10 @@ export const initialRecoverySchemas: RecoverySchemas = {
       if (!result.success) return fail();
       unchanged(fields, result.data);
       return row;
-    },
-  }])),
+    };
+    // Only accounts/transactions have a bank-sourced writer; every other section keeps the manual-only contract.
+    if (section !== "accounts" && section !== "transactions") return [sectionCollections[section], { version: "manual-v2", project: manual }];
+    return [sectionCollections[section], { version: "manual-v2-open-banking-v1",
+      project: (row: Document) => row.source?.kind === "open_banking" ? projectRecoveryOpenBankingRecord(section, row) : manual(row) }];
+  })),
 };

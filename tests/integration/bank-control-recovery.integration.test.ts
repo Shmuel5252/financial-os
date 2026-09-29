@@ -25,7 +25,7 @@ const rows = (records: Record<string, readonly Document[]>) => ({ bindings: reco
     try {
       target = await createIsolatedRecoveryTarget(uri!);
       let clock = Date.parse("2026-09-29T08:00:00.000Z"); const tick = (ms = 1_000) => { clock += ms; };
-      const repository = openBankingRepositoryForDatabase(source.database, () => new Date(clock)); await repository.ensureIndexes();
+      const repository = openBankingRepositoryForDatabase(source.database, () => new Date(clock++)); await repository.ensureIndexes();
       const actors = [new ObjectId(), new ObjectId()].map(id => ({ kind: "user" as const, userId: id.toHexString() }));
       // Retry keys are deliberately shared across owners: uniqueness is owner scoped.
       const keys = { completed: randomUUID(), partial: randomUUID(), interrupted: randomUUID(), failedRefresh: randomUUID(), unknownRefresh: randomUUID(),

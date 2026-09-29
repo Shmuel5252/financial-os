@@ -15,7 +15,7 @@ export function inspectManifestRecoverySources(
     for (const [collection, rows] of Object.entries(records)) {
       if (!allowed.has(collection)) return fail();
       const adapter = initialRecoverySchemas[collection];
-      if (!adapter || adapter.version !== "manual-v2") return fail();
+      if (!adapter || !["manual-v2", "manual-v2-open-banking-v1"].includes(adapter.version)) return fail();
       for (const input of rows) {
         const row = adapter.project(input); const key = `${collection}:${row._id.toHexString()}`;
         if (index.has(key) || !Number.isSafeInteger(row.version)) return fail();
