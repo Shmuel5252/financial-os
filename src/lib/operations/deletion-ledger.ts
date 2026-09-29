@@ -4,7 +4,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { Actor } from "@/lib/auth/actor";
 
-export const DELETION_POLICY = "erasure-v1" as const;
+// v2 (ADR-076) adds signed provider-subject markers; no v1 receipt was ever persisted outside disposable tests.
+export const DELETION_POLICY = "erasure-v2" as const;
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const instant = z.number().int().nonnegative().max(8_640_000_000_000_000);
 const environment = z.enum(["isolated-test", "staging", "production"]);
@@ -14,6 +15,8 @@ const receiptSchema = z.object({
   keyVersion: z.number().int().positive(), operationId: z.string().uuid(),
   subject: digest, acceptedAt: instant, completedAt: instant.nullable(),
   status: z.enum(["suppressed", "locally-erased"]), revision: z.number().int().positive().max(2),
+  // ADR-076: keyed markers of the erased owner's provider subject aliases (never the alias, provider data or finance).
+  providerSubjects: z.array(digest).max(8),
   signature: digest,
 }).strict().refine(r => r.status === "suppressed"
   ? r.completedAt === null && r.revision === 1
@@ -33,8 +36,12 @@ function mac(key: LedgerKey, domain: string, value: unknown): string {
 export function deletionSubject(userId: string, env: LedgerEnvironment, key: LedgerKey): string {
   return mac(key, "subject", [parse(environment, env), parse(identity, userId)]);
 }
+/** Anti-reimport marker for an erased owner's provider subject alias (itself an HMAC); unlinkable without the ledger key. */
+export function providerSubjectMarker(subjectAlias: string, env: LedgerEnvironment, key: LedgerKey): string {
+  return mac(key, "provider-subject", [parse(environment, env), parse(digest, subjectAlias)]);
+}
 function payload(r: Omit<DeletionReceipt, "signature">) {
-  return [r.policy, r.environment, r.keyVersion, r.operationId, r.subject, r.acceptedAt, r.completedAt, r.status, r.revision];
+  return [r.policy, r.environment, r.keyVersion, r.operationId, r.subject, r.acceptedAt, r.completedAt, r.status, r.revision, r.providerSubjects];
 }
 function seal(r: Omit<DeletionReceipt, "signature">, key: LedgerKey): DeletionReceipt {
   return parse(receiptSchema, { ...r, signature: mac(key, "receipt", payload(r)) });
@@ -50,11 +57,14 @@ export function validateDeletionReceipt(input: unknown, env: LedgerEnvironment, 
 }
 
 /** Caller must obtain Actor from requireActor; request supplies no target user ID. */
-export function beginDeletion(actor: Actor, env: LedgerEnvironment, operationId: string, at: number, key: LedgerKey): DeletionReceipt {
+/** providerSubjectAliases: the owner's own server-derived binding aliases, captured before local erasure removes them. */
+export function beginDeletion(actor: Actor, env: LedgerEnvironment, operationId: string, at: number, key: LedgerKey,
+  providerSubjectAliases: readonly string[] = []): DeletionReceipt {
   if (actor.kind !== "user") return fail();
+  const providerSubjects = [...new Set(providerSubjectAliases.map(alias => providerSubjectMarker(alias, env, key)))].sort();
   return seal({ policy: DELETION_POLICY, environment: env, keyVersion: key.version, operationId,
     subject: deletionSubject(actor.userId, env, key), acceptedAt: at, completedAt: null,
-    status: "suppressed", revision: 1 }, key);
+    status: "suppressed", revision: 1, providerSubjects }, key);
 }
 /** Records LOCAL completion only; this never claims provider consent was revoked. */
 export function completeLocalDeletion(input: unknown, actor: Actor, env: LedgerEnvironment, at: number, key: LedgerKey): DeletionReceipt {
@@ -75,7 +85,8 @@ export type RestorationLedgerContext = Readonly<{
 }>;
 
 /** Validate even an empty graph/ledger before filtering. Trusted storage supplies freshness/revision. */
-export function restorationSuppression(input: RestorationLedgerContext): Readonly<{ isSuppressed: (userId: string) => boolean }> {
+export function restorationSuppression(input: RestorationLedgerContext): Readonly<{ isSuppressed: (userId: string) => boolean;
+  isProviderSubjectSuppressed: (subjectAlias: string) => boolean }> {
   const { now, ledgerReadAt, maxLedgerAgeMs, authoritativeRevision, suppliedRevision } = input;
   if (![now, ledgerReadAt].every(v => instant.safeParse(v).success) || !Number.isSafeInteger(maxLedgerAgeMs) || maxLedgerAgeMs < 0
     || ledgerReadAt > now || now - ledgerReadAt > maxLedgerAgeMs || !Number.isSafeInteger(authoritativeRevision)
@@ -88,15 +99,19 @@ export function restorationSuppression(input: RestorationLedgerContext): Readonl
     return { version: key.version, material: Uint8Array.from(key.material) };
   });
   const env = input.environment;
-  const seenSubjects = new Set<string>();
+  const seenSubjects = new Set<string>(); const providerSubjects = new Set<string>();
   const receipts = input.receipts.map(r => validateDeletionReceipt(r, env, keys));
   for (const r of receipts) {
     const subjectKey = `${r.keyVersion}:${r.subject}`;
     // Idempotency keys are subject-scoped; reuse by a different actor cannot invalidate their ledger.
     if (seenSubjects.has(subjectKey) || r.acceptedAt > ledgerReadAt) return fail();
     seenSubjects.add(subjectKey);
+    for (const marker of r.providerSubjects) providerSubjects.add(`${r.keyVersion}:${marker}`);
   }
-  return Object.freeze({ isSuppressed: (id: string) => keys.some(key => seenSubjects.has(`${key.version}:${deletionSubject(id, env, key)}`)) });
+  return Object.freeze({
+    isSuppressed: (id: string) => keys.some(key => seenSubjects.has(`${key.version}:${deletionSubject(id, env, key)}`)),
+    isProviderSubjectSuppressed: (alias: string) => keys.some(key => providerSubjects.has(`${key.version}:${providerSubjectMarker(alias, env, key)}`)),
+  });
 }
 
 export function restorationDisposition(input: RestorationLedgerContext & {

@@ -22,15 +22,15 @@ export class DeletionReceiptStore {
       || current.operationId !== accepted.operationId || current.acceptedAt !== accepted.acceptedAt) throw new Error("Deletion ledger conflict");
     return current;
   }
-  async accept(actor: Actor, operationId: string, at: number): Promise<DeletionReceipt> {
-    const proposed = beginDeletion(actor, this.env, operationId, at, this.key);
+  async accept(actor: Actor, operationId: string, at: number, providerSubjectAliases: readonly string[] = []): Promise<DeletionReceipt> {
+    const proposed = beginDeletion(actor, this.env, operationId, at, this.key, providerSubjectAliases);
     try {
       await this.collection.insertOne({ _id: this.id(actor), current: proposed, accepted: proposed }, { writeConcern: { w: "majority" } });
       return proposed;
     } catch (error) {
       if (!(error instanceof MongoServerError && error.code === 11000)) throw new Error("Deletion ledger unavailable");
       const row = await this.read(actor);
-      if (!row || row.operationId !== operationId) throw new Error("Deletion ledger conflict");
+      if (!row || row.operationId !== operationId || JSON.stringify(row.providerSubjects) !== JSON.stringify(proposed.providerSubjects)) throw new Error("Deletion ledger conflict");
       return row;
     }
   }

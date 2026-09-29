@@ -145,7 +145,7 @@ export function inspectBankControlRecovery(input: BankControlRows) {
  */
 export function quarantineBankControl(input: BankControlRows, ledger: RestorationLedgerContext) {
   inspectBankControlRecovery(input);
-  const { isSuppressed } = restorationSuppression(ledger); let excluded = 0; let fenced = 0;
+  const { isSuppressed, isProviderSubjectSuppressed } = restorationSuppression(ledger); let excluded = 0; let fenced = 0;
   const keep = (rows: readonly Document[], fence: boolean) => rows.flatMap(row => {
     if (isSuppressed(row.userId.toHexString())) { excluded++; return []; }
     const copy = BSON.deserialize(BSON.serialize(row), { promoteLongs: false });
@@ -155,5 +155,7 @@ export function quarantineBankControl(input: BankControlRows, ledger: Restoratio
   const kept = { bindings: keep(input.bindings, false), connections: keep(input.connections, false), runs: keep(input.runs, true), lifecycle: keep(input.lifecycle, true) };
   // Evidence describes only what would be restored, after the whole input was validated above.
   return { releaseAllowed: false as const, ...kept, evidence: { policy: "bank-control-quarantine-v1" as const,
-    ledgerRevision: ledger.authoritativeRevision, evaluatedAt: ledger.now, excluded, fenced, unresolved: inspectBankControlRecovery(kept).unresolved } };
+    ledgerRevision: ledger.authoritativeRevision, evaluatedAt: ledger.now, excluded, fenced, unresolved: inspectBankControlRecovery(kept).unresolved,
+    // ADR-076: a surviving binding to an erased owner's provider subject is reported, never silently removed or trusted.
+    erasedProviderSubjects: kept.bindings.filter(row => isProviderSubjectSuppressed(row.subjectAlias)).length } };
 }

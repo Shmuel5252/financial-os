@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 owner decisions G/C implemented — 2026-09-29
+
+Original checkout aligned to origin/main after proof and checksum backup (G). ADR-076 (C1–C3): minimized retired development manifests, development archive excluded from backups (coverage 46/46), signed provider-subject anti-reimport markers bounded by receipt retention. Reviewed, mutation-checked and rehearsed on real local Mongo. No infrastructure, credential or live change; A/B provisioning not authorized.
+
 ## Phase 18 development-baseline recovery — verified 2026-09-29; repository recovery coverage 47/47
 
 Strict adapters for development migration manifests and archives complete schema coverage of all 47 restorable collections. Archive payloads are inspected (never opaque) and re-materialized byte-exact; a real-Mongo rehearsal with the real offline retirement tool proves restored manifests prevent reimport of retired development data, with a control restore showing reimport without them. Review's Important round-trip issue fixed RED→GREEN; archive scope/legacy-row limits recorded as owner decisions. Phase 18 remains unaccepted pending owner/external gates; see `PHASE_18_20_ACCEPTANCE_PACKAGE.md`. Phase 19 not started.

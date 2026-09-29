@@ -144,6 +144,13 @@ it("fences restored non-completed commands and excludes suppressed owners withou
   expect(result.runs.find(row => row.status === "completed")!.recoveryQuarantinedAt).toBeUndefined();
   expect(result.runs.find(row => row.status === "partial")!.recoveryQuarantinedAt).toEqual(new Date(now));
   expect(result.lifecycle[0]!.recoveryQuarantinedAt).toEqual(new Date(now));
+  expect(result.evidence.erasedProviderSubjects).toBe(0);
+  // ADR-076: another owner now bound to the erased owner provider subject stays visible as a release barrier.
+  const reclaimed = quarantineBankControl(input, { environment: "isolated-test", keys: [key], now, ledgerReadAt: now, maxLedgerAgeMs: 0,
+    authoritativeRevision: 1, suppliedRevision: 1, receipts: [beginDeletion({ kind: "user", userId: erased.binding.userId.toHexString() }, "isolated-test", randomUUID(), now, key,
+      [kept.binding.subjectAlias as string])] });
+  expect(reclaimed.evidence.erasedProviderSubjects).toBe(1);
+  expect(reclaimed.bindings).toHaveLength(1);
   // Fenced copies remain valid artifacts and are not fenced twice.
   expect(quarantineBankControl(result, { environment: "isolated-test", keys: [key], now: now + 1, ledgerReadAt: now + 1, maxLedgerAgeMs: 0,
     authoritativeRevision: 1, suppliedRevision: 1, receipts: [] }).evidence.fenced).toBe(0);

@@ -16,7 +16,7 @@ const headerSchema = z.object({
   digest: z.string().regex(/^[a-f0-9]{64}$/),
   indexManifestDigest: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
-const excluded = new Set(["authSessions", "authVerificationTokens", "bankDevelopmentMigrationLocks", "authorizedSearchDocuments", "rateLimits"]);
+const excluded = new Set(["authSessions", "authVerificationTokens", "bankDevelopmentMigrationLocks", "bankDevelopmentArchive", "authorizedSearchDocuments", "rateLimits"]);
 type Header = z.infer<typeof headerSchema>;
 export type RecoveryEnvelope = Readonly<{ header: Header; iv: Uint8Array; tag: Uint8Array; ciphertext: Uint8Array }>;
 function fail(): never { throw new Error("Recovery envelope validation failed"); }

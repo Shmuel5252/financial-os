@@ -19,6 +19,8 @@ realMongo("isolated durable deletion receipts (no real account erasure)", () => 
       expect(new Set(receipts.map(r => r.signature)).size).toBe(1);
       expect(await collection.countDocuments()).toBe(1);
       await expect(store.accept(actor, randomUUID(), 1010)).rejects.toThrow("Deletion ledger conflict");
+      // ADR-076: a retry cannot add, drop or change provider-subject markers of an accepted deletion.
+      await expect(store.accept(actor, operation, 1011, ["a".repeat(64)])).rejects.toThrow("Deletion ledger conflict");
       await expect(store.recordLocalCompletion(other, operation, 1010)).rejects.toThrow("Deletion ledger conflict");
       expect((await store.read(actor))?.status).toBe("suppressed");
       const completed = await Promise.all(Array.from({ length: 4 }, (_, i) => store.recordLocalCompletion(actor, operation, 1020 + i)));

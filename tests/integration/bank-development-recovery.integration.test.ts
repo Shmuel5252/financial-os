@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { Binary, BSON, Long, ObjectId, type Document } from "mongodb";
+import { BSON, ObjectId, type Document } from "mongodb";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/lib/auth/actor";
 import { money } from "@/lib/domain/money/money";
@@ -18,7 +18,7 @@ import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
 import { recoveryCollections } from "@/lib/operations/recovery-plan";
 import { beginDeletion, restorationSuppression } from "@/lib/operations/deletion-ledger";
 import { quarantineBankControl } from "@/lib/operations/bank-control-recovery";
-import { inspectBankDevelopmentRecovery, materializeBankDevelopmentArchive } from "@/lib/operations/bank-development-recovery";
+import { inspectBankDevelopmentRecovery } from "@/lib/operations/bank-development-recovery";
 
 const uri = process.env.MONGODB_TEST_URI;
 const byName = (left: Document, right: Document) => String(left.name).localeCompare(String(right.name));
@@ -48,7 +48,7 @@ class SyntheticProvider implements OpenBankingProvider {
 
 (uri ? describe : describe.skip)("real isolated development-baseline recovery", () => {
   afterEach(() => { vi.unstubAllEnvs(); });
-  it("restores inspected archives and manifests so retired development data is never reimported", async () => {
+  it("restores minimized manifests without the development archive so retired development data is never reimported", async () => {
     vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("AUTH_SECRET", "synthetic-recovery-secret-at-least-32-characters");
     vi.stubEnv("OPEN_FINANCE_CLIENT_ID", "synthetic-client"); vi.stubEnv("OPEN_FINANCE_CLIENT_SECRET", "synthetic-secret");
     const source = await createIsolatedRecoveryTarget(uri!);
@@ -87,23 +87,30 @@ class SyntheticProvider implements OpenBankingProvider {
       expect(written).toEqual(["accounts", "bankConnections", "bankDevelopmentArchive", "bankDevelopmentMigrations", "bankProviderBindings", "bankRecordRevisions",
         "bankSyncRuns", "profiles", "transactions"]);
       const inspect = (rows: Record<string, readonly Document[]>) => inspectBankDevelopmentRecovery({ migrations: rows.bankDevelopmentMigrations ?? [],
-        archives: rows.bankDevelopmentArchive ?? [], connections: rows.bankConnections!, revisions: rows.bankRecordRevisions!, accounts: rows.accounts!, transactions: rows.transactions! });
-      expect(inspect(records)).toEqual({ policy: "bank-development-recovery-v1", releaseAllowed: false, matched: plan.targets.length,
-        unresolved: { missingManifest: 0, missingArchive: 0, retiredReappeared: 0, mixedSubjectDigests: plan.protectedRecords.length } });
+        connections: rows.bankConnections!, revisions: rows.bankRecordRevisions!, accounts: rows.accounts!, transactions: rows.transactions! });
+      // Retired manifests are inspected in minimized form: no mixed-subject digests remain for a completed retirement.
+      expect(inspect(records)).toEqual({ policy: "bank-development-recovery-v2", releaseAllowed: false, unresolved: { retiredReappeared: 0, mixedSubjectDigests: 0, interruptedRetirements: 0 } });
       const key = { version: 1, material: randomBytes(32) }; const digest = "a".repeat(64);
       const pack = createBackupPackage(records, initialRecoverySchemas, digest, key); expect(pack.manifest.releaseAllowed).toBe(false);
-      expect(Object.fromEntries(pack.manifest.entries.filter(entry => entry.collection.startsWith("bankDevelopment")).map(entry => [entry.collection, entry.schema])))
-        .toEqual({ bankDevelopmentMigrations: "bank-development-migration-v1", bankDevelopmentArchive: "bank-development-archive-v1" });
+      // ADR-076 C2: the development archive is excluded; there is no part for it at all.
+      expect(pack.manifest.excluded).toContain("bankDevelopmentArchive");
+      expect(pack.manifest.entries.filter(entry => entry.collection.startsWith("bankDevelopment")).map(entry => [entry.collection, entry.schema]))
+        .toEqual([["bankDevelopmentMigrations", "bank-development-migration-v2"]]);
       const opened = openBackupPackage(pack, initialRecoverySchemas, digest, key); const at = Date.now();
+      expect(opened.bankDevelopmentArchive).toBeUndefined();
+      // ADR-076 C1: the restored manifest carries none of the protected-record digests, including the erased owner digests.
+      expect(opened.bankDevelopmentMigrations!.every(row => row.protectedRecords === undefined)).toBe(true);
+      const bindingOf = (index: number) => records.bankProviderBindings!.find(row => row.userId.toHexString() === actors[index]!.userId)!.subjectAlias as string;
       const ledger = { environment: "isolated-test" as const, keys: [key], now: at, ledgerReadAt: at, maxLedgerAgeMs: 0, authoritativeRevision: 1, suppliedRevision: 1,
-        receipts: [beginDeletion(actors[0]!, "isolated-test", randomUUID(), at, key)] };
-      const { isSuppressed } = restorationSuppression(ledger);
+        receipts: [beginDeletion(actors[0]!, "isolated-test", randomUUID(), at, key, [bindingOf(0)])] };
+      const { isSuppressed, isProviderSubjectSuppressed } = restorationSuppression(ledger);
+      // ADR-076 C3: the erased owner provider subject is marked; the survivor subject is not.
+      expect([isProviderSubjectSuppressed(bindingOf(0)), isProviderSubjectSuppressed(bindingOf(1))]).toEqual([true, false]);
       const control = quarantineBankControl({ bindings: opened.bankProviderBindings!, connections: opened.bankConnections!, runs: opened.bankSyncRuns!, lifecycle: [] }, ledger);
-      const survivors: Record<string, readonly Document[]> = Object.fromEntries(written.map(name => [name, name === "bankProviderBindings" ? control.bindings
-        : name === "bankConnections" ? control.connections : name === "bankSyncRuns" ? control.runs
-          : opened[name]!.filter(row => !isSuppressed(row.userId.toHexString())).map(row => name === "bankDevelopmentArchive" ? materializeBankDevelopmentArchive(row) : row)]));
-      // The artifact never contains the opaque Binary: the envelope inspected the nested archived record.
-      expect(opened.bankDevelopmentArchive!.every(row => !(row.payload instanceof Binary))).toBe(true);
+      expect(control.evidence).toMatchObject({ erasedProviderSubjects: 0 });
+      const included = written.filter(name => name !== "bankDevelopmentArchive");
+      const survivors: Record<string, readonly Document[]> = Object.fromEntries(included.map(name => [name, name === "bankProviderBindings" ? control.bindings
+        : name === "bankConnections" ? control.connections : name === "bankSyncRuns" ? control.runs : opened[name]!.filter(row => !isSuppressed(row.userId.toHexString()))]));
       const restore = async (names: readonly string[]) => {
         const target = await createIsolatedRecoveryTarget(uri!); namespaces.push(target);
         const repo = openBankingRepositoryForDatabase(target.database, now); const restoredProfiles = profileRepositoryForDatabase(target.database);
@@ -112,34 +119,32 @@ class SyntheticProvider implements OpenBankingProvider {
         for (const name of names) await target.database.collection(name).insertMany([...survivors[name]!]);
         return { target, repo, restoredProfiles };
       };
-      const restored = await restore(written);
-      for (const name of written) {
+      const restored = await restore(included);
+      const minimized = (name: string, row: Document) => { const copy = { ...row }; if (name === "bankDevelopmentMigrations") delete copy.protectedRecords; return copy; };
+      for (const name of included) {
         expect(BSON.serialize({ rows: await restored.target.database.collection(name).find().sort({ _id: 1 }).toArray() }))
-          .toEqual(BSON.serialize({ rows: records[name]!.filter(row => row.userId.toHexString() === survivor.userId) }));
+          .toEqual(BSON.serialize({ rows: records[name]!.filter(row => row.userId.toHexString() === survivor.userId).map(row => minimized(name, row)) }));
         expect(await restored.target.database.collection(name).countDocuments({ userId: new ObjectId(actors[0]!.userId) })).toBe(0);
       }
+      expect(await restored.target.database.collection("bankDevelopmentArchive").countDocuments()).toBe(0);
       await ensureDevelopmentBaselineIndexes(restored.target.database);
-      for (const name of ["bankDevelopmentMigrations", "bankDevelopmentArchive"]) {
-        expect((await restored.target.database.collection(name).listIndexes().toArray()).sort(byName)).toEqual((await source.database.collection(name).listIndexes().toArray()).sort(byName));
-      }
-      const archivedAccount = await restored.target.database.collection("bankDevelopmentArchive").findOne({ collection: "accounts" });
-      expect(BSON.deserialize(archivedAccount!.payload.value(), { promoteLongs: false }).fields.balance.amountMinor).toEqual(Long.fromBigInt(9007199254740993n));
+      expect((await restored.target.database.collection("bankDevelopmentMigrations").listIndexes().toArray()).sort(byName))
+        .toEqual((await source.database.collection("bankDevelopmentMigrations").listIndexes().toArray()).sort(byName));
       // After release, an ordinary sync where the provider still lists the retired connection imports only the active one.
       const rows = async (db: typeof restored.target.database) => (await Promise.all([db.collection("accounts").countDocuments({ "source.connectionAlias": oldAlias }),
         db.collection("transactions").countDocuments({ "source.connectionAlias": oldAlias }), db.collection("bankConnections").countDocuments({ connectionAlias: oldAlias }),
         db.collection("bankRecordRevisions").countDocuments({ connectionAlias: oldAlias })])).reduce((sum, value) => sum + value, 0);
       expect((await synchronizeOpenBanking(survivor, randomUUID(), { now, profileRepository: restored.restoredProfiles, provider: providers[1]!, repository: restored.repo })).status).toBe("completed");
       expect(await rows(restored.target.database)).toBe(0);
-      expect(inspect(Object.fromEntries(await Promise.all(written.map(async name => [name, await restored.target.database.collection(name).find().toArray()]))))).toMatchObject({
-        releaseAllowed: false, matched: plan.targets.length, unresolved: { missingManifest: 0, missingArchive: 0, retiredReappeared: 0, mixedSubjectDigests: plan.protectedRecords.length } });
-      // Control: the same restore without the manifest/archive reimports the retired development connection and its records.
-      const unguarded = await restore(written.filter(name => !name.startsWith("bankDevelopment")));
+      expect(inspect(Object.fromEntries(await Promise.all(included.map(async name => [name, await restored.target.database.collection(name).find().toArray()]))))).toEqual({
+        policy: "bank-development-recovery-v2", releaseAllowed: false, unresolved: { retiredReappeared: 0, mixedSubjectDigests: 0, interruptedRetirements: 0 } });
+      // Control: the same restore without the minimized manifest reimports the retired development connection and its records.
+      const unguarded = await restore(included.filter(name => name !== "bankDevelopmentMigrations"));
       expect((await synchronizeOpenBanking(survivor, randomUUID(), { now, profileRepository: unguarded.restoredProfiles, provider: providers[1]!, repository: unguarded.repo })).status).toBe("completed");
       // Connection, account, transaction and their revisions all come back without the manifest.
       expect(await rows(unguarded.target.database)).toBeGreaterThanOrEqual(6);
-      expect(inspectBankDevelopmentRecovery({ migrations: records.bankDevelopmentMigrations!.filter(row => row.userId.toHexString() === survivor.userId), archives: [],
-        connections: await unguarded.target.database.collection("bankConnections").find().toArray(), revisions: [],
-        accounts: await unguarded.target.database.collection("accounts").find().toArray(), transactions: [] }).unresolved.retiredReappeared).toBeGreaterThan(0);
+      expect(inspectBankDevelopmentRecovery({ migrations: survivors.bankDevelopmentMigrations!, connections: await unguarded.target.database.collection("bankConnections").find().toArray(),
+        revisions: [], accounts: await unguarded.target.database.collection("accounts").find().toArray(), transactions: [] }).unresolved.retiredReappeared).toBeGreaterThan(0);
     } finally { for (const target of namespaces) await target.dispose(); await source.dispose(); }
   }, 60000);
 });

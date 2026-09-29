@@ -65,7 +65,11 @@ realMongo("reviewed application profile/manual schemas in isolated recovery pack
       const bad = { ...raw, fields: { ...raw.fields, unknownSensitiveField: "synthetic" } };
       expect(() => initialRecoverySchemas.accounts!.project(bad)).toThrow("Recovery schema requires review");
       expect(() => initialRecoverySchemas.accounts!.project({ ...raw, schemaVersion: 999 })).toThrow();
-      expect(() => createBackupPackage({ ...input, bankDevelopmentArchive: [{ opaque: "unreviewed" }] }, initialRecoverySchemas, indexDigest, key)).toThrow();
+      const withoutProfiles = { ...initialRecoverySchemas }; delete withoutProfiles.profiles;
+      expect(() => createBackupPackage(input, withoutProfiles, indexDigest, key)).toThrow("Backup package validation failed");
+      // Excluded development archive rows never become package content, whatever the caller supplies.
+      const excludedArchive = createBackupPackage({ ...input, bankDevelopmentArchive: [{ opaque: "unreviewed" }] }, initialRecoverySchemas, indexDigest, key);
+      expect(excludedArchive.manifest.entries.map(entry => entry.collection)).not.toContain("bankDevelopmentArchive");
     } finally { await target.dispose(); await source.dispose(); }
   }, 30000);
 });

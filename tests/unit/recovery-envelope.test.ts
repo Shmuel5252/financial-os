@@ -37,7 +37,9 @@ describe("synthetic recovery encryption primitive (not a complete backup)", () =
   it("refuses nested replayable material before encryption, even in an allowed collection", () => {
     for (const field of ["sessionToken", "access_token", "refreshToken", "id_token", "password", "authorization", "apiKey", "tokenHash"])
       expect(() => encryptRecoveryBson(BSON.serialize({ nested: [{ [field]: "SYNTHETIC_NOT_A_SECRET" }] }), "accounts", manifest, key)).toThrow("Recovery envelope validation failed");
-    expect(() => encryptRecoveryBson(BSON.serialize({ nested: Buffer.from("synthetic") }), "bankDevelopmentArchive", manifest, key)).toThrow();
+    expect(() => encryptRecoveryBson(BSON.serialize({ nested: Buffer.from("synthetic") }), "accounts", manifest, key)).toThrow("Recovery envelope validation failed");
+    // ADR-076: the development archive is excluded from artifacts entirely.
+    expect(() => encryptRecoveryBson(BSON.serialize({ note: "synthetic" }), "bankDevelopmentArchive", manifest, key)).toThrow("Recovery envelope validation failed");
     expect(() => encryptRecoveryBson(BSON.serialize({ note: "Bearer SYNTHETIC_NOT_A_TOKEN" }), "profiles", manifest, key)).toThrow();
   });
 });

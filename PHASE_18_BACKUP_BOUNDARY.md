@@ -57,7 +57,7 @@ Replay codes: D apply current deletion ledger; H apply current household access/
 | `bankLifecycleCommands` | F | Paid/disconnect receipts, no provider token intended | D,P,J; never replay paid/remote actions |
 | `bankAccountReconciliations` | M | Masked/hashed personal identities and audit | D,P |
 | `bankDevelopmentMigrations` | M | Historical suppression IDs/digests, not credentials | D,P,J |
-| `bankDevelopmentArchive` | F | Arbitrary historical BSON payload may embed unexpected sensitive fields | D,H,P; inspect nested payloads, never opaque-copy into staging backup |
+| `bankDevelopmentArchive` | X (ADR-076, 2026-09-29; previously F) | Arbitrary historical BSON payload may embed unexpected sensitive fields | Excluded from staging/production backups; retired manifests carry the anti-reimport evidence |
 | `bankDevelopmentMigrationLocks` | X | Offline lock token | J; never restore active lock |
 | `rateLimits` | R | Linkable actor hash/counter, no credential | D; recreate TTL index/counters, not historical allowances |
 

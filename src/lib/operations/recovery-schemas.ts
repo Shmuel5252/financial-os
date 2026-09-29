@@ -24,7 +24,7 @@ import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/
 import { projectRecoveryGoalDefinition, projectRecoveryGoalProgress, projectRecoveryGoalReceipt } from "@/lib/operations/goal-recovery";
 import { projectRecoveryFinancialSnapshot } from "@/lib/operations/financial-snapshot-recovery";
 import { projectRecoveryPurchaseSimulation } from "@/lib/operations/purchase-recovery";
-import { projectRecoveryBankDevelopmentArchive, projectRecoveryBankDevelopmentMigration } from "@/lib/operations/bank-development-recovery";
+import { projectRecoveryBankDevelopmentMigration } from "@/lib/operations/bank-development-recovery";
 import { projectRecoveryBankReconciliation, projectRecoveryBankRecordRevision, projectRecoveryOpenBankingRecord } from "@/lib/operations/bank-record-recovery";
 import { projectRecoveryBankBinding, projectRecoveryBankConnection, projectRecoveryBankLifecycle, projectRecoveryBankSyncRun } from "@/lib/operations/bank-control-recovery";
 
@@ -79,8 +79,7 @@ export const initialRecoverySchemas: RecoverySchemas = {
   bankLifecycleCommands: { version: "bank-lifecycle-v1", project: projectRecoveryBankLifecycle },
   bankRecordRevisions: { version: "bank-revision-v1", project: projectRecoveryBankRecordRevision },
   bankAccountReconciliations: { version: "bank-reconciliation-v1", project: projectRecoveryBankReconciliation },
-  bankDevelopmentMigrations: { version: "bank-development-migration-v1", project: projectRecoveryBankDevelopmentMigration },
-  bankDevelopmentArchive: { version: "bank-development-archive-v1", project: projectRecoveryBankDevelopmentArchive },
+  bankDevelopmentMigrations: { version: "bank-development-migration-v2", project: projectRecoveryBankDevelopmentMigration },
   authUsers: { version: "auth-user-v1", project: row => { validate(authUserSchema, row); return row; } },
   profiles: { version: "profile-v1", project: row => { validate(storedProfileSchema.strict(), row); return row; } },
   ...Object.fromEntries(manualSectionSchema.options.map(section => {

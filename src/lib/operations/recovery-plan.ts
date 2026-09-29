@@ -13,9 +13,10 @@ export const recoveryGroups = [
   ["authSessions", "authVerificationTokens", "bankDevelopmentMigrationLocks", "authorizedSearchDocuments", "rateLimits"],
 ] as const;
 export const recoveryCollections: readonly string[] = recoveryGroups.flat();
-const excluded = new Set(["authSessions", "authVerificationTokens", "bankDevelopmentMigrationLocks"]);
+// ADR-076: the development-only archive is never copied into staging/production backups.
+const excluded = new Set(["authSessions", "authVerificationTokens", "bankDevelopmentMigrationLocks", "bankDevelopmentArchive"]);
 const rebuild = new Set(["authorizedSearchDocuments", "rateLimits"]);
-const filtered = new Set(["authAccounts", "householdInvitations", "notifications", "bankSyncRuns", "bankLifecycleCommands", "bankDevelopmentArchive"]);
+const filtered = new Set(["authAccounts", "householdInvitations", "notifications", "bankSyncRuns", "bankLifecycleCommands"]);
 
 export function recoveryPlan(names: readonly string[]) {
   if (new Set(names).size !== names.length || names.some(name => !recoveryCollections.includes(name))) throw new Error("Unreviewed recovery inventory");

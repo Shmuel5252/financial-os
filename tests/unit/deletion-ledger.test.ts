@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { beginDeletion, completeLocalDeletion, deletionRetention, deletionSubject, restorationDisposition, restorationSuppression, validateDeletionReceipt } from "@/lib/operations/deletion-ledger";
+import { beginDeletion, completeLocalDeletion, deletionRetention, deletionSubject, providerSubjectMarker, restorationDisposition, restorationSuppression, validateDeletionReceipt } from "@/lib/operations/deletion-ledger";
 
 const actor = { kind: "user", userId: "100000000000000000000001" } as const;
 const other = { kind: "user", userId: "100000000000000000000002" } as const;
@@ -10,6 +10,38 @@ const make = () => beginDeletion(actor, "isolated-test", randomUUID(), at, key);
 const decision = (receipts: readonly unknown[]) => ({ ownerId: other.userId, contributingSubjectIds: [] as string[], receipts,
   environment: "isolated-test" as const, keys: [key], now: at + 100, ledgerReadAt: at + 50, maxLedgerAgeMs: 100,
   authoritativeRevision: 1, suppliedRevision: 1 });
+
+describe("ADR-076 provider-subject anti-reimport markers", () => {
+  const subjectAlias = "a".repeat(64); const otherAlias = "b".repeat(64);
+  it("seal only keyed markers, sorted and unique, never the alias itself", () => {
+    const r = beginDeletion(actor, "isolated-test", randomUUID(), at, key, [otherAlias, subjectAlias, subjectAlias]);
+    expect(r.providerSubjects).toEqual([providerSubjectMarker(subjectAlias, "isolated-test", key), providerSubjectMarker(otherAlias, "isolated-test", key)].sort());
+    expect(JSON.stringify(r)).not.toContain(subjectAlias);
+    expect(providerSubjectMarker(subjectAlias, "staging", key)).not.toBe(r.providerSubjects[0]);
+    expect(() => beginDeletion(actor, "isolated-test", randomUUID(), at, key, ["not-an-alias"])).toThrow("Deletion safety validation failed");
+    expect(validateDeletionReceipt(r, "isolated-test", [key])).toEqual(r);
+    // The signature covers the markers: adding, removing or reordering one invalidates the receipt.
+    for (const providerSubjects of [[], [...r.providerSubjects, "c".repeat(64)], [...r.providerSubjects].reverse()]) {
+      expect(() => validateDeletionReceipt({ ...r, providerSubjects }, "isolated-test", [key])).toThrow("Deletion safety validation failed");
+    }
+  });
+  it("keep markers through local completion and answer only for marked subjects", () => {
+    const r = beginDeletion(actor, "isolated-test", randomUUID(), at, key, [subjectAlias]);
+    const done = completeLocalDeletion(r, actor, "isolated-test", at + 10, key);
+    expect(done.providerSubjects).toEqual(r.providerSubjects);
+    const state = restorationSuppression(decision([done]));
+    expect([state.isProviderSubjectSuppressed(subjectAlias), state.isProviderSubjectSuppressed(otherAlias)]).toEqual([true, false]);
+    expect(restorationSuppression(decision([make()])).isProviderSubjectSuppressed(subjectAlias)).toBe(false);
+  });
+  it("bound receipt retention (which carries the markers) by configured windows and margin, never by default", () => {
+    // Retention inputs are the operator-configured restorable window, replay window and safety margin; unknown coverage blocks expiry.
+    const base = { now: at + 40 * 86_400_000, completedAt: at, latestRestorableExpiry: at + 30 * 86_400_000, replayWindowEnd: at + 86_400_000,
+      safetyMarginMs: 7 * 86_400_000, inventoryVerifiedAt: at + 39 * 86_400_000, maxInventoryAgeMs: 2 * 86_400_000 };
+    expect(deletionRetention(base)).toEqual({ status: "expiry-eligible", notBefore: at + 37 * 86_400_000 });
+    expect(deletionRetention({ ...base, safetyMarginMs: 14 * 86_400_000 })).toEqual({ status: "retain", notBefore: at + 44 * 86_400_000 });
+    expect(deletionRetention({ ...base, latestRestorableExpiry: null })).toEqual({ status: "review-required", notBefore: null });
+  });
+});
 
 describe("minimal deletion ledger", () => {
   it("validates empty ledger configuration and snapshots suppression key material", () => {
@@ -23,7 +55,7 @@ describe("minimal deletion ledger", () => {
   });
   it("emits a strict minimized receipt with no raw actor or financial/auth payload", () => {
     const r = make();
-    expect(Object.keys(r).sort()).toEqual(["policy", "environment", "keyVersion", "operationId", "subject", "acceptedAt", "completedAt", "status", "revision", "signature"].sort());
+    expect(Object.keys(r).sort()).toEqual(["policy", "environment", "keyVersion", "operationId", "subject", "acceptedAt", "completedAt", "status", "revision", "providerSubjects", "signature"].sort());
     expect(JSON.stringify(r)).not.toContain(actor.userId);
     expect(validateDeletionReceipt(r, "isolated-test", [key])).toEqual(r);
     expect(() => validateDeletionReceipt({ ...r, arbitrary: "synthetic-private" }, "isolated-test", [key])).toThrow("Deletion safety validation failed");
