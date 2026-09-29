@@ -14,6 +14,7 @@ import { calendarDateAtInstant } from "@/lib/domain/financial-engine/financial-c
 import { money } from "@/lib/domain/money/money";
 import {
   ConfigurationError,
+  ConflictError,
   DependencyUnavailableError,
   InputValidationError,
   NotFoundError,
@@ -50,6 +51,9 @@ type SyncCounts = {
 };
 
 export type OpenBankingDependencies = Readonly<{
+  /** ADR-076 C3: true when a retained deletion receipt marks this provider subject; errors fail closed.
+   * Wired to the independent deletion ledger once it is provisioned (A/B); until then no erasure can exist to mark a subject. */
+  erasedProviderSubject?: (subjectAlias: string) => Promise<boolean>;
   now?: () => Date;
   profileRepository?: UserProfileRepository;
   provider?: OpenBankingProvider;
@@ -217,7 +221,17 @@ export async function claimConfiguredOpenBankingSubject(
     if (error instanceof DependencyUnavailableError) throw error;
     throw providerFailure(error);
   }
+  // Anti-resurrection: an erased owner's provider subject is not rebound (and its data not reimported) during receipt retention.
+  // Checked right before and again right after the claim, so an erasure completing in between cannot leave a new binding.
+  const guard = dependenciesInput?.erasedProviderSubject;
+  const refused = () => new ConflictError("This bank connection belongs to an erased account and requires review before it can be linked again.");
+  if (guard !== undefined && await guard(subjectAlias())) throw refused();
   await resolved.repository.claimBinding(actor, subjectAlias());
+  if (guard !== undefined) {
+    let erased = true;
+    try { erased = await guard(subjectAlias()); } finally { if (erased) await resolved.repository.releaseBinding(actor, subjectAlias()); }
+    if (erased) throw refused();
+  }
 }
 
 export async function synchronizeOpenBanking(

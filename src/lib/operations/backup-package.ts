@@ -11,12 +11,17 @@ import { encryptRecoveryBson, decryptRecoveryBson, type RecoveryEnvelope } from 
  */
 export type RecoverySchema = Readonly<{ version: string; project: (record: Document) => Document }>;
 export type RecoverySchemas = Readonly<Partial<Record<string, RecoverySchema>>>;
-const version = "synthetic-backup-package-v1";
+const version = "backup-package-v2";
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const entrySchema = z.object({ collection: z.string(), schema: z.string().regex(/^[a-z0-9-]{1,64}$/), count: z.number().int().nonnegative(), digest: hash }).strict();
-const manifestSchema = z.object({ version: z.literal(version), source: z.literal("isolated-synthetic"),
+// A snapshot capture binds its recovery point: one cluster time for every part and the ledger head seen before capture.
+const recoveryPointSchema = z.object({ atClusterTime: z.string().regex(/^\d{1,20}$/), capturedAt: z.number().int().nonnegative(),
+  ledgerHead: z.number().int().nonnegative() }).strict();
+export type RecoveryPoint = z.infer<typeof recoveryPointSchema>;
+const manifestSchema = z.object({ version: z.literal(version), source: z.enum(["isolated-synthetic", "snapshot-capture"]),
   indexManifestDigest: hash, inventory: z.array(z.string()), excluded: z.array(z.string()),
-  entries: z.array(entrySchema), releaseAllowed: z.literal(false) }).strict();
+  entries: z.array(entrySchema), recoveryPoint: recoveryPointSchema.nullable(), releaseAllowed: z.literal(false) }).strict()
+  .refine(manifest => (manifest.source === "snapshot-capture") === (manifest.recoveryPoint !== null));
 type Manifest = z.infer<typeof manifestSchema>;
 export type BackupPackage = Readonly<{ manifest: Manifest; signature: string; parts: readonly RecoveryEnvelope[] }>;
 type Key = Readonly<{ version: number; material: Uint8Array }>;
@@ -34,7 +39,7 @@ function validateRegistry(schemas: RecoverySchemas) {
   for (const name of Object.keys(schemas)) if (!recoveryCollections.includes(name) || excluded.includes(name) || name === "authAccounts") return fail();
 }
 export function createBackupPackage(records: Readonly<Record<string, readonly Document[]>>, schemas: RecoverySchemas,
-  indexManifestDigest: string, key: Key): BackupPackage {
+  indexManifestDigest: string, key: Key, recoveryPoint: RecoveryPoint | null = null): BackupPackage {
   try {
     validateRegistry(schemas);
     const names = Object.keys(records);
@@ -52,8 +57,8 @@ export function createBackupPackage(records: Readonly<Record<string, readonly Do
       const part = encryptRecoveryBson(bson, name, indexManifestDigest, key);
       parts.push(part); entries.push({ collection: name, schema: schema?.version ?? "empty-unreviewed-v1", count: projected.length, digest: part.header.digest });
     }
-    const manifest = manifestSchema.parse({ version, source: "isolated-synthetic", indexManifestDigest,
-      inventory: [...recoveryCollections], excluded, entries, releaseAllowed: false });
+    const manifest = manifestSchema.parse({ version, source: recoveryPoint === null ? "isolated-synthetic" : "snapshot-capture", indexManifestDigest,
+      inventory: [...recoveryCollections], excluded, entries, recoveryPoint, releaseAllowed: false });
     return { manifest, parts, signature: signature(manifest, key) };
   } catch { return fail(); }
 }

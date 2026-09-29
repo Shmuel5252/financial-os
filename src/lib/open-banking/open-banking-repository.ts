@@ -337,6 +337,11 @@ export class OpenBankingRepository {
     }
   }
 
+  /** Compensation only: removes the actor's own binding to this subject (used when a claim raced an erasure). */
+  async releaseBinding(actor: Actor, subjectAlias: string): Promise<void> {
+    await this.collections.bindings.deleteOne({ provider: OPEN_BANKING_PROVIDER, subjectAlias, userId: userId(actor) });
+  }
+
   async assertBinding(actor: Actor, subjectAlias: string): Promise<void> {
     const binding = await this.collections.bindings.findOne({
       provider: OPEN_BANKING_PROVIDER,

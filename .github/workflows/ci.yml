@@ -29,6 +29,8 @@ jobs:
           --health-retries 5
     env:
       MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+      # Single-node replica set for the deletion ledger, snapshot capture and restore/release-fence rehearsals.
+      MONGODB_TEST_REPLICA_URI: mongodb://127.0.0.1:27018
       MONGODB_TEST_DB_NAME: financial_os_ci
       RUN_REAL_ANTHROPIC_TESTS: "0"
       RUN_REAL_RESEND_TESTS: "0"
@@ -56,6 +58,14 @@ jobs:
 
       - name: Verify source index inventory
         run: npm run operations:index-check
+
+      - name: Start single-node replica set for recovery rehearsals
+        run: |
+          docker run -d --name mongo-rs --network host mongo:8.0 --replSet rs0 --port 27018 --bind_ip 127.0.0.1
+          for i in $(seq 1 30); do docker exec mongo-rs mongosh --quiet --port 27018 --eval 'db.adminCommand({ ping: 1 })' && break; sleep 1; done
+          docker exec mongo-rs mongosh --quiet --port 27018 --eval 'rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "127.0.0.1:27018" }] })'
+          for i in $(seq 1 30); do docker exec mongo-rs mongosh --quiet --port 27018 --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)' && break; sleep 1; done
+          docker exec mongo-rs mongosh --quiet --port 27018 --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'
 
       - name: Run unit and available integration tests
         run: npm test

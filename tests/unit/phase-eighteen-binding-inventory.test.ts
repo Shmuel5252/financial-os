@@ -12,8 +12,11 @@ it("classifies every existing inventory collection in the backup secret boundary
   const base = readFileSync("PHASE_18_DATA_INVENTORY.md", "utf8");
   const boundary = readFileSync("PHASE_18_BACKUP_BOUNDARY.md", "utf8");
   const names = (text: string) => [...text.matchAll(/^\| `([A-Za-z]+)` \|/gm)].map(match => match[1]).sort();
-  expect(names(boundary)).toEqual(names(base));
+  // Operational collections outside the application database are documented separately and never backed up.
+  const [application, operational = ""] = base.split("### Operational collections outside the application database");
+  expect(names(boundary)).toEqual(names(application!));
   expect(names(boundary)).toHaveLength(52);
+  expect(names(operational)).toEqual(["deletionLedgerHead", "deletionReceipts", "recoveryQuarantine"]);
 });
 
 it("accounts for all 52 collections in the quarantined restore-order plan", () => {

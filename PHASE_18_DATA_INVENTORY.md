@@ -68,6 +68,17 @@ Erasure implications are decision inputs, **not permission to remove or retain i
 | `bankDevelopmentMigrationLocks` | O | offline migration lock/token/time; no general owner field | E,Q | Do not restore as an active migration or steal a lock; offline operator scope only; not a per-user blanket erase target |
 | `rateLimits` | O | scope + user hash + time window, count/expiry | E | TTL expires counters; hashes link users, but not financial audit. No canonical history depends on retaining counters |
 
+
+### Operational collections outside the application database (2026-09-29, ADR-076 / B1)
+
+These are not among the 52 application collections and are never captured: the ledger collections live only in the independent deletion-ledger database (separate cluster/principal), and the restore bookkeeping collection only in isolated restore targets. Capture fails closed if either set ever appears in the application database.
+
+| Collection | Classes | Ownership / sensitive contents | Backup / restore | Full-erasure consequence and current distinction |
+|---|---|---|---|---|
+| `deletionReceipts` | A,O | Signed minimal receipts: keyed pseudonymous subject, environment, operation, status, timestamps, keyed provider-subject markers; no finance, identity or credentials | Independent ledger store; own durability plus signed object-locked mirror; never restored from an application backup | Bounded retention per ADR-074/076 (restorable window + replay window + configured margin; unknown coverage ⇒ review) |
+| `deletionLedgerHead` | O | Single monotonic revision counter for the ledger | Same store as the receipts; rollback detected against package recovery points and the signed mirror | Operational metadata only |
+| `recoveryQuarantine` | O | Signed restore state for one isolated target: package name, ledger head applied, per-collection counts, release watermark | Created by the restore process in the target; not captured (operational) | Holds no personal data; discarded with the target |
+
 ## Cross-collection consequences requiring owner policy
 
 1. **Audit is not uniformly metadata-only.** budgetPeriods embeds allocation amounts before/after, budgetCategories embeds settings/labels, snapshots/reports/progress contain historical personal values, bank revisions contain financial observations, and archives contain full BSON documents. Retaining these unchanged after full erase would retain ordinary personal finance. Possible direction: erase personal payloads and keep only separately justified minimized deletion/security receipts; this is NOT approved or implemented here.

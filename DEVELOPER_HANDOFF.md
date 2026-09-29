@@ -181,6 +181,16 @@ npm run security:audit
 git diff --check
 ```
 
+**Replica-set suites (added 2026-09-29).** The independent deletion ledger, snapshot capture and restore/release-fence rehearsals need transactions and snapshot sessions, so they run only when `MONGODB_TEST_REPLICA_URI` points at a local, synthetic, loopback single-node replica set (they skip otherwise, which is *unverified*, not passed). Example (temporary data directory, port 27018, never 3000/3001):
+
+```powershell
+& "C:\Program Files\MongoDB\Server\8.3\bin\mongod.exe" --replSet rs0 --port 27018 --bind_ip 127.0.0.1 --dbpath <temporary-empty-directory>
+# once: initiate with host 127.0.0.1:27018 (e.g. replSetInitiate via the Node driver with directConnection=true)
+$env:MONGODB_TEST_REPLICA_URI='mongodb://127.0.0.1:27018'
+```
+
+Include it in the full regression alongside `MONGODB_TEST_URI`; shut the node down and delete its data directory afterwards.
+
 Run commands separately and inspect each exit code; PowerShell does not automatically stop after a failed native command. Run build after regression, not concurrently. Missing Mongo means real integration is unverified, not passed. Excluded provider tests require actual provider authorization/configuration; development cutover tests may be destructive and are not routine regression permission. Do not enable flags to improve counts. A local synthetic rehearsal is real Mongo evidence, not real financial/provider/staging evidence.
 
 `security:check` is a bounded repository secret/private-file guard, not exhaustive SAST or certification of arbitrary historical text. `security:audit` requires registry access; network/reviewer denial is a reported blocker, never a zero-vulnerability result. Follow applicable installed skills/tool safety instructions, but no particular model, plugin, conversation, agent ID or vanished process is necessary to reconstruct the task.

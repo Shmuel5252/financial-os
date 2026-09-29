@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 A+B built and rehearsed locally — 2026-09-29
+
+Independent ledger (head, snapshot, keyring, signed mirror), ledger-first erasure, snapshot-session capture, quarantine restore, signed release fence/watermark and claim anti-resurrection guard, proven fail-closed on a synthetic loopback replica set with adversarial mutation testing. Region/runtime recommendations and minimum external actions in `PHASE_18_BACKUP_LEDGER_PROPOSAL.md` §11–12. Nothing provisioned.
+
 ## Phase 18 F design and A+B proposal — 2026-09-29
 
 Identity-key continuity design with an unwired, tested prototype; combined backup/ledger proposal with a local snapshot-consistency experiment. Awaiting owner decisions; no infrastructure or credential change.

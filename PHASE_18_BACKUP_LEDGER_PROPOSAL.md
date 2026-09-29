@@ -1,6 +1,6 @@
 # Phase 18 — A+B proposal: consistent backups and an independent deletion ledger
 
-2026-09-29. **Proposal only.** No infrastructure, purchase, cluster, bucket, credential, Vercel or Atlas change was made or is authorized by this document. Vendor capabilities marked *(verify)* must be confirmed against current vendor documentation and pricing before a decision. Requirements come from the approved targets (RPO ≤24h, RTO ≤4h, ≥30-day history, isolated restore) and ADR-074/076.
+2026-09-29. **Proposal, owner decisions (§9) and local build (§10).** No infrastructure, purchase, cluster, bucket, credential, Vercel or Atlas change was made or is authorized by this document. Vendor capabilities marked *(verify)* must be confirmed against current vendor documentation and pricing before a decision. Requirements come from the approved targets (RPO ≤24h, RTO ≤4h, ≥30-day history, isolated restore) and ADR-074/076.
 
 ## 0. What already exists (repository)
 
@@ -120,3 +120,57 @@ Cannot be proven locally: vendor features and limits, real RPO/RTO, credentials 
 3. Capture runner choice.
 4. Approval to build the local items in §8 (repository-only, no provisioning).
 5. Afterwards, separate approval for provisioning and credentials.
+
+## 9. Owner decisions (2026-09-29)
+
+B1 is the target ledger architecture (separate MongoDB project/cluster, separate principal); B-min remains a documented fallback only. A target: filtered, encrypted logical BSON packages in object storage with immutability/Object Lock, never full Atlas snapshots containing sessions/provider/OAuth credentials. One snapshot session per capture is approved in principle. Approved now: build and test §8 locally. **Not approved:** provisioning, purchase, cluster/bucket creation, credentials, Vercel/Atlas changes or staging actions. Region and runtime: recommendation only (§11).
+
+## 10. Built and proven locally (synthetic data, temporary loopback replica set)
+
+| Component | Code | Proof |
+|---|---|---|
+| Independent ledger with monotonic head | `deletion-receipt-store.ts` (majority transactions; head advances once per accept/completion; idempotent retries; `snapshot()`; `isProviderSubjectErased`; versioned keyring) | head counts under concurrent and timed-out retries; aborted transaction never advances head; tamper and outage fail closed; erasures under an older ledger key stay effective after rotation, and dropping the old key fails closed |
+| Signed ledger mirror | `ledger-mirror.ts` (`mirrorLedger`, `highestMirroredHead`) | a ledger rolled back behind its newest signed export is refused even when not behind the backup; corrupted or forged exports fail closed |
+| Ledger-first erasure protocol | `erasure-protocol.ts` | accept before any local step; completion only after verification; crash/verify-failure and lost-operation-ID retries resume the stored operation; a binding claimed between alias read and fence blocks erasure; ledger unavailable ⇒ nothing local |
+| Capture coordinator | `backup-capture.ts` (snapshot pinned by a namespace-independent read before any collection read — a read of a missing collection returns no cluster time —, unknown-collection refusal, excluded collections never read, duration bound, write-once upload, signed `recoveryPoint`) | 3 captures during continuous transactional writes: no split account/transaction pair; standalone server, adapter rejection, over-long capture, unknown collection and upload failure all fail closed with nothing stored |
+| Restore orchestration | `restore-orchestration.ts` `restoreIntoQuarantine` (fresh target only, existing quarantines composed, state `restoring → restored`) | backup older than a deletion restores without the erased owner, survivor BSON exact; interrupted restore can never be fenced; retry into the same target refused; retry into a fresh target succeeds |
+| Release fence + restore watermark | `releaseFence`, `verifyReleaseWatermark` (release state signed with the operator ledger key) | fails closed on ledger unavailable, stale, older than backup or its mirror, advanced since restore or during fence, rolled back after release; on residual erased references, unfenced provider commands, changed counts, missing or forged watermark/state |
+| Anti-resurrection | claim guard (`erasedProviderSubject`, checked before and after the claim with compensation) + fence marker scan | erased subject cannot be rebound while its receipt is retained, including when an erasure completes mid-claim; guard outage fails closed; control shows rebinding without the guard |
+| Owner probe | `scripts/snapshot-session-probe.mjs` | supported on the local replica set, unsupported (NotAReplicaSet) on a standalone |
+| Key/secret interface | `recovery-keys.ts` | versioned base64 keys, active version, no value echo |
+| Package format | manifest v2 with signed recovery point | ledger-behind-backup detection |
+
+Independent review (no Critical; six Important: ledger rollback after capture, unsigned release state, fail-open markers after ledger-key rotation, alias-capture race, claim race, CI skipping replica suites) — all fixed as above, plus CI now starts a single-node replica set; my own probe found that a snapshot read of a missing collection does not pin the snapshot, fixed by pinning first. Adversarial mutation run: 29 guard removals; 28 caught by a test; the survivor ("watermark requires fenced state") is redundant by construction because the signed state cannot carry a watermark unless fenced. Remaining documented limits: the claim guard and release tooling are wired to the ledger only when it is provisioned (no runtime ledger exists yet); the fence scan matches ObjectIds and whole 24-hex strings, not composite strings or binary IDs (none persisted today); ledger collections and head should be created at provisioning; collections created during a capture that are not in the inventory are refused only if present at listing time.
+
+## 11. Vendor verification and recommendations
+
+Verified from vendor documentation on 2026-09-29 (re-check at provisioning):
+- **Vercel** ([duration](https://vercel.com/docs/functions/configuring-functions/duration), [cron](https://vercel.com/docs/cron-jobs/manage-cron-jobs)): function duration 300 s (Hobby), 800 s (Pro/Enterprise; 1800 s beta); cron failures are not retried; delivery is best effort and can be missed or duplicated; overlapping runs need a lock.
+- **AWS S3 Object Lock** ([docs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html)): requires versioning; per-version retention or bucket default retention; *compliance* mode cannot be shortened or bypassed by anyone, *governance* mode can be bypassed with `s3:BypassGovernanceRetention`; a simple DELETE only adds a delete marker, a versioned DELETE of a locked version is refused.
+- **MongoDB** ([snapshot read concern](https://www.mongodb.com/docs/manual/reference/read-concern-snapshot/), [Flex limits](https://www.mongodb.com/docs/atlas/reference/flex-limitations/), [free limits](https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/)): snapshot reads outside transactions support find/aggregate/distinct and are bounded by `minSnapshotHistoryWindowInSeconds` (changing it on Atlas requires Atlas Support); free clusters have no backups and no private endpoints; Flex has one daily snapshot, no private endpoints or peering, 500 ops/s. **Snapshot-read support on M0/Flex is not documented** — verify with a read-only probe before relying on it (capture fails closed otherwise).
+
+**Object storage: AWS S3 in eu-central-1 (Frankfurt)**, same provider and region as the documented Atlas cluster (AWS Frankfurt). Reasons: no cross-region/cross-cloud transfer of the full dataset, EU residency, verified Object Lock semantics, IAM roles instead of static keys. Not Vercel's region: Vercel functions run in `iad1` (US), which would move every capture across the Atlantic. Configuration: versioning on, Object Lock with bucket default retention = history window (30 days) + margin, lifecycle removing noncurrent versions after lock expiry (bounded retention), KMS encryption, write-only capture role without delete, read-only restore role, separate break-glass role.
+**Mode decision for you:** *compliance* gives the strongest protection against compromised credentials but makes early physical deletion from backups impossible for the whole retention period (erasure is then enforced by ledger suppression at restore, as designed). *Governance* allows an audited break-glass deletion. Recommendation: governance with the bypass permission only on a separate MFA-protected break-glass role, moving to compliance after a legal check that no obligation requires earlier physical deletion.
+
+**Capture runtime: a dedicated managed worker in AWS eu-central-1** (EventBridge Scheduler → Lambda, or a Fargate task if a capture ever approaches Lambda's 15-minute limit — verify), not Vercel Cron.
+
+| Criterion | Vercel Cron + Function | GitHub Actions schedule | AWS scheduled worker (recommended) |
+|---|---|---|---|
+| Timeout vs snapshot window | 300/800 s; enough today | hours | 15 min (Lambda) or unbounded (Fargate); both exceed the ~5 min default snapshot window, which is the real bound |
+| Retries / missed runs | none; best effort; duplicates | delayed/skipped under load | scheduler retry policy + dead-letter + alarm on missing package (verify configuration) |
+| Region / data path | `iad1` → cross-Atlantic | runner region not controlled | same region as Atlas and S3 |
+| Secret isolation | package keys in the app runtime env, readable by every function | repository secrets | separate account/role; IAM to S3; Secrets Manager/KMS; app never holds backup keys |
+| Network to Atlas | dynamic IPs ⇒ keeps `0.0.0.0/0` | dynamic IPs | static egress (NAT) or private endpoint on a dedicated tier |
+| Observability | function logs | workflow logs | CloudWatch metrics/alarms, run history |
+| Cost | included | minutes | Lambda/Scheduler negligible; NAT gateway or dedicated tier is the main cost (verify pricing) |
+
+Independent of provisioning, the capture design already tolerates missed/duplicate runs (write-once names, every run is a full package) and fails closed on anything it cannot guarantee.
+
+## 12. Minimum external actions to close A+B
+
+1. Decide Object Lock mode (above) and accept AWS eu-central-1 for storage and worker; create the AWS account/project structure and billing.
+2. Create the ledger project/cluster (B1) in the same region; dedicated ledger principal; decide its tier (backups needed for the ledger itself).
+3. Decide the main cluster tier and network path for capture (static egress IP allowlisted, or dedicated tier with private endpoint); this also retires the known `0.0.0.0/0` exposure.
+4. Run a one-time read-only snapshot-session probe on the chosen main-cluster tier (a script from this repository; synthetic database; no data read).
+5. Create and store secrets: package keys, ledger keys, identity keyring (F), principals; configure the worker; wire the claim guard and release tooling to the ledger (repository change, separate approval).
+6. First real capture, isolated restore drill with measured RPO/RTO (≤24h/≤4h), then retention/lifecycle and alarm verification — the evidence Phase 18 rows 18-10/11 still need.
