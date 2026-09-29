@@ -2,7 +2,7 @@
 
 Snapshot: 2026-09-29. Repository is the memory; models are replaceable workers.
 
-**Superseding status (later 2026-09-29):** the AI-history source-link unit described in §5 was verified, reviewed and committed as a checkpoint with this document; see the first entries of `PHASE_18_RECOVERY_IMPLEMENTATION.md` and `PROGRESS.md` for the current HEAD, evidence and next unit. §1/§5 below are the preserved handoff snapshot, not the current state. Phase 18 remains unaccepted; Phase 19 unopened.
+**Superseding status (later 2026-09-29):** the AI-history source-link unit described in §5 was verified, reviewed and committed as a checkpoint with this document; see the first entries of `PHASE_18_RECOVERY_IMPLEMENTATION.md` and `PROGRESS.md` for the current HEAD, evidence and next unit. §1/§5 below are the preserved handoff snapshot, not the current state. Phase 18 remains unaccepted; Phase 19 unopened. Later the same day the eight provider recovery classes were completed (coverage 47/47); the current state, owner decisions and reproduction steps are in `PHASE_18_20_ACCEPTANCE_PACKAGE.md`.
 
 ## 1. Start here: exact state and current authorization
 

@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 development-baseline recovery — verified 2026-09-29; repository recovery coverage 47/47
+
+Strict adapters for development migration manifests and archives complete schema coverage of all 47 restorable collections. Archive payloads are inspected (never opaque) and re-materialized byte-exact; a real-Mongo rehearsal with the real offline retirement tool proves restored manifests prevent reimport of retired development data, with a control restore showing reimport without them. Review's Important round-trip issue fixed RED→GREEN; archive scope/legacy-row limits recorded as owner decisions. Phase 18 remains unaccepted pending owner/external gates; see `PHASE_18_20_ACCEPTANCE_PACKAGE.md`. Phase 19 not started.
+
 ## Phase 18 bank record recovery — verified 2026-09-29
 
 Strict adapters for bank record revisions, reconciliation ledgers and bank-sourced canonical accounts/transactions (coverage 45/47) with a link inspector. Review's Critical (cross-now() timestamp equality rejected every production bank row) and a real Phase 9 writer defect (bank account names up to 120 characters vs the 100-character domain limit, breaking the reader) were both reproduced RED in a real-Mongo service rehearsal and fixed. Full 679 tests/139 files, one opt-in skip, six unchanged exclusions; types, lint, build, security464/zero, index90/88/2, diff, audit zero. Details and limitations: `PHASE_18_RECOVERY_IMPLEMENTATION.md`.
