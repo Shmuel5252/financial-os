@@ -16,12 +16,16 @@
     "ScheduleExpression": { "Type": "String", "Default": "cron(0 3 * * ? *)" },
     "ScheduleTimezone": { "Type": "String", "Default": "Asia/Jerusalem" },
     "VpcCidr": { "Type": "String", "Default": "10.40.0.0/24" },
-    "MonthlyBudgetUsd": { "Type": "Number", "Default": 100 }
+    "MonthlyBudgetUsd": { "Type": "Number", "Default": 100 },
+    "VercelTeamSlug": { "Type": "String", "Default": "", "AllowedPattern": "^[a-z0-9-]{0,64}$", "Description": "Optional (IAM-auth preparation): Vercel team slug; empty = no Vercel OIDC trust. The Vercel project must use the Global OIDC issuer mode." },
+    "VercelProjectName": { "Type": "String", "Default": "", "AllowedPattern": "^[a-z0-9._-]{0,100}$" },
+    "VercelEnvironment": { "Type": "String", "Default": "production", "AllowedValues": ["production"], "Description": "Only production deployments may reach the ledger or write the journal; preview deployments never" }
   },
   "Conditions": {
     "UseKms": { "Fn::Equals": [{ "Ref": "UseKms" }, "true"] },
     "UseVpc": { "Fn::Equals": [{ "Ref": "EgressMode" }, "nat-gateway"] },
-    "RequireStsMfa": { "Fn::Equals": [{ "Ref": "OperatorSignIn" }, "iam-user-mfa"] }
+    "RequireStsMfa": { "Fn::Equals": [{ "Ref": "OperatorSignIn" }, "iam-user-mfa"] },
+    "EnableVercelOidc": { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "VercelTeamSlug" }, ""] }] }
   },
   "Resources": {
     "BackupKey": {
@@ -45,7 +49,8 @@
         "BucketEncryption": { "ServerSideEncryptionConfiguration": [{ "BucketKeyEnabled": true, "ServerSideEncryptionByDefault": { "Fn::If": ["UseKms",
           { "SSEAlgorithm": "aws:kms", "KMSMasterKeyID": { "Fn::GetAtt": ["BackupKey", "Arn"] } }, { "SSEAlgorithm": "AES256" }] } }] },
         "LifecycleConfiguration": { "Rules": [
-          { "Id": "ExpireAfterRetention", "Status": "Enabled", "ExpirationInDays": 36, "NoncurrentVersionExpiration": { "NoncurrentDays": 1 } },
+          { "Id": "ExpirePackagesAfterRetention", "Status": "Enabled", "Prefix": "packages/", "ExpirationInDays": 36 },
+          { "Id": "RemoveNoncurrentVersions", "Status": "Enabled", "NoncurrentVersionExpiration": { "NoncurrentDays": 1 } },
           { "Id": "RemoveExpiredDeleteMarkers", "Status": "Enabled", "ExpiredObjectDeleteMarker": true },
           { "Id": "AbortIncompleteUploads", "Status": "Enabled", "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 } }
         ] }
@@ -228,6 +233,25 @@
         "Targets": [{ "Id": "alarm-topic", "Arn": { "Ref": "AlarmTopic" } }]
       }
     },
+    "VercelOidcProvider": {
+      "Type": "AWS::IAM::OIDCProvider", "Condition": "EnableVercelOidc",
+      "Properties": { "Url": "https://oidc.vercel.com", "ClientIdList": [{ "Fn::Sub": "https://vercel.com/${VercelTeamSlug}" }] }
+    },
+    "LedgerAppRole": {
+      "Type": "AWS::IAM::Role", "Condition": "EnableVercelOidc",
+      "Properties": {
+        "Description": "App (one Vercel project and environment) to Atlas ledger via MONGODB-AWS, and mirror-on-accept journal writes; short-lived credentials only",
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow",
+          "Principal": { "Federated": { "Fn::GetAtt": ["VercelOidcProvider", "Arn"] } }, "Action": "sts:AssumeRoleWithWebIdentity",
+          "Condition": { "StringEquals": { "oidc.vercel.com:aud": { "Fn::Sub": "https://vercel.com/${VercelTeamSlug}" },
+            "oidc.vercel.com:sub": { "Fn::Sub": "owner:${VercelTeamSlug}:project:${VercelProjectName}:environment:${VercelEnvironment}" } } } }] },
+        "Policies": [{ "PolicyName": "ledger-journal-write-once", "PolicyDocument": { "Version": "2012-10-17", "Statement": [
+          { "Sid": "JournalWritesOnly", "Effect": "Allow", "Action": "s3:PutObject", "Resource": { "Fn::Sub": "${BackupBucket.Arn}/ledger-journal/*" } },
+          { "Fn::If": ["UseKms", { "Sid": "EncryptWithBackupKey", "Effect": "Allow", "Action": ["kms:GenerateDataKey", "kms:Encrypt"], "Resource": { "Fn::GetAtt": ["BackupKey", "Arn"] } }, { "Ref": "AWS::NoValue" }] }
+        ] } }]
+      }
+    },
     "MonthlyBudget": {
       "Type": "AWS::Budgets::Budget",
       "Properties": {
@@ -243,6 +267,7 @@
     "WorkerEgressIp": { "Condition": "UseVpc", "Value": { "Ref": "NatEip" }, "Description": "Add to both Atlas access lists (runbook S4)" },
     "RestoreOperatorRoleArn": { "Value": { "Fn::GetAtt": ["RestoreOperatorRole", "Arn"] } },
     "BreakGlassRoleArn": { "Value": { "Fn::GetAtt": ["BreakGlassRole", "Arn"] } },
-    "AlarmTopicArn": { "Value": { "Ref": "AlarmTopic" } }
+    "AlarmTopicArn": { "Value": { "Ref": "AlarmTopic" } },
+    "LedgerAppRoleArn": { "Condition": "EnableVercelOidc", "Value": { "Fn::GetAtt": ["LedgerAppRole", "Arn"] }, "Description": "Map to an Atlas AWS-IAM database user with the no-remove ledger role; set as FINANCIAL_OS_LEDGER_AWS_ROLE_ARN" }
   }
 }

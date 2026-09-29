@@ -2,7 +2,7 @@
 
 2026-09-29. Owner-approved direction: AWS S3 `eu-central-1` for filtered/encrypted backup packages, Object Lock in **Governance** mode first, a managed backup worker in AWS `eu-central-1` (not Vercel Cron), and B1 (separate MongoDB project/cluster) for the independent deletion ledger. **No provisioning, resource creation, billing, credential, networking, staging or production change is authorized by this document.** Each stage starts only after the owner records its approval.
 
-Design and local evidence: `PHASE_18_BACKUP_LEDGER_PROPOSAL.md` (§10 local build, §11 vendor verification). Costs, cheaper equivalents, the Flex assessment and app→ledger options: **`PHASE_18_PROVISIONING_DECISION_SHEET.md`** (it supersedes the cost estimates below). Repository items C1–C7 are implemented and tested locally (2026-09-29); every stage below still needs your approval. Prices below are approximations to be confirmed on the vendor pricing pages at decision time; the only price verified from vendor documentation today is Vercel Static IPs.
+Design and local evidence: `PHASE_18_BACKUP_LEDGER_PROPOSAL.md` (§10 local build, §11 vendor verification). **Target: Configuration B** (owner decision 2026-09-29): M0 for the primary and the ledger only after their probes pass, Flex as the fallback, SSE-S3, no NAT/VPC in staging, AWS on the Paid plan. Costs, probe order, PASS/FAIL, M0 → Flex triggers and app→ledger options: **`PHASE_18_PROVISIONING_DECISION_SHEET.md`** (authoritative where it differs from older text here). Repository items C1–C7 and the Configuration B hardening are implemented and tested locally; every stage below still needs your approval.
 
 ## 0. Conventions
 
@@ -25,11 +25,11 @@ Never reversible without waiting: an Object Lock bucket cannot disable Object Lo
 |---|---|---|---|---|
 | D1 | AWS account | new dedicated account under your organization / existing account | New dedicated account: blast-radius and billing isolation from anything else | — |
 | D2 | Retention | Object Lock default retention = backup history 30 days + margin; noncurrent-version expiry after lock | 35-day Governance default retention; objects expire at 36 days (the day after their lock ends), noncurrent versions 1 day later; abort incomplete uploads after 1 day | — (policy, not cost) |
-| D3 | Storage encryption | SSE-KMS customer key (~$1 + requests) / SSE-S3 (free) | SSE-KMS: separate key policy and CloudTrail record of every decrypt | **SSE-S3 keeps the same confidentiality invariant** because packages are already AES-256-GCM encrypted and HMAC-signed by the application with keys that never live in S3; KMS adds auditing/separation only. Savings ≈ $1/month. |
+| D3 | Storage encryption | SSE-KMS customer key (~$1 + requests) / SSE-S3 (free) | **SSE-S3 (approved)**; KMS is an optional audit enhancement | **SSE-S3 keeps the same confidentiality invariant** because packages are already AES-256-GCM encrypted and HMAC-signed by the application with keys that never live in S3; KMS adds auditing/separation only. Savings ≈ $1/month. |
 | D4 | Worker secrets store | SSM Parameter Store SecureString, standard tier (free) / Secrets Manager (~$0.40 per secret) | **SSM Parameter Store** | Yes — same KMS-encrypted, IAM-scoped, CloudTrail-audited storage; we do not use automatic rotation. |
 | D5 | Worker static egress (needed for Atlas IP allowlists) | NAT Gateway (~$35–45 + data) / NAT instance t4g.nano + Elastic IP (~$7–8) / Atlas private endpoint (needs M10+) | NAT Gateway (managed, nothing to patch) | NAT instance gives the same static-IP invariant but adds an internet-facing instance to patch (Amazon Linux + automatic patching via SSM Patch Manager). Equal only if you accept that maintenance duty. |
-| D6 | Ledger cluster tier (B1) | Flex ($8–30, usage based; daily snapshot; **never paused** — Atlas cannot pause Flex manually or automatically) / M0 free / M10 (from ~$57; backups, private endpoints) | **Flex** in AWS Frankfurt, subject to the S1 probes (see `PHASE_18_PROVISIONING_DECISION_SHEET.md` §3) | M0 keeps durability only if the ledger is mirrored to Object Lock *synchronously on every receipt* (C5); **M0 (Free) is automatically paused after 30 days of inactivity**, has no backups or SLA, and its snapshot/transaction support must pass the probe. Lower availability ⇒ claims/erasures fail closed more often. Not equal on availability. The pause risk applies to M0 only, not to Flex. |
-| D7 | Main cluster tier for capture | keep current tier if the probe passes / upgrade | Decide after the probe (S2) | — |
+| D6 | Ledger cluster tier (B1) | M0 free / Flex ($8–30, never paused) / M10 (from ~$57) | **M0 in its own project, only if probes P1–P2 pass**; Flex is the fallback (decision sheet §4–5) | M0 has no Atlas backups or SLA (neither has Flex — SLA is M10+ only), a 100 ops/s cap and auto-pause after 30 days **without any connection** (the daily worker connects). Durability comes from the signed mirror + mirror-on-accept journal + rebuild (tier-independent). |
+| D7 | Main cluster tier for capture | keep the existing M0 if probe P3 passes / Flex | Keep M0 if P3 passes; Flex if it fails or §5 evidence appears | — |
 | D8 | App → ledger network path | a) open access list + TLS + least-privilege `ledger-app` user (free) · a′) same with MONGODB-AWS auth via Vercel OIDC (free, no static password) · b) Vercel Static IPs ($100/month per project — cost gate) · c) Secure Compute (Enterprise) · d) AWS ledger gateway behind the worker NAT (≈ $0–2 + NAT) — decision sheet §4 | Staging a; production a′ or d with 18-04 | Static IPs are not required by any invariant; b is not auto-approved. |
 | D9 | Alarm recipients / on-call | email address(es) | Your email + a second contact | — |
 | D10 | Restore-drill location | local loopback replica set on an encrypted disk (existing tooling) / temporary isolated Atlas project | **Local first** (cheaper, already built and tested), cloud drill later for realistic RTO | Local preserves isolation (no ingress, jobs or provider egress) if the disk is encrypted and the data destroyed afterwards. |
@@ -37,13 +37,14 @@ Never reversible without waiting: an Object Lock bucket cannot disable Object Lo
 | D12 | Break-glass custodian | who can bypass Governance retention (legal deletion) | You only, MFA-protected, every use alarmed | — |
 | D13 | Identity keyring (design F, Step 1) | before production restore / later | Before any `AUTH_SECRET` rotation and before a production restore drill | — |
 
-Estimated recurring totals: see the decision sheet §2 (staging minimum ≈ $9–10/month with SSE-S3, a Flex ledger, `EgressMode=none` and app path a; production adds static egress). Confirm every figure before approving.
+Estimated recurring cost with both M0 probes passing: ≈ $0.05–0.20/month (decision sheet §3); + $8 per cluster that needs Flex. AWS must be on the **Paid plan** (a Free-plan account closes after 6 months or when credits run out). Confirm every figure before approving.
 
 ## 2. Secrets [SECRET] — you create and store them; Claude never sees them
 
 | Secret | Stored in | Used by | Escrow |
 |---|---|---|---|
 | Package key v1 (32 random bytes, base64) + active version | SSM `/financial-os/<env>/backup/package-key-v1`, `/…/package-key-active-version` | worker (encrypt/sign packages), restore operator at drill time | Offline sealed copy (password manager vault + printed copy in a safe). Losing it makes every backup unusable. |
+| **Ledger mirror key v1** (32 bytes, base64, **different from every ledger key**) + active version | SSM `/financial-os/<env>/ledger/mirror-key-v1`, `/…/ledger/mirror-key-active-version` (worker signs mirrors); restore operator's shell (`FINANCIAL_OS_LEDGER_MIRROR_KEY_*`) for drills and rebuilds. **Never in Vercel.** | worker, restore operator | Offline sealed copy |
 | Ledger key v1 (32 bytes, base64) + active version | Vercel env `FINANCIAL_OS_DELETION_LEDGER_KEY_V1` / `FINANCIAL_OS_DELETION_LEDGER_KEY_ACTIVE_VERSION` (app, ledger writes/markers); SSM `/financial-os/<env>/ledger/key-v1`, `/…/ledger/key-active-version` (worker, mirror signing) | app, worker, restore operator | Offline sealed copy |
 | Atlas `backup-reader` user (read-only on the application DB) connection string | SSM `/financial-os/<env>/backup/app-db-uri` | worker | — (regenerable) |
 | Atlas `ledger-mirror` user (read on `deletion_ledger`) connection string | SSM `/financial-os/<env>/ledger/read-uri` | worker; restore operator (`FINANCIAL_OS_LEDGER_READ_URI` in the drill shell) | — |
@@ -81,15 +82,15 @@ For Vercel, pipe the variable into `vercel env add <NAME> production` in the sam
 1. Create Atlas project `financial-os-ledger-<env>`; cluster tier per D6 in AWS Frankfurt (`eu-central-1`).
 2. Database users: `ledger-app` → custom role with only `find`, `insert`, `update` on `deletion_ledger` (no `remove`/`dropCollection`: the ledger never deletes receipts); `ledger-mirror` → `read@deletion_ledger`; a temporary `ledger-probe` user → `readWrite@ledger_probe` for step 5 only, deleted afterwards. No other roles. (Restore also refuses a live ledger missing any mirrored receipt.)
 3. Network: add the worker's Elastic IP after S4; app path per D8. Enable TLS-only (default).
-4. Atlas alerts → D9 recipients. Flex offers only Connections, Logical Size, Network and Opscounter conditions; ledger outages are caught by the worker's Errors and missing-success alarms (it mirrors the ledger first) and claims fail closed.
-5. [CLAUDE-prepared, OWNER-run] Temporarily allowlist your current IP (one hour), then in your shell: `$env:PROBE_MONGODB_URI='<ledger-probe uri>'; node scripts/ledger-probe.mjs` (refuses a non-empty database; drops only what it created) (must print two `supported` lines, exit 0) and `$env:LEDGER_BOOTSTRAP_URI='<ledger-app uri>'; $env:LEDGER_BOOTSTRAP_DATABASE='deletion_ledger'; node scripts/ledger-bootstrap.mjs` (idempotent). Remove the temporary IP. Neither script prints a URI or document.
-- Verify: both probes print `supported`; bootstrap created two collections and head revision 0; users have only the listed roles.
+4. Atlas alerts → D9 recipients (probe P4): `node scripts/atlas-alerts.mjs --role ledger --cluster <name> --email <you> --out <dir>` then `atlas alerts settings create --projectId <id> --file <each file>` (or recreate them in the UI). Free/Flex offer only Connections, Logical Size, Network and Opscounter conditions; outages are also caught by the worker's Errors and missing-success alarms (it mirrors the ledger first) and claims fail closed.
+5. [CLAUDE-prepared, OWNER-run] Temporarily allowlist your current IP (one hour), then in your shell: `$env:PROBE_MONGODB_URI='<ledger-probe uri>'; node scripts/ledger-probe.mjs` (refuses a non-empty database; drops only what it created) — **P1**, PASS/FAIL in the decision sheet §4 — then delete the `ledger-probe` user, and (**P2**) with a temporary `ledger-admin` user (`readWrite` + `dbAdmin` on `deletion_ledger`, deleted right after): `$env:LEDGER_BOOTSTRAP_URI='<ledger-admin uri>'; $env:LEDGER_BOOTSTRAP_DATABASE='deletion_ledger'; node scripts/ledger-bootstrap.mjs` (idempotent; `ledger-app` cannot create collections by design). Remove the temporary IP. Neither script prints a URI or document.
+- Verify: P1 PASS (two `supported` lines, exit 0); P2 PASS (bootstrap `ok … head revision 0`, a delete attempt as `ledger-app` is unauthorized); users have only the listed roles. P1 FAIL on a capability → ledger on Flex and re-run P1.
 - Rollback: delete the project (no data yet).
 
 ### S2 — Snapshot probe on the main cluster [OWNER, early and cheap]
 1. Create Atlas user `backup-reader` with the built-in `read` role on the application database only.
-2. Temporarily allowlist your current IP; run `scripts/snapshot-session-probe.mjs` with `PROBE_MONGODB_URI`/`PROBE_DATABASE` set in your shell; remove the temporary IP.
-- Verify: `supported` → capture can run on this tier. `unsupported` → D7: upgrade the main cluster tier, or approve building a quiescence capture (maintenance-mode write fence) before continuing.
+2. Temporarily allowlist your current IP; run `scripts/snapshot-session-probe.mjs` with `PROBE_MONGODB_URI`/`PROBE_DATABASE` set in your shell (**P3**: pins a snapshot, then reads one `_id` per collection in it; prints only a count); remove the temporary IP. Apply the primary's alerts (`--role primary`, P4).
+- Verify: `supported: snapshot session and snapshot reads of N collections at one cluster time` (N = the application's collections) → capture can run on M0. `unsupported: <capability>` → D7: Flex, or approve building a quiescence capture, before continuing. Connection errors are inconclusive.
 - Rollback: delete the `backup-reader` user; remove the temporary IP.
 
 ### S3 — Encryption and storage [OWNER, template from C1]
@@ -101,7 +102,7 @@ For Vercel, pipe the variable into `vercel env add <NAME> production` in the sam
 - Changing the bucket policy, lifecycle, versioning or Object Lock settings later is denied to everyone but the break-glass role (by design, so stack updates touching them fail); the account root user can still remove a bucket policy as the lockout escape.
 - Rollback: the bucket cannot lose Object Lock; if configuration is wrong, create a new bucket and leave the old one empty except the test object until it expires. KMS: schedule deletion (7–30 days) only if no object was ever encrypted with it.
 
-### S4 — Network path for the worker [OWNER, template from C1]
+### S4 — Network path for the worker [OWNER, template from C1] — **skipped in Configuration B staging** (`EgressMode=none`; production decision 18-04)
 1. VPC in `eu-central-1` with one private subnet for Lambda and one public subnet for egress; D5: NAT Gateway with an Elastic IP (or NAT instance with EIP, automatic patching, security group accepting only the Lambda security group).
 2. Add the Elastic IP to both Atlas access lists (main cluster and ledger).
 - Verify: a test invocation reports its egress IP equals the Elastic IP; Atlas connection from the worker succeeds; from any other IP (except the D8 app path) it is refused.
@@ -131,7 +132,7 @@ Create the secrets of §2 in SSM and Vercel as shown; record escrow. Add the led
 - `FinancialOS/Backup` success metric: alarm when **no data for 26 hours** (missing data = breaching) → SNS → D9.
 - Lambda `Errors` > 0, dead-letter queue depth > 0, duration > 80 % of timeout → SNS.
 - Break-glass assumption and any `DeleteObjectVersion`/`BypassGovernanceRetention` CloudTrail event → SNS.
-- Budget alert; Atlas alerts from S1.
+- Budget alert; Atlas capacity/anomaly alerts from S1/S2 (P4).
 - Verify: temporarily disable the schedule → missing-data alarm fires within the window; force an error (wrong parameter name in a test alias) → error alarm; re-enable.
 - Rollback: delete alarms/topic.
 
@@ -147,14 +148,21 @@ Create the secrets of §2 in SSM and Vercel as shown; record escrow. Add the led
 
 ### S11 — Isolated restore drill (D10 local first) [OWNER runs C6]
 1. On an encrypted disk, start a local loopback single-node replica set (as in `DEVELOPER_HANDOFF.md` §8).
-2. Assume the restore-operator role in your shell; `aws s3 sync s3://<bucket> <encrypted-dir>`; set `FINANCIAL_OS_ENVIRONMENT`, `RESTORE_TARGET_URI` (loopback), `FINANCIAL_OS_LEDGER_READ_URI`, `FINANCIAL_OS_LEDGER_DATABASE` and the package/ledger keyring variables in that shell only; run `node .build/restore-drill/index.mjs --store <encrypted-dir>`. It checks the mirror, restores the newest package into a fresh target, applies quarantines, runs `releaseFence`, and prints counts, inspector barriers and timings only.
+2. Assume the restore-operator role in your shell; `aws s3 sync s3://<bucket> <encrypted-dir>`; set `FINANCIAL_OS_ENVIRONMENT`, `RESTORE_TARGET_URI` (loopback), `FINANCIAL_OS_LEDGER_READ_URI`, `FINANCIAL_OS_LEDGER_DATABASE` and the package, ledger and **mirror** keyring variables in that shell only; immediately after the sync save the authoritative listing `aws s3api list-objects-v2 --bucket <bucket> --output json > <encrypted-dir>.listing.json`; run `node .build/restore-drill/index.mjs --store <encrypted-dir> --listing <encrypted-dir>.listing.json` (a copy that differs from the listing is refused). It checks the mirror, restores the newest package into a fresh target, applies quarantines, runs `releaseFence`, and prints counts, inspector barriers and timings only.
 3. Measure: RPO = drill time − package `capturedAt`; RTO = incident declaration → fence passed.
 4. Destroy the local data directory; drop the operator session.
 - Verify: fence `technicalChecksPassed: true`; barriers reviewed; RTO ≤ 4h; RPO ≤ 24h; record evidence (no data) in `PHASE_18_RECOVERY_IMPLEMENTATION.md`.
 - Rollback: nothing external; if the fence fails, record the reason and fix before any further drill.
 
+### S12 — Ledger disaster-recovery drill (Configuration B) [OWNER runs, local only]
+1. With the same synced copy, listing and shell as S11, and the latest `FinancialOS/Backup` `LedgerHead` metric value as a lower bound: `node .build/ledger-rebuild/index.mjs --store <encrypted-dir> --listing <encrypted-dir>.listing.json --expect-head <n> --plan` → prints head, row count, base mirror, applied journal range and a digest.
+2. Rebuild into a fresh loopback database: set `LEDGER_REBUILD_TARGET_URI` (loopback) and `LEDGER_REBUILD_TARGET_DATABASE`, run without `--plan`; then run the S11 drill against the rebuilt ledger (`FINANCIAL_OS_LEDGER_READ_URI` = the loopback URI).
+- Verify: the plan's head equals the live staging ledger head at sync time (or is ahead only by writes after the sync), the rebuild's read-back digest matches the plan, and the restore fence passes against the rebuilt ledger. Any `Ledger rebuild refused: …` is a finding to resolve, never to override.
+- Rollback: nothing external; destroy the local data.
+- Residual limits (documented, all fail closed): an erasure whose journal write failed and was never retried leaves a gap that blocks a rebuild until the next worker mirror covers it — resume failed erasures promptly (the protocol alarms nothing yet: erasure is not enabled); a malformed object written to `ledger-journal/` by the app role (or a replayed row with a far-future revision by a ledger-key holder) blocks restores and rebuilds until break-glass removes it — preserve it as evidence first; rebuilt ledgers do not reproduce never-started, unjournaled acceptances, and later revisions may reuse their numbers. Ledger evidence (mirrors, journal) never expires; backup packages do (36 days).
+
 ## 4. What closes A+B (Phase 18 rows 18-10/18-11 evidence)
-All stages verified; 7 consecutive daily captures; one successful isolated drill within RPO/RTO; alarms proven by forced failure; secrets escrowed; the break-glass path tested with a test object; documentation updated. Production repeats S1–S11 with production values after staging acceptance. Phase 19 does not start until the whole of Phase 18 is accepted.
+All stages verified (S4 not required in Configuration B staging); probes P1–P4 PASS and recorded; 7 consecutive daily captures; one successful isolated drill within RPO/RTO and one ledger-rebuild drill (S12); alarms proven by forced failure; secrets escrowed; the break-glass path tested with a test object; documentation updated. Production repeats S1–S11 with production values after staging acceptance. Phase 19 does not start until the whole of Phase 18 is accepted.
 
 ## 5. Sources (verified 2026-09-29)
 [S3 Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html) · [S3 conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html) · [Vercel Static IPs](https://vercel.com/docs/networking/static-ips) · [Vercel function duration](https://vercel.com/docs/functions/configuring-functions/duration) · [Vercel cron](https://vercel.com/docs/cron-jobs/manage-cron-jobs) · [MongoDB snapshot read concern](https://www.mongodb.com/docs/manual/reference/read-concern-snapshot/) · [Atlas Flex limits](https://www.mongodb.com/docs/atlas/reference/flex-limitations/) · [Atlas free-cluster limits](https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/) · [Atlas pause/resume (free clusters paused after 30 days of inactivity)](https://www.mongodb.com/docs/atlas/pause-terminate-cluster/)

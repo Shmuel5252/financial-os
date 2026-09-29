@@ -20,7 +20,7 @@ describe("Phase 18 source collection inventory (no database access)", () => {
           && node.expression.name.text === "collection" && node.arguments[0] !== undefined
           && ts.isStringLiteral(node.arguments[0])) names.add(node.arguments[0].text);
         if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer !== undefined) {
-          if (["sectionCollections", "financialOsAuthCollections"].includes(node.name.text)) {
+          if (["sectionCollections", "financialOsAuthCollections", "LEDGER_COLLECTIONS"].includes(node.name.text)) {
             const literals = (child: ts.Node): void => {
               if (ts.isStringLiteral(child)) names.add(child.text);
               ts.forEachChild(child, literals);

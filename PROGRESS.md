@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 Configuration B hardening — 2026-09-29
+
+Ledger disaster recovery (deterministic rebuild from signed mirrors + mirror-on-accept journal, fail-closed on any unprovable evidence), separate mirror signing key, capacity/anomaly alert definitions, stronger capture probe, IAM-auth preparation; decision sheet and runbook moved to Configuration B (M0 only after probes pass, Flex fallback). Nothing provisioned; no real erasure.
+
 ## Phase 18 C1–C7 repository work and provisioning decision sheet — 2026-09-29
 
 Infrastructure template, Lambda backup worker, write-once S3 adapter, ledger bootstrap/probe, configured ledger as the default claim guard, restore-drill tooling, CI worker build and synthetic end-to-end rehearsal (worker → drill → fence). Costs, cheaper equivalents, Flex assessment and app→ledger options in `PHASE_18_PROVISIONING_DECISION_SHEET.md`. No provisioning, secrets, network or deployment change.

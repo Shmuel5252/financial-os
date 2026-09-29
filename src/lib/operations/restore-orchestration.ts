@@ -16,12 +16,13 @@ import { filterHouseholdDeletionQuarantine } from "@/lib/operations/household-de
 import { filterInvitationDeletionQuarantine } from "@/lib/operations/invitation-deletion-quarantine";
 import { materializeInertRecoveryInvitation } from "@/lib/operations/invitation-recovery";
 import { filterSharedReportDeletionQuarantine } from "@/lib/operations/shared-report-deletion-quarantine";
-import { verifiedMirrors } from "@/lib/operations/ledger-mirror";
+import { verifiedJournal, verifiedMirrors } from "@/lib/operations/ledger-mirror";
 
 type Key = Readonly<{ version: number; material: Uint8Array }>;
-/** ledgerKeys verify receipts, mirror exports and the signed release state; stateKey (the operator's active ledger key) signs state. */
+/** ledgerKeys verify receipts and the signed release state; mirrorKeys verify mirror exports (a separate keyring); stateKey (the
+ * operator's active ledger key) signs state. `mirror` is the object store holding `ledger-mirror/` and `ledger-journal/`. */
 export type LedgerInput = Readonly<{ ledger: Readonly<{ snapshot: () => Promise<LedgerSnapshot> }>; environment: LedgerEnvironment;
-  ledgerKeys: readonly LedgerKey[]; stateKey: LedgerKey; mirror: BackupObjectStore; maxLedgerAgeMs: number; now: () => number }>;
+  ledgerKeys: readonly LedgerKey[]; mirrorKeys: readonly LedgerKey[]; stateKey: LedgerKey; mirror: BackupObjectStore; maxLedgerAgeMs: number; now: () => number }>;
 type ReleaseFields = { state: "restoring" | "restored" | "fenced"; package: string; ledgerHead: number | null; counts: Record<string, number> | null; watermark: number | null };
 type ReleaseState = ReleaseFields & { _id: "release"; keyVersion: number; signature: string };
 
@@ -42,17 +43,20 @@ async function readState(target: Db, keys: readonly LedgerKey[]): Promise<Releas
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return fail("release state tampered");
   return row;
 }
-/** The live ledger must be at or past every signed mirror and still hold every mirrored receipt with at least its markers: a head
- * check alone misses receipts deleted without lowering the head. The worker mirrors before every capture, so no mirror = refuse. */
+/** The live ledger must be at or past every signed mirror and every journaled write, and still hold every mirrored or journaled
+ * receipt with at least its markers: a head check alone misses receipts deleted without lowering the head. The worker mirrors
+ * before every capture, so no mirror = refuse. */
 async function ledgerNotBehindMirror(input: LedgerInput, snapshot: LedgerSnapshot) {
-  let mirrored: Awaited<ReturnType<typeof verifiedMirrors>>;
-  try { mirrored = await verifiedMirrors(input.mirror, input.environment, input.ledgerKeys); } catch { return fail("ledger mirror unverifiable"); }
-  if (mirrored.count === 0) return fail("ledger mirror missing");
-  if (snapshot.head < mirrored.head) return fail("ledger older than its mirror");
-  const live = new Map(snapshot.receipts.map(receipt => [receipt.subject, new Set(receipt.providerSubjects)]));
-  for (const [subject, markers] of mirrored.subjects) {
-    const current = live.get(subject);
-    if (current === undefined || markers.some(marker => !current.has(marker))) return fail("ledger missing mirrored receipts");
+  let mirrors: Awaited<ReturnType<typeof verifiedMirrors>>; let journal: Awaited<ReturnType<typeof verifiedJournal>>;
+  try { mirrors = await verifiedMirrors(input.mirror, input.environment, input.ledgerKeys, input.mirrorKeys); } catch { return fail("ledger mirror unverifiable"); }
+  try { journal = await verifiedJournal(input.mirror, input.environment, input.ledgerKeys); } catch { return fail("ledger journal unverifiable"); }
+  if (mirrors.length === 0) return fail("ledger mirror missing");
+  if (snapshot.head < mirrors[mirrors.length - 1]!.head) return fail("ledger older than its mirror");
+  if (journal.length > 0 && snapshot.head < journal[journal.length - 1]!.revision) return fail("ledger older than its journal");
+  const live = new Map(snapshot.receipts.map(receipt => [`${input.environment}:${receipt.keyVersion}:${receipt.subject}`, new Set(receipt.providerSubjects)]));
+  for (const row of [...mirrors.flatMap(mirror => mirror.rows), ...journal.map(entry => entry.row)]) {
+    const current = live.get(row._id);
+    if (current === undefined || row.current.providerSubjects.some(marker => !current.has(marker))) return fail("ledger missing mirrored receipts");
   }
 }
 

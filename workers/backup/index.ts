@@ -18,16 +18,20 @@ const command = (sdk: Sdk, name: string, input: Record<string, unknown>) => new 
 const env = (name: string) => { const value = process.env[name]; if (value === undefined || value === "") throw new Error(`Backup worker failed closed: ${name} missing`); return value; };
 
 /** `<prefix>/backup/app-db-uri`, `<prefix>/ledger/read-uri`, `<prefix>/backup/package-key-v<n>`, `…/package-key-active-version`,
- * `<prefix>/ledger/key-v<n>`, `<prefix>/ledger/key-active-version` → worker secret names. Unknown parameters are ignored. */
+ * `<prefix>/ledger/key-v<n>`, `<prefix>/ledger/key-active-version`, `<prefix>/ledger/mirror-key-v<n>`,
+ * `<prefix>/ledger/mirror-key-active-version` → worker secret names. Unknown parameters are ignored. */
 export function mapParameters(prefix: string, parameters: readonly Readonly<{ Name?: unknown; Value?: unknown }>[]): Record<string, string> {
   const secrets: Record<string, string> = {};
   for (const parameter of parameters) {
     if (typeof parameter.Name !== "string" || typeof parameter.Value !== "string" || !parameter.Name.startsWith(`${prefix}/`)) continue;
     const path = parameter.Name.slice(prefix.length + 1);
     const packageKey = /^backup\/package-key-v([1-9][0-9]{0,5})$/.exec(path); const ledgerKey = /^ledger\/key-v([1-9][0-9]{0,5})$/.exec(path);
+    const mirrorKey = /^ledger\/mirror-key-v([1-9][0-9]{0,5})$/.exec(path);
     const name = path === "backup/app-db-uri" ? "FINANCIAL_OS_BACKUP_APP_DB_URI" : path === "ledger/read-uri" ? "FINANCIAL_OS_LEDGER_READ_URI"
       : path === "backup/package-key-active-version" ? "FINANCIAL_OS_RECOVERY_PACKAGE_KEY_ACTIVE_VERSION"
         : path === "ledger/key-active-version" ? "FINANCIAL_OS_DELETION_LEDGER_KEY_ACTIVE_VERSION"
+          : path === "ledger/mirror-key-active-version" ? "FINANCIAL_OS_LEDGER_MIRROR_KEY_ACTIVE_VERSION"
+            : mirrorKey ? `FINANCIAL_OS_LEDGER_MIRROR_KEY_V${mirrorKey[1]}`
           : packageKey ? `FINANCIAL_OS_RECOVERY_PACKAGE_KEY_V${packageKey[1]}` : ledgerKey ? `FINANCIAL_OS_DELETION_LEDGER_KEY_V${ledgerKey[1]}` : undefined;
     if (name !== undefined) secrets[name] = parameter.Value;
   }
@@ -65,7 +69,8 @@ export async function handler() {
   return runBackupWorker({ secrets: mapParameters(prefix, parameters), environment: environment as LedgerEnvironment,
     appDatabase: env("FINANCIAL_OS_APP_DATABASE"), ledgerDatabase: env("FINANCIAL_OS_LEDGER_DATABASE"), indexManifestDigest: __INDEX_MANIFEST_DIGEST__,
     connect: uri => new MongoClient(uri, { serverSelectionTimeoutMS: 10_000 }).connect(), store: s3ObjectStore(store),
-    recordSuccess: async () => { await metrics.send(command(cloudwatch, "PutMetricDataCommand", { Namespace: "FinancialOS/Backup",
-      MetricData: [{ MetricName: "BackupSucceeded", Value: 1, Unit: "Count", Dimensions: [{ Name: "Environment", Value: environment }] }] })); },
+    recordSuccess: async ({ ledgerHead }) => { await metrics.send(command(cloudwatch, "PutMetricDataCommand", { Namespace: "FinancialOS/Backup",
+      MetricData: [{ MetricName: "BackupSucceeded", Value: 1, Unit: "Count", Dimensions: [{ Name: "Environment", Value: environment }] },
+        { MetricName: "LedgerHead", Value: ledgerHead, Unit: "None", Dimensions: [{ Name: "Environment", Value: environment }] }] })); },
     now: () => Date.now(), maxDurationMs: Number(process.env.FINANCIAL_OS_CAPTURE_MAX_MS ?? 240_000) });
 }

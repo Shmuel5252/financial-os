@@ -22,7 +22,7 @@ import { runRestoreDrill } from "@/lib/operations/restore-drill";
 import { openBackupPackage } from "@/lib/operations/backup-package";
 import { DeletionReceiptStore, type LedgerSnapshot } from "@/lib/operations/deletion-receipt-store";
 import { runLedgerFirstErasure } from "@/lib/operations/erasure-protocol";
-import { mirrorLedger } from "@/lib/operations/ledger-mirror";
+import { journalLedgerRow, mirrorLedger } from "@/lib/operations/ledger-mirror";
 import { createIsolatedRecoveryTarget } from "@/lib/operations/isolated-recovery-target";
 import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
 import { recoveryCollections } from "@/lib/operations/recovery-plan";
@@ -32,6 +32,7 @@ import { releaseFence, restoreIntoQuarantine, verifyReleaseWatermark } from "@/l
 const replica = process.env.MONGODB_TEST_REPLICA_URI; const standalone = process.env.MONGODB_TEST_URI;
 const suite = replica ? describe : describe.skip;
 const digest = "a".repeat(64); const packageKey = { version: 1, material: randomBytes(32) }; const ledgerKey = { version: 1, material: randomBytes(32) };
+const mirrorKey = { version: 1, material: randomBytes(32) }; // separate from the ledger key (Configuration B)
 const alias = (value: string) => createHash("sha256").update(value).digest("hex");
 type Target = Awaited<ReturnType<typeof createIsolatedRecoveryTarget>>;
 
@@ -58,18 +59,20 @@ async function world(disposables: Target[]) {
   }
   const store = wormObjectStore();
   const ledgerInput = (overrides: Partial<{ snapshot: () => Promise<LedgerSnapshot>; now: () => number; maxLedgerAgeMs: number }> = {}) => ({
-    ledger: { snapshot: overrides.snapshot ?? (() => ledger.snapshot()) }, environment: "isolated-test" as const, ledgerKeys: [ledgerKey], stateKey: ledgerKey, mirror: store,
+    ledger: { snapshot: overrides.snapshot ?? (() => ledger.snapshot()) }, environment: "isolated-test" as const, ledgerKeys: [ledgerKey], mirrorKeys: [mirrorKey], stateKey: ledgerKey, mirror: store,
     maxLedgerAgeMs: overrides.maxLedgerAgeMs ?? 60_000, now: overrides.now ?? (() => Date.now()) });
   const capture = (overrides: Partial<Parameters<typeof captureBackup>[0]> = {}) => captureBackup({ client: app.database.client, databaseName: app.database.databaseName,
     schemas: initialRecoverySchemas, indexManifestDigest: digest, key: packageKey, ledgerHead: async () => (await ledger.snapshot()).head, store,
     now: () => Date.now(), maxDurationMs: 60_000, ...overrides });
   const restore = async (name: string, overrides: Parameters<typeof ledgerInput>[0] = {}, into?: Target) => {
     // As in the worker, a signed ledger mirror exists before any restore (restore refuses a store without one).
-    if ((await store.list("ledger-mirror/")).length === 0) await mirrorLedger({ ledger, store, environment: "isolated-test", key: ledgerKey });
+    if ((await store.list("ledger-mirror/")).length === 0) await mirrorLedger({ ledger, store, environment: "isolated-test", key: mirrorKey });
     const fresh = into ?? await target();
     return { target: fresh, result: await restoreIntoQuarantine({ ...ledgerInput(overrides), store, name, schemas: initialRecoverySchemas, indexManifestDigest: digest,
       packageKey, target: fresh.database, ensureIndexes }) };
   };
+  // Mirror-on-accept journal into the same write-once store as the mirrors and packages.
+  const journal = async (row: Parameters<typeof journalLedgerRow>[0]["row"]) => { await journalLedgerRow({ row, store, environment: "isolated-test", ledgerKeys: [ledgerKey] }); };
   const erase = (actor: Actor, verify = true) => runLedgerFirstErasure(ledger, actor, randomUUID(), () => Date.now(), {
     providerSubjectAliases: async () => [alias(`subject:${actor.userId}`)], fence: async () => undefined,
     erase: async () => {
@@ -77,8 +80,8 @@ async function world(disposables: Target[]) {
       await app.database.collection("authUsers").deleteMany({ _id: new ObjectId(actor.userId) });
     },
     verify: async () => verify && (await Promise.all(recoveryCollections.map(name => app.database.collection(name).countDocuments({ userId: new ObjectId(actor.userId) }))))
-      .every(count => count === 0) });
-  return { app, ledgerDb, ledger, store, actors, capture, restore, ledgerInput, erase, target, ensureIndexes };
+      .every(count => count === 0) }, journal);
+  return { app, ledgerDb, ledger, store, actors, capture, restore, ledgerInput, erase, target, ensureIndexes, journal };
 }
 const rowsOf = async (db: Db, name: string) => db.collection(name).find().sort({ _id: 1 }).toArray();
 
@@ -129,9 +132,9 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
     await expect(w.restore(captured.name, { snapshot: async () => { const s = await real(); return { receipts: [], head: 1, readAt: s.readAt }; } }))
       .rejects.toThrow("ledger older than backup");
     await expect(w.restore(captured.name, { now: () => Date.now() + 120_000 })).rejects.toThrow("ledger stale or invalid");
-    await mirrorLedger({ ledger: w.ledger, store: w.store, environment: "isolated-test", key: ledgerKey }); // head 2
+    await mirrorLedger({ ledger: w.ledger, store: w.store, environment: "isolated-test", key: mirrorKey }); // head 2
     await w.ledger.accept({ kind: "user", userId: new ObjectId().toHexString() }, randomUUID(), Date.now());
-    await mirrorLedger({ ledger: w.ledger, store: w.store, environment: "isolated-test", key: ledgerKey }); // head 3
+    await mirrorLedger({ ledger: w.ledger, store: w.store, environment: "isolated-test", key: mirrorKey }); // head 3
     await expect(w.restore(captured.name, { snapshot: async () => ({ ...(await real()), head: 2 }) })).rejects.toThrow("ledger older than its mirror");
     const mirrorName = (await w.store.list("ledger-mirror/"))[0]!; const mirrorBytes = (await w.store.get(mirrorName))!;
     mirrorBytes[mirrorBytes.length - 10] = mirrorBytes[mirrorBytes.length - 10]! ^ 0xff; w.store.objects.set("ledger-mirror/999999999999-tampered.bson", mirrorBytes);
@@ -184,6 +187,13 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
     const changed = await w.restore(captured.name);
     await changed.target.database.collection("profiles").deleteMany({});
     await expect(releaseFence({ ...w.ledgerInput(), target: changed.target.database })).rejects.toThrow("restored counts changed");
+    // Journaled writes newer than every mirror: a live ledger behind them, or missing their receipt, is refused.
+    await w.erase(w.actors[1]!);
+    const journaled = await real();
+    await expect(w.restore(captured.name, { snapshot: async () => ({ ...journaled, head: journaled.head - 1 }) })).rejects.toThrow("ledger older than its journal");
+    const newest = journaled.receipts.reduce((latest, receipt) => (receipt.acceptedAt > latest.acceptedAt ? receipt : latest));
+    await expect(w.restore(captured.name, { snapshot: async () => ({ ...journaled, receipts: journaled.receipts.filter(receipt => receipt !== newest) }) }))
+      .rejects.toThrow("ledger missing mirrored receipts");
   }, 60_000);
 
   it("never leaves a usable partial capture or restore, and retries start clean", async () => {
@@ -255,31 +265,31 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
     const steps = { providerSubjectAliases: vi.fn(async () => ["c".repeat(64)]), fence: vi.fn(async () => undefined), erase: vi.fn(async () => undefined), verify: vi.fn(async () => false) };
     const actor = w.actors[0]!; const operation = randomUUID();
     // Verification fails: suppression is durable but completion is never recorded.
-    await expect(runLedgerFirstErasure(w.ledger, actor, operation, () => Date.now(), steps)).rejects.toThrow("Erasure verification failed");
+    await expect(runLedgerFirstErasure(w.ledger, actor, operation, () => Date.now(), steps, w.journal)).rejects.toThrow("Erasure verification failed");
     expect((await w.ledger.read(actor))?.status).toBe("suppressed");
     steps.verify.mockResolvedValue(true);
-    expect((await runLedgerFirstErasure(w.ledger, actor, operation, () => Date.now(), steps)).status).toBe("locally-erased");
+    expect((await runLedgerFirstErasure(w.ledger, actor, operation, () => Date.now(), steps, w.journal)).status).toBe("locally-erased");
     // The retry reused the stored receipt: aliases were read once for acceptance and once per post-fence check, never re-sealed.
     expect(steps.providerSubjectAliases).toHaveBeenCalledTimes(3);
     expect((await w.ledger.read(actor))?.providerSubjects).toHaveLength(1);
     // A retry that lost its operation ID resumes the stored operation instead of stranding a suppressed, unerased subject.
-    expect((await runLedgerFirstErasure(w.ledger, actor, randomUUID(), () => Date.now(), steps)).operationId).toBe(operation);
+    expect((await runLedgerFirstErasure(w.ledger, actor, randomUUID(), () => Date.now(), steps, w.journal)).operationId).toBe(operation);
     // A binding claimed between the alias read and the fence is unmarked: nothing is erased.
     const raced = w.actors[1]!; let reads = 0;
     const racing = { providerSubjectAliases: vi.fn(async () => (++reads === 1 ? [] : ["e".repeat(64)])), fence: vi.fn(async () => undefined),
       erase: vi.fn(async () => undefined), verify: vi.fn(async () => true) };
-    await expect(runLedgerFirstErasure(w.ledger, raced, randomUUID(), () => Date.now(), racing)).rejects.toThrow("Erasure requires review: provider subject not marked");
+    await expect(runLedgerFirstErasure(w.ledger, raced, randomUUID(), () => Date.now(), racing, w.journal)).rejects.toThrow("Erasure requires review: provider subject not marked");
     expect(racing.erase).not.toHaveBeenCalled(); expect((await w.ledger.read(raced))?.status).toBe("suppressed");
     // Ledger reachable for reads but the durable accept fails: still nothing local happens (ledger-first).
-    const failingAccept = { read: async () => null, accept: async () => { throw new Error("Deletion ledger unavailable"); }, recordLocalCompletion: vi.fn(),
+    const failingAccept = { read: async () => null, accept: async () => { throw new Error("Deletion ledger unavailable"); }, recordLocalCompletion: vi.fn(), journalRow: vi.fn(),
       isProviderSubjectErased: vi.fn() };
     const blocked = { providerSubjectAliases: vi.fn(async () => []), fence: vi.fn(), erase: vi.fn(), verify: vi.fn() };
-    await expect(runLedgerFirstErasure(failingAccept, w.actors[1]!, randomUUID(), () => Date.now(), blocked)).rejects.toThrow("Deletion ledger unavailable");
+    await expect(runLedgerFirstErasure(failingAccept, w.actors[1]!, randomUUID(), () => Date.now(), blocked, w.journal)).rejects.toThrow("Deletion ledger unavailable");
     expect(blocked.fence).not.toHaveBeenCalled(); expect(blocked.erase).not.toHaveBeenCalled(); expect(failingAccept.recordLocalCompletion).not.toHaveBeenCalled();
     // Ledger unavailable: nothing local happens.
     const closed = await w.target(); const offline = new DeletionReceiptStore(closed.database, "isolated-test", { active: ledgerKey, keys: [ledgerKey] }); await closed.dispose();
     const untouched = { providerSubjectAliases: vi.fn(async () => []), fence: vi.fn(), erase: vi.fn(), verify: vi.fn() };
-    await expect(runLedgerFirstErasure(offline, { kind: "user", userId: new ObjectId().toHexString() }, randomUUID(), () => Date.now(), untouched)).rejects.toThrow("Deletion ledger unavailable");
+    await expect(runLedgerFirstErasure(offline, { kind: "user", userId: new ObjectId().toHexString() }, randomUUID(), () => Date.now(), untouched, w.journal)).rejects.toThrow("Deletion ledger unavailable");
     expect(untouched.fence).not.toHaveBeenCalled(); expect(untouched.erase).not.toHaveBeenCalled();
 
     // Anti-resurrection through the real claim path.
@@ -292,7 +302,7 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
     await claimConfiguredOpenBankingSubject(original, { provider, repository });
     const subjectAlias = (await claimDb.database.collection("bankProviderBindings").findOne())!.subjectAlias as string;
     await runLedgerFirstErasure(w.ledger, original, randomUUID(), () => Date.now(), { providerSubjectAliases: async () => [subjectAlias], fence: async () => undefined,
-      erase: async () => { await claimDb.database.collection("bankProviderBindings").deleteMany({ userId: new ObjectId(original.userId) }); }, verify: async () => true });
+      erase: async () => { await claimDb.database.collection("bankProviderBindings").deleteMany({ userId: new ObjectId(original.userId) }); }, verify: async () => true }, w.journal);
     const guard = (store: DeletionReceiptStore) => (value: string) => store.isProviderSubjectErased(value);
     await expect(claimConfiguredOpenBankingSubject(newcomer, { provider, repository, erasedProviderSubject: guard(w.ledger) })).rejects.toBeInstanceOf(ConflictError);
     await expect(claimConfiguredOpenBankingSubject(newcomer, { provider, repository, erasedProviderSubject: guard(offline) })).rejects.toThrow("Deletion ledger unavailable");
@@ -311,18 +321,19 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
       const store = directoryObjectStore(root); const recordSuccess = vi.fn(async () => undefined); const opened: MongoClient[] = [];
       const secrets = { FINANCIAL_OS_BACKUP_APP_DB_URI: replica, FINANCIAL_OS_LEDGER_READ_URI: replica,
         FINANCIAL_OS_RECOVERY_PACKAGE_KEY_V1: Buffer.from(packageKey.material).toString("base64"), FINANCIAL_OS_RECOVERY_PACKAGE_KEY_ACTIVE_VERSION: "1",
-        FINANCIAL_OS_DELETION_LEDGER_KEY_V1: Buffer.from(ledgerKey.material).toString("base64"), FINANCIAL_OS_DELETION_LEDGER_KEY_ACTIVE_VERSION: "1" };
+        FINANCIAL_OS_DELETION_LEDGER_KEY_V1: Buffer.from(ledgerKey.material).toString("base64"), FINANCIAL_OS_DELETION_LEDGER_KEY_ACTIVE_VERSION: "1",
+        FINANCIAL_OS_LEDGER_MIRROR_KEY_V1: Buffer.from(mirrorKey.material).toString("base64"), FINANCIAL_OS_LEDGER_MIRROR_KEY_ACTIVE_VERSION: "1" };
       const worker = (overrides: Partial<Parameters<typeof runBackupWorker>[0]> = {}) => runBackupWorker({ secrets, environment: "isolated-test",
         appDatabase: w.app.database.databaseName, ledgerDatabase: w.ledgerDb.database.databaseName, indexManifestDigest: digest,
         connect: async uri => { const client = await new MongoClient(uri).connect(); opened.push(client); return client; },
         store, recordSuccess, now: () => Date.now(), maxDurationMs: 60_000, ...overrides });
       const first = await worker();
-      expect(first).toMatchObject({ ledgerHead: 0 }); expect(recordSuccess).toHaveBeenCalledTimes(1);
+      expect(first).toMatchObject({ ledgerHead: 0 }); expect(recordSuccess).toHaveBeenCalledTimes(1); expect(recordSuccess).toHaveBeenCalledWith({ ledgerHead: 0 });
       expect([await store.list("packages/"), await store.list("ledger-mirror/")]).toEqual([[first.package], [first.mirror]]);
       // Every client the worker opened is closed again.
       await expect(opened[0]!.db("admin").command({ ping: 1 })).rejects.toThrow();
       // The owner is erased after the newest capture: the drill restores that package without them and the fence passes.
-      await w.erase(w.actors[0]!); const second = await worker(); expect(second.ledgerHead).toBe(2);
+      await w.erase(w.actors[0]!); const second = await worker(); expect(second.ledgerHead).toBe(2); expect(recordSuccess).toHaveBeenLastCalledWith({ ledgerHead: 2 });
       await w.erase(w.actors[1]!, false).catch(() => undefined); // suppressed but unverified: the ledger is now ahead of every package (head 3)
       const drill = await runRestoreDrill({ ...w.ledgerInput(), mirror: store, store, targetUri: replica!, packageKey, indexManifestDigest: digest });
       expect(drill).toMatchObject({ package: second.package, ledgerHead: 3, releaseAllowed: false,
@@ -341,6 +352,8 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
       const missingLedgerKey = Object.fromEntries(Object.entries(secrets).filter(([name]) => name !== "FINANCIAL_OS_DELETION_LEDGER_KEY_V1"));
       for (const [overrides, reason] of [
         [{ secrets: missingLedgerKey }, "keys"], [{ secrets: { ...secrets, FINANCIAL_OS_RECOVERY_PACKAGE_KEY_V1: "short" } }, "keys"],
+        [{ secrets: { ...secrets, FINANCIAL_OS_LEDGER_MIRROR_KEY_V1: undefined } }, "keys"],
+        [{ secrets: { ...secrets, FINANCIAL_OS_LEDGER_MIRROR_KEY_V1: secrets.FINANCIAL_OS_DELETION_LEDGER_KEY_V1 } }, "keys"], // mirror key must differ
         [{ secrets: { ...secrets, FINANCIAL_OS_BACKUP_APP_DB_URI: undefined } }, "database URI missing"],
         [{ secrets: { ...secrets, FINANCIAL_OS_LEDGER_READ_URI: "mongodb://ledger.example.invalid:27017/" } }, "database URI must require TLS"],
         [{ secrets: { ...secrets, FINANCIAL_OS_BACKUP_APP_DB_URI: "mongodb+srv://app.example.invalid/?tlsInsecure=true" } }, "database URI must require TLS"],
@@ -374,7 +387,8 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
     await claimConfiguredOpenBankingSubject(original, { provider, repository, erasedProviderSubject: async () => false });
     const subjectAlias = (await claimDb.database.collection("bankProviderBindings").findOne())!.subjectAlias as string;
     await runLedgerFirstErasure(staging, original, randomUUID(), () => Date.now(), { providerSubjectAliases: async () => [subjectAlias], fence: async () => undefined,
-      erase: async () => { await claimDb.database.collection("bankProviderBindings").deleteMany({}); }, verify: async () => true });
+      erase: async () => { await claimDb.database.collection("bankProviderBindings").deleteMany({}); }, verify: async () => true },
+      async row => { await journalLedgerRow({ row, store: wormObjectStore(), environment: "staging", ledgerKeys: [stagingKey] }); });
     // Fresh module graph so the runtime reads this configuration (the ledger handle is cached per process).
     const load = async () => { vi.resetModules(); return { ...await import("@/lib/open-banking/open-banking-service"), ...await import("@/lib/errors/application-error") }; };
     vi.stubEnv("FINANCIAL_OS_ENVIRONMENT", "staging"); vi.stubEnv("FINANCIAL_OS_LEDGER_MONGODB_URI", replica!);

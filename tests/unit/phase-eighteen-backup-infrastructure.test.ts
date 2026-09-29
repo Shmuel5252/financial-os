@@ -1,13 +1,16 @@
+import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfigurationError } from "@/lib/errors/application-error";
-import { deletionLedgerConfig } from "@/lib/operations/deletion-ledger-runtime";
-import { directoryObjectStore, s3ObjectStore, type S3Client } from "@/lib/operations/object-stores";
+import { assumeRoleWithWebIdentity, deletionLedgerConfig, getDeletionLedger, resetDeletionLedger } from "@/lib/operations/deletion-ledger-runtime";
+import { MongoClient } from "mongodb";
+import { directoryObjectStore, listedDirectoryObjectStore, s3ObjectStore, type S3Client } from "@/lib/operations/object-stores";
 import { mapParameters } from "../../workers/backup/index";
 import template from "../../infra/aws/financial-os-backup.template.json";
+import atlasAlerts from "../../infra/atlas/capacity-alerts.json";
 
 type Statement = Readonly<{ Sid?: string; Effect: string; Action: string | string[]; Condition?: Record<string, Record<string, unknown>> }>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deep traversal of a CloudFormation JSON document
@@ -26,12 +29,12 @@ describe("backup infrastructure template (runbook S3-S8)", () => {
     expect(bucket.Properties.OwnershipControls.Rules).toEqual([{ ObjectOwnership: "BucketOwnerEnforced" }]);
     const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault["Fn::If"];
     expect([encryption[1].SSEAlgorithm, encryption[2].SSEAlgorithm]).toEqual(["aws:kms", "AES256"]);
-    // D2: history = retention; objects expire the day after their lock ends (never earlier), then disappear a day later.
+    // D2: backup packages (personal data) expire the day after their lock ends; ledger evidence (minimal receipts: mirrors and
+    // the mirror-on-accept journal) never expires, so a rebuild can always prove completeness against every acceptance.
     const rules = bucket.Properties.LifecycleConfiguration.Rules as { NoncurrentVersionExpiration?: { NoncurrentDays: number }; ExpirationInDays?: number; Prefix?: string }[];
     const expiry = rules.filter(rule => rule.ExpirationInDays !== undefined);
-    expect(expiry).toHaveLength(1); expect(expiry[0]!.Prefix).toBeUndefined();
-    expect(expiry[0]!.ExpirationInDays).toBe(bucket.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Days + 1);
-    expect(expiry[0]!.NoncurrentVersionExpiration?.NoncurrentDays).toBe(1);
+    expect(expiry).toEqual([expect.objectContaining({ Prefix: "packages/", ExpirationInDays: bucket.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Days + 1 })]);
+    expect(rules.find(rule => rule.NoncurrentVersionExpiration)?.NoncurrentVersionExpiration?.NoncurrentDays).toBe(1);
   });
   it("denies non-TLS access, non-conditional writes and any retention bypass or version deletion except by break-glass", () => {
     const statements = statementsOf(resources.BackupBucketPolicy!.Properties.PolicyDocument);
@@ -94,6 +97,50 @@ describe("backup infrastructure template (runbook S3-S8)", () => {
     expect([...referenced].filter(name => !declared.has(name))).toEqual([]);
     expect(text).not.toMatch(/mongodb(\+srv)?:\/\/|AKIA[0-9A-Z]{16}/);
   });
+  it("keeps every resource description deployable (IAM/EventBridge allow only Latin-1 characters)", () => {
+    const bad = Object.entries(resources).filter(([, resource]) => typeof resource.Properties?.Description === "string"
+      && /[^\t\n\r\x20-\x7e\xa1-\xff]/.test(resource.Properties.Description)).map(([name]) => name);
+    expect(bad).toEqual([]);
+  });
+  it("prepares an optional, narrowly trusted app role: one Vercel project/environment, journal writes only", () => {
+    const role = resources.LedgerAppRole!;
+    expect([role.Condition, resources.VercelOidcProvider!.Condition]).toEqual(["EnableVercelOidc", "EnableVercelOidc"]);
+    const trust = role.Properties.AssumeRolePolicyDocument.Statement[0];
+    expect(trust).toMatchObject({ Effect: "Allow", Action: "sts:AssumeRoleWithWebIdentity", Principal: { Federated: { "Fn::GetAtt": ["VercelOidcProvider", "Arn"] } } });
+    expect(trust.Condition.StringEquals).toEqual({ "oidc.vercel.com:aud": { "Fn::Sub": "https://vercel.com/${VercelTeamSlug}" },
+      "oidc.vercel.com:sub": { "Fn::Sub": "owner:${VercelTeamSlug}:project:${VercelProjectName}:environment:${VercelEnvironment}" } });
+    const statements = statementsOf(role.Properties.Policies[0].PolicyDocument).filter(statement => statement.Effect !== undefined);
+    expect(statements.flatMap(actions)).toEqual(["s3:PutObject"]);
+    expect(statements[0]).toMatchObject({ Resource: { "Fn::Sub": "${BackupBucket.Arn}/ledger-journal/*" } });
+    expect(template.Parameters.VercelEnvironment.AllowedValues).toEqual(["production"]); // preview deployments never reach the ledger
+  });
+});
+
+describe("Atlas capacity and anomaly alert definitions (Free/Flex)", () => {
+  type Alert = (typeof atlasAlerts.alerts)[number];
+  const allowed = /^(CONNECTIONS_PERCENT|LOGICAL_SIZE|NETWORK_BYTES_IN|NETWORK_BYTES_OUT|NETWORK_NUM_REQUESTS|OPCOUNTER_(CMD|QUERY|INSERT|UPDATE|DELETE|GETMORE))$/;
+  const byId = (id: string) => atlasAlerts.alerts.find((alert: Alert) => alert.id === id)!;
+  it("uses only conditions Free/Flex support, with thresholds below the Free limits", () => {
+    expect(atlasAlerts.alerts.every((alert: Alert) => allowed.test(alert.metricName))).toBe(true);
+    expect(byId("requests-near-ops-cap").threshold).toBeLessThan(100);
+    expect(byId("connections-high").threshold).toBeLessThan(100);
+    expect(atlasAlerts.clusters.primary.logicalSizeMegabytes).toBeLessThan(512);
+    expect(atlasAlerts.clusters.ledger.logicalSizeMegabytes).toBeLessThan(512);
+    expect(Number(byId("network-out-high").threshold) * 7 * 86_400).toBeLessThan(10 * 1024 ** 3); // 10 GB per rolling 7 days
+    expect(byId("delete-ops-seen")).toMatchObject({ threshold: 0, only: "deleteOpsAlert" });
+  });
+  it("renders per-cluster files with the ledger-only delete anomaly and refuses bad arguments", () => {
+    const out = join(tmpdir(), `fos-alerts-${randomBytes(4).toString("hex")}`);
+    try {
+      const run = (role: string) => execFileSync(process.execPath, ["scripts/atlas-alerts.mjs", "--role", role, "--cluster", `${role}-staging`, "--email", "owner@example.invalid", "--out", out], { encoding: "utf8" });
+      expect(run("ledger")).toContain(`wrote ${atlasAlerts.alerts.length} alert files`);
+      expect(run("primary")).toContain(`wrote ${atlasAlerts.alerts.length - 1} alert files`);
+      const size = JSON.parse(execFileSync(process.execPath, ["-e", `process.stdout.write(require("fs").readFileSync(${JSON.stringify(join(out, "primary-logical-size-high.json"))}, "utf8"))`], { encoding: "utf8" }));
+      expect(size).toMatchObject({ eventTypeName: "OUTSIDE_METRIC_THRESHOLD", matchers: [{ fieldName: "CLUSTER_NAME", operator: "EQUALS", value: "primary-staging" }],
+        metricThreshold: { metricName: "LOGICAL_SIZE", threshold: 400, units: "MEGABYTES" }, notifications: [{ typeName: "EMAIL" }] });
+      expect(() => execFileSync(process.execPath, ["scripts/atlas-alerts.mjs", "--role", "other", "--cluster", "x", "--email", "a@b.c", "--out", out], { stdio: "pipe" })).toThrow();
+    } finally { execFileSync(process.execPath, ["-e", `require("fs").rmSync(${JSON.stringify(out)}, { recursive: true, force: true })`]); }
+  });
 });
 
 describe("object stores", () => {
@@ -122,6 +169,22 @@ describe("object stores", () => {
     expect(await s3ObjectStore(paged.client).list("packages/")).toEqual([name, second]);
     expect(paged.calls).toEqual([{ prefix: "packages/" }, { prefix: "packages/", continuationToken: "t" }]);
     await expect(s3ObjectStore(fakeS3([], [{ keys: ["packages/evil"] }]).client).list("packages/")).rejects.toThrow("unexpected object name");
+  });
+  describe("listed local copy", () => {
+    let root: string | undefined;
+    afterEach(async () => { if (root) await rm(root, { recursive: true, force: true }); root = undefined; });
+    it("lists a prefix only when the local copy equals the authoritative bucket listing, and is read-only", async () => {
+      root = await mkdtemp(join(tmpdir(), "fos-listed-")); await directoryObjectStore(root).putOnce(name, new Uint8Array([1]));
+      const second = `packages/2-${"b".repeat(16)}.bson`;
+      const listing = (keys: string[]) => JSON.stringify({ Contents: keys.map(Key => ({ Key, Size: 1 })) });
+      expect(await listedDirectoryObjectStore(root, listing([name])).list("packages/")).toEqual([name]);
+      expect(await listedDirectoryObjectStore(root, listing([])).list("ledger-journal/")).toEqual([]);
+      await expect(listedDirectoryObjectStore(root, listing([name, second])).list("packages/")).rejects.toThrow("local copy incomplete"); // truncated sync
+      await expect(listedDirectoryObjectStore(root, listing([])).list("packages/")).rejects.toThrow("local copy incomplete"); // extra local object
+      expect(() => listedDirectoryObjectStore(root!, "not json")).toThrow("listing unreadable");
+      expect(() => listedDirectoryObjectStore(root!, JSON.stringify({ Contents: [{ Key: 1 }] }))).toThrow("listing unreadable");
+      await expect(listedDirectoryObjectStore(root, listing([name])).putOnce(second, new Uint8Array())).rejects.toThrow("read-only copy");
+    });
   });
   describe("directory", () => {
     let root: string | undefined;
@@ -175,6 +238,78 @@ describe("deletion ledger runtime configuration", () => {
   });
 });
 
+describe("ledger AWS IAM authentication (preparation; no credentials)", () => {
+  const key = randomBytes(32).toString("base64");
+  const base = { FINANCIAL_OS_ENVIRONMENT: "staging", FINANCIAL_OS_LEDGER_DATABASE: "deletion_ledger", FINANCIAL_OS_DELETION_LEDGER_KEY_V1: key,
+    FINANCIAL_OS_DELETION_LEDGER_KEY_ACTIVE_VERSION: "1", FINANCIAL_OS_LEDGER_MONGODB_URI: "mongodb+srv://ledger.example.invalid/?authMechanism=MONGODB-AWS&authSource=%24external" };
+  const roleArn = "arn:aws:iam::123456789012:role/financial-os-ledger-app";
+  const sts = (expiration: string, status = 200) => vi.fn(async () => new Response(status !== 200 ? "denied" : `<AssumeRoleWithWebIdentityResponse><AssumeRoleWithWebIdentityResult><Credentials>
+    <AccessKeyId>ASIAEXAMPLEEXAMPLE01</AccessKeyId><SecretAccessKey>synthetic/secret+value=</SecretAccessKey><SessionToken>synthetic-session-token</SessionToken>
+    <Expiration>${expiration}</Expiration></Credentials></AssumeRoleWithWebIdentityResult></AssumeRoleWithWebIdentityResponse>`, { status }));
+  afterEach(async () => { await resetDeletionLedger(); });
+  it("accepts MONGODB-AWS only without a secret in the URI, and a role ARN only with it", () => {
+    expect(deletionLedgerConfig(base)).toMatchObject({ configured: true, auth: { kind: "aws-runtime" } });
+    expect(deletionLedgerConfig({ ...base, FINANCIAL_OS_LEDGER_AWS_ROLE_ARN: roleArn })).toMatchObject({ auth: { kind: "aws-web-identity", roleArn, region: "eu-central-1" } });
+    expect(deletionLedgerConfig({ ...base, FINANCIAL_OS_LEDGER_MONGODB_URI: "mongodb+srv://u:p@ledger.example.invalid/" })).toMatchObject({ auth: { kind: "uri" } });
+    for (const env of [{ ...base, FINANCIAL_OS_LEDGER_MONGODB_URI: "mongodb+srv://AKIDEXAMPLE:secret@ledger.example.invalid/?authMechanism=MONGODB-AWS" },
+      { ...base, FINANCIAL_OS_LEDGER_MONGODB_URI: "mongodb+srv://u:p@ledger.example.invalid/", FINANCIAL_OS_LEDGER_AWS_ROLE_ARN: roleArn },
+      { ...base, FINANCIAL_OS_LEDGER_AWS_ROLE_ARN: "arn:aws:iam::123:role/x" }, { ...base, FINANCIAL_OS_LEDGER_AWS_REGION: "Frankfurt" }]) {
+      expect(() => deletionLedgerConfig(env)).toThrow(ConfigurationError);
+    }
+  });
+  it("exchanges the web identity token at STS and never echoes it", async () => {
+    const fetch = sts("2030-01-01T00:15:00Z");
+    expect(await assumeRoleWithWebIdentity({ roleArn, region: "eu-central-1", token: "synthetic.oidc.token", fetch }))
+      .toEqual({ accessKeyId: "ASIAEXAMPLEEXAMPLE01", secretAccessKey: "synthetic/secret+value=", sessionToken: "synthetic-session-token", expiration: Date.parse("2030-01-01T00:15:00Z") });
+    const [url, init] = fetch.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(url).toBe("https://sts.eu-central-1.amazonaws.com/");
+    expect(Object.fromEntries(init.body as URLSearchParams)).toMatchObject({ Action: "AssumeRoleWithWebIdentity", RoleArn: roleArn, WebIdentityToken: "synthetic.oidc.token", DurationSeconds: "900" });
+    for (const failing of [sts("2030-01-01T00:15:00Z", 403), vi.fn(async () => new Response("<Credentials></Credentials>")), vi.fn(async () => { throw new Error("synthetic.oidc.token"); })]) {
+      const error = await assumeRoleWithWebIdentity({ roleArn, region: "eu-central-1", token: "synthetic.oidc.token", fetch: failing }).catch((caught: Error) => caught);
+      expect(error).toEqual(new Error("Deletion ledger unavailable")); expect(String((error as Error).message)).not.toContain("synthetic");
+    }
+  });
+  it("rotates the client before short-lived credentials expire and fails closed without a token", async () => {
+    const expiry = Date.parse("2030-01-01T00:15:00Z"); let now = expiry - 15 * 60_000; const fetch = sts("2030-01-01T00:15:00Z");
+    const runtime = { env: { ...base, FINANCIAL_OS_LEDGER_AWS_ROLE_ARN: roleArn }, now: () => now, fetch, webIdentityToken: async () => "synthetic.oidc.token" };
+    const first = await getDeletionLedger(runtime);
+    now = expiry - 6 * 60_000; expect(await getDeletionLedger(runtime)).toBe(first);
+    now = expiry - 4 * 60_000; const second = await getDeletionLedger(runtime);
+    expect(second).not.toBe(first); expect(fetch).toHaveBeenCalledTimes(2);
+    await resetDeletionLedger();
+    await expect(getDeletionLedger({ ...runtime, webIdentityToken: async () => undefined })).rejects.toThrow("Deletion ledger unavailable");
+  });
+  it("swaps the client once under concurrent callers and closes only the replaced one", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      const close = vi.spyOn(MongoClient.prototype, "close").mockResolvedValue();
+      const expiry = Date.parse("2030-01-01T00:15:00Z"); let now = expiry - 15 * 60_000;
+      const fetch = vi.fn(async () => sts(new Date(now + 15 * 60_000).toISOString())()); // fresh 15-minute credentials, as STS issues
+      const runtime = { env: { ...base, FINANCIAL_OS_LEDGER_AWS_ROLE_ARN: roleArn }, now: () => now, fetch, webIdentityToken: async () => "synthetic.oidc.token" };
+      await getDeletionLedger(runtime);
+      now = expiry - 4 * 60_000;
+      const [left, right, third] = await Promise.all([getDeletionLedger(runtime), getDeletionLedger(runtime), getDeletionLedger(runtime)]);
+      expect(left).toBe(right); expect(right).toBe(third); expect(fetch).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(60_000);
+      expect(close).toHaveBeenCalledTimes(1); // only the replaced client
+      expect(await getDeletionLedger(runtime)).toBe(left);
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+describe("ledger export snapshot pin", () => {
+  it("refuses an export when the server returns no snapshot time for the pinned session", async () => {
+    const { DeletionReceiptStore } = await import("@/lib/operations/deletion-receipt-store");
+    const key = { version: 1, material: randomBytes(32) };
+    const session = { snapshotTime: undefined, endSession: async () => undefined };
+    // Collections answer normally (an empty ledger): only the missing snapshot time can make the export refuse.
+    const collection = { findOne: async () => null, find: () => ({ sort: () => ({ toArray: async () => [] }) }) };
+    const database = { client: { startSession: () => session }, collection: () => collection,
+      aggregate: () => ({ toArray: async () => [] }) } as unknown as import("mongodb").Db;
+    await expect(new DeletionReceiptStore(database, "isolated-test", { active: key, keys: [key] }).export()).rejects.toThrow("Deletion ledger unavailable");
+  });
+});
+
 describe("backup worker parameter mapping", () => {
   it("maps only known parameters under the prefix and never another environment's", () => {
     const prefix = "/financial-os/staging";
@@ -182,9 +317,11 @@ describe("backup worker parameter mapping", () => {
       { Name: `${prefix}/backup/app-db-uri`, Value: "a" }, { Name: `${prefix}/ledger/read-uri`, Value: "b" },
       { Name: `${prefix}/backup/package-key-v2`, Value: "c" }, { Name: `${prefix}/backup/package-key-active-version`, Value: "2" },
       { Name: `${prefix}/ledger/key-v1`, Value: "d" }, { Name: `${prefix}/ledger/key-active-version`, Value: "1" },
+      { Name: `${prefix}/ledger/mirror-key-v3`, Value: "m" }, { Name: `${prefix}/ledger/mirror-key-active-version`, Value: "3" },
       { Name: `${prefix}/ledger/key-v0`, Value: "x" }, { Name: `${prefix}/unknown`, Value: "x" }, { Name: "/financial-os/production/backup/app-db-uri", Value: "x" },
       { Name: `${prefix}-evil/backup/app-db-uri`, Value: "x" }, { Name: "/financial-os/product/backup/app-db-uri", Value: "x" } /* same length as the prefix */, { Name: `${prefix}/backup/app-db-uri-2`, Value: "x" }, { Name: 1, Value: "x" },
     ])).toEqual({ FINANCIAL_OS_BACKUP_APP_DB_URI: "a", FINANCIAL_OS_LEDGER_READ_URI: "b", FINANCIAL_OS_RECOVERY_PACKAGE_KEY_V2: "c",
-      FINANCIAL_OS_RECOVERY_PACKAGE_KEY_ACTIVE_VERSION: "2", FINANCIAL_OS_DELETION_LEDGER_KEY_V1: "d", FINANCIAL_OS_DELETION_LEDGER_KEY_ACTIVE_VERSION: "1" });
+      FINANCIAL_OS_RECOVERY_PACKAGE_KEY_ACTIVE_VERSION: "2", FINANCIAL_OS_DELETION_LEDGER_KEY_V1: "d", FINANCIAL_OS_DELETION_LEDGER_KEY_ACTIVE_VERSION: "1",
+      FINANCIAL_OS_LEDGER_MIRROR_KEY_V3: "m", FINANCIAL_OS_LEDGER_MIRROR_KEY_ACTIVE_VERSION: "3" });
   });
 });

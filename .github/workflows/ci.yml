@@ -86,3 +86,4 @@ jobs:
         run: |
           node --input-type=module -e "const m = await import('./.build/backup-worker/index.mjs'); if (typeof m.handler !== 'function') process.exit(1); try { await m.handler(); process.exit(1); } catch (e) { if (!/failed closed/.test(e.message)) process.exit(1); }"
           env -u FINANCIAL_OS_ENVIRONMENT node .build/restore-drill/index.mjs --store /nonexistent 2>&1 | grep -q "FINANCIAL_OS_ENVIRONMENT missing"
+          env -u FINANCIAL_OS_ENVIRONMENT node .build/ledger-rebuild/index.mjs --store /nonexistent 2>&1 | grep -q "FINANCIAL_OS_ENVIRONMENT missing"

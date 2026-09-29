@@ -40,6 +40,21 @@ const databases: [string, string][] = [];
     expect(passed.stdout).not.toContain(replica!);
   }, 90_000);
 
+  it("snapshot probe (primary): pinned session plus snapshot reads of every collection pass on a replica set, fail on a standalone", async () => {
+    const database = `snap_${randomBytes(6).toString("hex")}`; databases.push([replica!, database]);
+    const seed = await new MongoClient(replica!).connect();
+    try { for (const name of ["accounts", "transactions", "profiles"]) await seed.db(database).collection(name).insertOne({ secret: "synthetic-value" }); }
+    finally { await seed.close(); }
+    const passed = await run("scripts/snapshot-session-probe.mjs", { PROBE_MONGODB_URI: replica!, PROBE_DATABASE: database });
+    expect(passed).toEqual({ code: 0, stdout: "supported: snapshot session and snapshot reads of 3 collections at one cluster time\n" });
+    if (standalone) {
+      const failed = await run("scripts/snapshot-session-probe.mjs", { PROBE_MONGODB_URI: standalone, PROBE_DATABASE: database });
+      expect(failed.code).toBe(1); expect(failed.stdout).toMatch(/^unsupported: /);
+    }
+    expect((await run("scripts/snapshot-session-probe.mjs", {})).code).toBe(2);
+    expect(passed.stdout).not.toMatch(/synthetic-value|accounts|27018/);
+  }, 90_000);
+
   it("bootstrap: idempotent head at revision 0, refuses a database holding anything else, never prints the URI", async () => {
     const database = `ledger_${randomBytes(6).toString("hex")}`; databases.push([replica!, database]);
     for (let attempt = 0; attempt < 2; attempt++) {

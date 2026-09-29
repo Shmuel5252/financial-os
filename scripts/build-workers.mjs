@@ -11,7 +11,7 @@ if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error("Index manifest digest unava
 // Optional MongoDB driver integrations we do not use (Kerberos, compression, client-side encryption, AWS auth helpers).
 const optional = ["kerberos", "@mongodb-js/zstd", "snappy", "socks", "aws4", "mongodb-client-encryption", "gcp-metadata", "@aws-sdk/credential-providers"];
 
-for (const [name, entry] of [["backup-worker", "workers/backup/index.ts"], ["restore-drill", "workers/restore-drill/cli.ts"]]) {
+for (const [name, entry] of [["backup-worker", "workers/backup/index.ts"], ["restore-drill", "workers/restore-drill/cli.ts"], ["ledger-rebuild", "workers/ledger-rebuild/cli.ts"]]) {
   await build({
     configFile: false, root, logLevel: "warn",
     define: { __INDEX_MANIFEST_DIGEST__: JSON.stringify(digest) },

@@ -11,11 +11,26 @@ import { beginDeletion, completeLocalDeletion, deletionSubject, providerSubjectM
 export type DeletionLedgerRow = { _id: string; current: DeletionReceipt; accepted: DeletionReceipt; revision: number };
 type LedgerHeadRow = { _id: "head"; revision: number };
 export type LedgerSnapshot = Readonly<{ receipts: readonly DeletionReceipt[]; head: number; readAt: number }>;
+/** The full rows (acceptance, current state, last revision) under one head: what the signed mirror and the journal carry. */
+export type LedgerExport = LedgerSnapshot & Readonly<{ rows: readonly DeletionLedgerRow[] }>;
+export const LEDGER_COLLECTIONS = { rows: "deletionReceipts", head: "deletionLedgerHead" } as const;
 /** Writes use the active key; every readable version still validates receipts and answers marker/actor lookups after rotation. */
 export type LedgerKeyring = Readonly<{ active: LedgerKey; keys: readonly LedgerKey[] }>;
 
 class LedgerConflict extends Error { constructor() { super("Deletion ledger conflict"); } }
 const unavailable = () => new Error("Deletion ledger unavailable");
+
+/** Structural validation that does not need the actor: signatures, row identity, immutable acceptance. */
+export function validateLedgerRow(row: DeletionLedgerRow, env: LedgerEnvironment, keys: readonly LedgerKey[]): DeletionReceipt {
+  if (row === null || typeof row !== "object") throw new LedgerConflict();
+  const current = validateDeletionReceipt(row.current, env, keys);
+  const accepted = validateDeletionReceipt(row.accepted, env, keys);
+  if (Object.keys(row).sort().join(",") !== "_id,accepted,current,revision" || !Number.isSafeInteger(row.revision) || row.revision < 1
+    || row._id !== `${env}:${current.keyVersion}:${current.subject}` || accepted.status !== "suppressed" || current.subject !== accepted.subject
+    || current.operationId !== accepted.operationId || current.acceptedAt !== accepted.acceptedAt
+    || JSON.stringify(current.providerSubjects) !== JSON.stringify(accepted.providerSubjects)) throw new LedgerConflict();
+  return current;
+}
 
 export class DeletionReceiptStore {
   private readonly rows; private readonly head;
@@ -25,24 +40,15 @@ export class DeletionReceiptStore {
     if (!keyring.keys.some(key => key.version === keyring.active.version) || new Set(keyring.keys.map(key => key.version)).size !== keyring.keys.length) throw new LedgerConflict();
     this.key = keyring.active; this.readable = keyring.keys;
     const durable = { readConcern: { level: "majority" as const }, writeConcern: { w: "majority" as const } };
-    this.rows = database.collection<DeletionLedgerRow>("deletionReceipts", durable);
-    this.head = database.collection<LedgerHeadRow>("deletionLedgerHead", durable);
+    this.rows = database.collection<DeletionLedgerRow>(LEDGER_COLLECTIONS.rows, durable);
+    this.head = database.collection<LedgerHeadRow>(LEDGER_COLLECTIONS.head, durable);
   }
   private id(actor: Actor, key: LedgerKey = this.key) {
     if (actor.kind !== "user") throw new LedgerConflict();
     return `${this.env}:${key.version}:${deletionSubject(actor.userId, this.env, key)}`;
   }
   private ids(actor: Actor) { return this.readable.map(key => this.id(actor, key)); }
-  /** Structural validation that does not need the actor: signatures, row identity, immutable acceptance. */
-  private validateRow(row: DeletionLedgerRow): DeletionReceipt {
-    const current = validateDeletionReceipt(row.current, this.env, this.readable);
-    const accepted = validateDeletionReceipt(row.accepted, this.env, this.readable);
-    if (Object.keys(row).sort().join(",") !== "_id,accepted,current,revision" || !Number.isSafeInteger(row.revision) || row.revision < 1
-      || row._id !== `${this.env}:${current.keyVersion}:${current.subject}` || accepted.status !== "suppressed" || current.subject !== accepted.subject
-      || current.operationId !== accepted.operationId || current.acceptedAt !== accepted.acceptedAt
-      || JSON.stringify(current.providerSubjects) !== JSON.stringify(accepted.providerSubjects)) throw new LedgerConflict();
-    return current;
-  }
+  private validateRow(row: DeletionLedgerRow): DeletionReceipt { return validateLedgerRow(row, this.env, this.readable); }
   private validate(row: DeletionLedgerRow, actor: Actor): DeletionReceipt {
     const current = this.validateRow(row);
     if (!this.ids(actor).includes(row._id)) throw new LedgerConflict();
@@ -109,20 +115,35 @@ export class DeletionReceiptStore {
     });
   }
   /** One snapshot of every receipt and the head that covers them; the only input restore and release may use. */
-  async snapshot(): Promise<LedgerSnapshot> {
+  async snapshot(): Promise<LedgerSnapshot> { const { receipts, head, readAt } = await this.export(); return { receipts, head, readAt }; }
+  /** The same snapshot with full rows, for the signed mirror. */
+  async export(): Promise<LedgerExport> {
     let session: ClientSession;
     try { session = this.database.client.startSession({ snapshot: true }); } catch { throw unavailable(); }
     try {
-      const head = await this.head.findOne({ _id: "head" }, { session });
-      const rows = await this.rows.find({}, { session }).sort({ _id: 1 }).toArray();
+      // Pin the snapshot before any collection read (a read of a not-yet-existing collection does not establish one).
+      await this.database.aggregate([{ $documents: [{}] }], { session }).toArray();
+      if ((session as unknown as { snapshotTime?: unknown }).snapshotTime === undefined) throw unavailable();
+      // Plain handles: the session's snapshot read concern (with its pinned atClusterTime) must not mix with "majority".
+      const head = await this.database.collection<LedgerHeadRow>(LEDGER_COLLECTIONS.head).findOne({ _id: "head" }, { session });
+      const rows = await this.database.collection<DeletionLedgerRow>(LEDGER_COLLECTIONS.rows).find({}, { session }).sort({ _id: 1 }).toArray();
       const revision = head?.revision ?? 0;
       if (!Number.isSafeInteger(revision) || revision < 0) throw unavailable();
       const receipts = rows.map(row => { if (row.revision > revision) throw new LedgerConflict(); return this.validateRow(row); });
-      return { receipts, head: revision, readAt: this.now() };
+      return { receipts, rows, head: revision, readAt: this.now() };
     } catch (error) {
       if (error instanceof LedgerConflict || (error instanceof Error && error.message === "Deletion safety validation failed")) throw error;
       throw unavailable();
     } finally { await session.endSession().catch(() => undefined); }
+  }
+  /** The subject's validated row with its revision (mirror-on-accept journaling); null when no receipt exists. */
+  async journalRow(actor: Actor): Promise<DeletionLedgerRow | null> {
+    let row: DeletionLedgerRow | null;
+    try { row = await this.rows.findOne({ _id: { $in: this.ids(actor) } }); }
+    catch { throw unavailable(); }
+    if (row === null) return null;
+    this.validate(row, actor);
+    return row;
   }
   /** ADR-076 C3 runtime check: is this provider subject alias marked by a retained deletion receipt? */
   async isProviderSubjectErased(subjectAlias: string): Promise<boolean> {

@@ -1,91 +1,74 @@
-# Phase 18 — Final Provisioning Decision Sheet (A+B)
+# Phase 18 — Provisioning Decision Sheet (A+B): Configuration B
 
-2026-09-29. Prepared for the owner's decision. **Nothing here is approved or provisioned**: no account, resource, billing, secret, network or deployment change has been made. Execution follows `PHASE_18_PROVISIONING_RUNBOOK.md` stage by stage after each approval. The repository side (C1–C7) is built and tested locally (§5).
+2026-09-29. **Owner decision: Configuration B is the low-cost target for Phase 18, subject to empirical proof of capabilities, not assumptions.** Nothing here is provisioned: no account, resource, billing, secret, network or deployment change has been made, and no real erasure is enabled. Execution follows `PHASE_18_PROVISIONING_RUNBOOK.md` stage by stage, each after its own approval.
 
-Prices are USD, approximate, list prices without free-tier credits or taxes, and must be re-confirmed on the vendor pricing page at approval time. **Verified** = read from vendor documentation on 2026-09-29; everything else is an estimate.
+Prices are USD list prices before credits and taxes, verified on the vendor pages on 2026-09-29 unless marked *estimate*; re-confirm at approval time.
 
-## 1. Resources
+## 1. Principles (owner-approved)
+- Do not buy reliability the design already achieves another way; never save where an invariant would drop.
+- **M0 (Free) is the preferred starting tier for the primary and for the independent ledger only if the relevant probes pass** (§4). M0 is not described as providing the same guarantees until its probe has actually passed.
+- **Flex is the fallback** when a capability probe fails or capacity/operational evidence justifies it (§5).
+- M10, NAT, static egress and private networking remain a production / 18-04 decision, not an A+B requirement.
+- **AWS must be on the Paid plan.** Credits may reduce cost but are not part of the durability model (a Free-plan account closes after 6 months or when credits run out, taking the backups with it).
+- S3 + Object Lock + application encryption remain the backup target. **SSE-S3 is approved now**; KMS is an optional audit enhancement.
 
-"Fixed" = billed whether or not anything runs. "Variable" = at staging scale (daily capture, packages in the low MB, a handful of claims/erasures).
+## 2. Resources in Configuration B
 
-| # | Resource | Provider / tier / region | Fixed / month | Variable / month | Cheapest invariant-preserving alternative | What blocks anything cheaper | Staging cheaper, upgrade before production? |
-|---|---|---|---|---|---|---|---|
-| R1 | Backup bucket (Object Lock Governance 35 d, versioning, lifecycle 36 d) | AWS S3 Standard, `eu-central-1` | $0 | < $0.10 (≈ $0.0245/GB-month; PUT ≈ $0.0054/1k) | This one | Write-once (Object Lock + `If-None-Match`) is the backup invariant; cold classes (Glacier IR/Deep Archive) have 90/180-day minimums and retrieval fees → not cheaper at this size, slower RTO | Same in both |
-| R2 | Bucket encryption key | AWS KMS customer key (D3) | ≈ $1 | ≈ $0 (requests $0.03/10k) | **SSE-S3 ($0)** — template `UseKms=false` | Nothing: packages are already AES-256-GCM encrypted and HMAC-signed by the app with keys that never reach S3. KMS adds only key-policy separation and decrypt audit trail | **Yes**: SSE-S3 in staging; KMS optional in production (cannot switch an existing object, new objects only) |
-| R3 | Worker secrets | AWS SSM Parameter Store, standard, SecureString (`aws/ssm` key) | $0 | $0 | This one (Secrets Manager ≈ $0.40/secret is dearer) | — | Same |
-| R4 | Backup worker | AWS Lambda arm64, 1024 MB, ≤ 10 min, reserved concurrency 1 | $0 | ≈ $0–0.15 (≈ 9k GB-s) | This one | — | Same |
-| R5 | Schedule + dead-letter queue + alarm topic | EventBridge Scheduler, SQS, SNS e-mail | $0 | $0 (free allowances) | This one | — | Same |
-| R6 | Metric, 4 alarms, logs (30 d) | CloudWatch | ≈ $0.70 (0 within the first 10 alarms/metrics free allowance) | < $0.10 | This one | Missing-success alarm (26 h, missing = breaching) is the RPO control | Same |
-| R7 | Break-glass alert, audit trail | CloudTrail management trail (first copy free) + EventBridge rule | $0 | cents (trail storage) | This one | Governance bypass must be observable (D12) | Same |
-| R8 | Cost guardrail | AWS Budgets | $0 | $0 | This one | — | Same |
-| R9 | Worker static egress | VPC + NAT Gateway + Elastic IP (D5), `eu-central-1` | ≈ $38 NAT + $3.65 IPv4 ≈ **$42** *(Frankfurt NAT rate unverified; IPv4 $0.005/h verified)* | ≈ $0.05/GB | **NAT instance t4g.nano + EIP ≈ $8** (same static IP; you patch it — template variant not yet written) · **No VPC ($0)** — template `EgressMode=none` | A static IP matters only once Atlas access lists are narrowed (production network decision 18-04). Private endpoints would need M10+ on **both** clusters | **Yes**: staging runs with `EgressMode=none` while staging access lists stay open (the already-accepted staging risk; auth + TLS unchanged). Production adds NAT when lists are narrowed |
-| R10 | Independent deletion ledger (B1) | MongoDB Atlas **Flex**, AWS Frankfurt, own project | **≈ $8** (verified: $0.011/h up to 100 ops/s; capped at $30 at 500 ops/s) | $0–22 only if ops/s rise | **M0 Free ($0)** — see §3.2 | M0: no backups/SLA, 100 ops/s, paused after 30 days without activity (verified). Flex meets every ledger requirement (§3) | Possible (M0 in staging with explicit acceptance, §3.2) — **recommended: Flex from the start**, as instructed |
-| R11 | Main application cluster (capture source) | Existing Atlas **Free (M0)** staging cluster, AWS Frankfurt | $0 today | — | Keep M0 **if** the S2 snapshot probe passes | If M0 refuses snapshot sessions, capture cannot guarantee cross-collection consistency (fails closed) → Flex ≈ $8 (D7) or an approved quiescence-capture design | Staging decided by the probe; production tier is the separate availability decision (18-04) |
-| R12 | App → ledger path | see §4 | $0 (options a/a′) · ≈ $0–2 (d, in production reusing R9) · **$100** (b, cost gate) | — | Option **a** (staging) / **a′ or d** (production) | Static IPs are not required by any invariant; they narrow the list but use a shared pool | **Yes** |
-| R13 | Restore drill | Local loopback replica set on an encrypted disk (D10) | $0 | S3 egress cents | This one | Isolation invariant holds locally (no ingress/jobs/provider egress) | Same; an Atlas-hosted drill later costs cents (hourly Flex) |
+| # | Resource | Choice | Monthly (expected) | What would force a change |
+|---|---|---|---|---|
+| R1 | Backup bucket | S3 Standard `eu-central-1`, Object Lock Governance 35 d, versioning, expiry 36 d, SSE-S3 | cents (storage ≈ $0.0245/GB *estimate for Frankfurt*; PUT $0.005/1k) | — |
+| R2 | Encryption | SSE-S3 (`UseKms=false`) | $0 | KMS ($1/key) only if you want per-object decrypt audit/key-policy separation |
+| R3 | Worker secrets | SSM Parameter Store standard SecureString (`aws/ssm`) | $0 | — |
+| R4 | Backup worker | Lambda arm64, no VPC (`EgressMode=none`), reserved concurrency 1 | $0 (1M requests + 400k GB-s always free) | — |
+| R5 | Schedule, DLQ, alarm topic | EventBridge Scheduler (14M free), SQS, SNS e-mail | $0 (*SQS/SNS free allowances not re-verified today*) | — |
+| R6 | Metric + 4 alarms + logs | CloudWatch | $0 (10 metrics, 10 alarms, 5 GB logs free) | — |
+| R7 | Audit + alerts | CloudTrail first management trail (free) + S3 data events on the bucket ($0.10/100k) + EventBridge rules | ≈ $0 (+ cents for trail log storage) | — |
+| R8 | Cost guardrail | AWS Budgets (free) | $0 | — |
+| R9 | Static egress | none in staging (access lists stay as today: TLS + authenticated users) | $0 | Production network decision 18-04 (NAT instance ≈ $8 *estimate* or NAT Gateway ≈ $42 *estimate*) |
+| R10 | Independent ledger (B1) | Atlas **M0**, own project (preferably own organisation), AWS Frankfurt | $0 | Probe P1 fails, or §5 evidence → Flex $8 (verified: $0.011/h, up to $30) |
+| R11 | Primary (capture source) | Existing Atlas **M0**, AWS Frankfurt | $0 | Probe P3 fails, or §5 evidence → Flex $8 (or an approved quiescence-capture design) |
+| R12 | App → ledger | Option a: TLS + least-privilege SCRAM user (IAM option a′ prepared, §6) | $0 | Production 18-04; Vercel Static IPs ($100, verified) are **not** approved |
+| R13 | Restore and ledger-rebuild drills | Local loopback replica set on an encrypted disk | $0 | — |
 
-Not needed: Secrets Manager, Vercel Secure Compute (Enterprise), Atlas private endpoints/peering, Atlas continuous backup, AWS Backup, a second region.
+## 3. Expected cost
+- **If both M0 probes pass: ≈ $0.05–0.20 per month** (S3 storage/requests and trail storage; everything else inside always-free allowances), billed on the Paid plan and initially absorbed by the sign-up credits.
+- One probe fails: + $8 (that cluster on Flex). Both fail: + $16. A capability that also fails on Flex is the exact reason to consider M10 (≈ $57, verified) and is a new decision.
+- Not needed for A+B: KMS, NAT/VPC, Static IPs, Secure Compute, private endpoints, M10, Secrets Manager.
 
-## 2. Totals (per month, before free-tier credits)
+## 4. Probe order and PASS/FAIL (all free; temporary IP allowlist entry for one hour, removed afterwards)
 
-| Configuration | What it contains | Estimate |
-|---|---|---|
-| **Staging minimum (recommended start)** | R1 + SSE-S3 + R3–R8 + Flex ledger + main M0 (probe passes) + `EgressMode=none` + app path a | **≈ $9–10** |
-| Staging, if the main-cluster probe fails | same + main cluster to Flex | ≈ $17–18 |
-| Production minimum preserving every invariant | Flex ledger + NAT instance + SSE-S3 + app path a′ (or d) + main-cluster tier per 18-04 | ≈ $17–20 + main tier |
-| Production with managed NAT + KMS | Flex ledger + NAT Gateway + KMS + app path d | ≈ $52–55 + main tier |
-| Adding Vercel Static IPs | cost gate, **not recommended** | + $100 |
+| Order | Probe | Command (owner shell) | PASS | FAIL / INCONCLUSIVE |
+|---|---|---|---|---|
+| P1 | Ledger M0 capabilities | temporary `ledger-probe` user (readWrite@`ledger_probe`): `node scripts/ledger-probe.mjs` | exit 0 and exactly two lines `supported: transaction (snapshot read concern, majority write concern) — pass` and `supported: snapshot session pinned without a collection read — pass` | Any `unsupported: <capability>` with exit 1 = **FAIL** → ledger on Flex, re-run P1 there. `unsupported: connection …` or `ProbeDatabaseNotEmpty` = **INCONCLUSIVE** (fix access list/user/database, re-run); never a reason to change tier |
+| P2 | Ledger bootstrap + least privilege | temporary `ledger-admin` user (readWrite + dbAdmin on `deletion_ledger`, deleted afterwards): `node scripts/ledger-bootstrap.mjs`; then as `ledger-app` (custom role: find, insert, update only) try a delete in `deletion_ledger` | bootstrap prints `ok: ledger collections present; head revision 0` (twice, idempotent) **and** the delete is refused as unauthorized | bootstrap `failed: …` or the delete succeeds → fix the role before anything else |
+| P3 | Primary M0 snapshot capture | `backup-reader` user (read on the application DB): `node scripts/snapshot-session-probe.mjs` | exit 0 and `supported: snapshot session and snapshot reads of N collections at one cluster time` with N = the application's collection count | `unsupported: …` (not a connection error) = **FAIL** → primary on Flex (or approve a quiescence capture); connection errors = INCONCLUSIVE |
+| P4 | Alerts in place | `node scripts/atlas-alerts.mjs --role ledger|primary …` then `atlas alerts settings create --file …` (or the UI) | Both projects list the rendered alerts (10 for the ledger, 9 for the primary) with your e-mail | — |
+| P5 | End-to-end (after AWS, runbook S7) | first manual worker invoke | one `ledger-mirror/` and one `packages/` object, success metric emitted | worker error → alarm; investigate (not a tier signal unless the error is a throttling/capability error) |
 
-**Estimated minimum to close Phase 18's A+B evidence (staging, §4 of the runbook: 7 consecutive daily captures + one drill + forced alarms): ≈ $9–10/month recurring, ≈ $18 if the main cluster must move to Flex** — at least one billed month (usage is prorated hourly). One-time costs are owner time only. Production repetition afterwards adds the production rows above; the remaining non-A+B Phase 18 gates are owner/policy work, not spend.
+Evidence to record (non-secret): the probe output lines, the date, the cluster tier.
 
-## 3. Does Atlas Flex satisfy the ledger? (runbook D6)
+## 5. When to move M0 → Flex (either cluster)
+Move when **any** holds, after one confirmation that the cause is not a configuration error:
+1. P1 or P3 FAIL on a capability (immediately, before AWS work).
+2. Capacity: the `requests-near-ops-cap` alert (> 60 requests/s against the 100 ops/s cap) fires on 3 different days within 14 days; or any claim, erasure, capture or mirror fails with an Atlas throttling error; or logical size passes the alert threshold (primary 400 MB, ledger 100 MB, of 512 MB); or network passes ~70 % of the 10 GB/7-day allowance; or connections stay above 80 %.
+3. Operations: an unexplained auto-pause warning e-mail (the daily worker run keeps both clusters active, so a warning means something is broken); or ledger unavailability > 1 hour in a month attributable to the free tier.
+4. Before production launch, the production tier is decided in 18-04 regardless.
+Upgrade path (both directions of risk are fail-closed): announce a window, mirror the ledger (worker run), stop writes, upgrade in Atlas (M0 → Flex needs downtime and an application restart), confirm the connection string, re-run P1/P3 on the new tier, resume. A dedicated (M10+) upgrade deletes the free cluster: take a backup package and verify it with the drill first.
 
-### 3.1 Requirement check (sources: Atlas Flex limitations and pause/resume docs, verified 2026-09-29)
+## 6. Configuration B hardening (repository, $0 — built and tested locally)
+- **Ledger rebuild from the signed object-storage evidence** (`src/lib/operations/ledger-rebuild.ts`, CLI `workers/ledger-rebuild/cli.ts`): deterministic; accepts only when ordering (mirrors never lose or regress a row), completeness (every journaled write at or below the base mirror is in it) and continuity (contiguous journal revisions after the base mirror) are proven; refuses no/old-only-without-journal/forged/tampered/foreign/rolled-back evidence, duplicate revisions, a non-empty target; writes in one majority transaction and reads back by digest. A local copy is accepted only if it equals the authoritative S3 listing (a truncated sync is refused), and the worker's `LedgerHead` metric is an independent lower bound. Ledger evidence (mirrors, journal) never expires; only backup packages expire at 36 days.
+- **Mirror-on-accept** (`erasure-protocol.ts`): every ledger write is journaled to write-once `ledger-journal/` before the protocol continues; without the journal nothing local happens; retries close gaps. Restore also refuses a live ledger behind or missing any journaled write.
+- **Separate mirror signing key** (`FINANCIAL_OS_LEDGER_MIRROR_KEY_*`, SSM `ledger/mirror-key-v<n>`), never equal to a ledger key; the app never holds it.
+- **Capacity/anomaly alerts** for both Free/Flex clusters (`infra/atlas/capacity-alerts.json`, renderer `scripts/atlas-alerts.mjs`), including a ledger-only "any delete" anomaly (collection drops count as commands, not deletes; the `ledger-app` role cannot drop).
+- **IAM-auth preparation**: MONGODB-AWS URIs without secrets, STS web-identity exchange with credential rotation, optional Vercel OIDC trust + a role limited to `ledger-journal/` writes in the template. Only the production Vercel environment is trusted (never previews); trust is bound to team and project slugs, so do not release or rename them without updating the role. Not enabled: needs the driver's optional `aws4` module and a Vercel OIDC token source (`@vercel/oidc`) — a dependency decision — and an IAM probe on the real ledger.
 
-| Ledger requirement (why) | Flex | Evidence / condition |
-|---|---|---|
-| Multi-document transaction, majority write concern (receipt + monotonic head written atomically) | Not listed as unsupported; Flex is a replica set | **Must pass** `scripts/ledger-probe.mjs` on the real cluster (S1) |
-| Snapshot session pinned by `$documents` (consistent ledger snapshot for mirror/restore) | `$documents` not among the unsupported stages; MongoDB ≥ 8.0 | Same probe |
-| TLS always; password (SCRAM) or AWS IAM authentication | Supported | App refuses non-TLS/insecure-TLS URIs (`deletion-ledger-runtime.ts`) |
-| Least-privilege users (`readWrite@deletion_ledger`, `read@deletion_ledger`) | Built-in roles and custom roles supported | Created in S1 |
-| IP access list | Supported | Private endpoints / VPC peering **not** supported |
-| Never paused | Verified: Flex cannot be paused manually or automatically | M0 is paused after 30 days of inactivity |
-| Capacity (2 collections, tiny documents, low ops) | 500 ops/s, 500 connections, 5 GB, DB name ≤ 38 bytes, nesting ≤ 50 | App pool capped at 5 connections per instance |
-| Durability | One daily snapshot, no point-in-time restore | Ledger integrity is cryptographic (signed receipts, monotonic head, signed Object Lock mirror). Receipts newer than the last mirror depend on cluster replication on **any** tier → synchronous mirror-on-accept is required before erasure is enabled (tier-independent gate) |
-| Outage detection | Flex alerts only on Connections / Logical Size / Network / Opscounter | Covered by the worker (mirrors the ledger first → Errors alarm + 26 h missing-success alarm); claims fail closed while unreachable |
-| Region | Subset of regions | Confirm AWS Frankfurt is offered at creation |
+Evidence: a lost ledger rebuilt exactly on a loopback replica set; adversarial cases for every refusal; 33/33 targeted mutations killed; an independent adversarial review (1 Critical, 4 Important — the Critical, the lifecycle issue and the rotation race fixed and tested; the app-role denial-of-service and the un-retried-gap window are documented fail-closed residuals, runbook S12).
 
-**Verdict: Flex satisfies every invariant the ledger needs** (conditional on the probe passing on the actual cluster), so Flex is the preferred starting tier for staging and production. **Dedicated (M10+) is required only if you decide you want**: private endpoint / VPC peering for the ledger, database audit logs or access history, point-in-time restore, customer-managed encryption-at-rest keys, or a contractual SLA. None of these is a current Phase 18 invariant. If the probe fails on Flex, the failing capability (transaction or snapshot session) is the exact reason to move to M10.
+Still required before any real erasure (unchanged gates): the app's write path to `ledger-journal/` (S3 client with Vercel OIDC — same dependency decision), the erase executor and policy gates, and the explicit ledger opt-out (§7.2).
 
-### 3.2 M0 for staging (cheaper, not recommended)
-M0 would also pass the invariants if the probe passes: the daily worker run counts as activity (so no auto-pause while the schedule runs), a ledger lost entirely could be rebuilt from the signed mirror up to the last mirror (rebuild tooling not built), and every failure is fail-closed. It gives up backups, SLA and headroom (100 ops/s), and the recovery evidence gathered on M0 would not transfer to production. Saving: ≈ $8/month.
+## 7. Decisions still open
+1. D1 AWS account (Paid plan), D9 alarm recipients, D12 break-glass custodian.
+2. Explicit ledger opt-out: when no ledger is configured, require `FINANCIAL_OS_DELETION_LEDGER=disabled` (refused in production). Recommended before any production ledger exists; not applied yet because the next deployment would make staging open-banking claims fail until the variable is set.
+3. Enabling IAM auth / the app's journal writer: add `aws4` and `@vercel/oidc` (pinned) — only when erasure or password-less ledger access is scheduled.
 
-## 4. App → ledger connectivity (D8)
-Every option keeps TLS, a dedicated least-privilege ledger principal and fail-closed claims. They differ in who can reach the ledger's port.
-
-| Option | Network exposure | Credential | Cost | Build work | Trade-off |
-|---|---|---|---|---|---|
-| **a** Open access list + TLS + `ledger-app` SCRAM user | Internet (like the current staging main cluster) | Static password in Vercel env | $0 | none (built) | Leaked password + URI = direct access; mitigated by least privilege and rotation |
-| **a′** Same network, **MONGODB-AWS auth** via Vercel OIDC → AWS role | Internet | No static password; short-lived AWS credentials | $0 | small (credential provider + OIDC wiring; not built) | Removes the long-lived secret; does not narrow the network |
-| **b** Vercel Static IPs | Allowlist = shared Vercel pool | as a/a′ | **$100 / project** (verified; Pro) | none | Cost gate; pool shared with other Vercel customers, so not equal to private networking |
-| **c** Vercel Secure Compute + private networking | Private | as a/a′ | Enterprise contract; Atlas side needs M10+ | medium | Only fully private option; highest cost |
-| **d** AWS ledger gateway: API Gateway (IAM auth) + Lambda in the worker VPC; app signs with Vercel OIDC → AWS role | Ledger allowlist = the NAT Elastic IP only | No static secret in Vercel | ≈ $0–2 on top of R9 | medium (gateway + client; not built) | Extra hop and dependency on claims (latency; fails closed); needs R9 anyway |
-| — Atlas Data API | — | — | — | — | Retired by MongoDB; not an option |
-
-Recommendation: **staging a** (no spend). **Production a′ or d**, decided together with the main-cluster network plan (18-04): d when the NAT for the worker is bought anyway and you want the allowlist narrowed; a′ when an internet-reachable, password-less ledger is acceptable. b only if you explicitly approve the $100/month gate.
-
-## 5. Repository work completed (no provisioning)
-C1 CloudFormation template `infra/aws/financial-os-backup.template.json` (conditional KMS and VPC/NAT; invariants unit-tested) · C2 Lambda worker `workers/backup/index.ts` + `runBackupWorker` + `npm run workers:build` · C3 S3 and directory object stores (write-once, validated names) · C4 `scripts/ledger-bootstrap.mjs` · C5 runtime ledger configuration (fail-closed, TLS enforced) wired as the default claim guard · C6 restore drill `runRestoreDrill` + CLI · C7 `scripts/ledger-probe.mjs`. Local evidence: worker → create-only store → drill → fence passes on a replica set; fail-closed cases for keys, configuration, non-TLS URIs, ledger outage, capture refusal, a missing mirror and a receipt deleted from the live ledger; 36/36 targeted mutations killed. An independent adversarial review found gaps that are fixed: plain `DeleteObject` and policy/lifecycle changes are now break-glass-only, objects expire at 36 days (D2), CloudWatch may publish to the alarm topic, MFA works with Identity Center, a protection-change alert, restore requires a verified mirror and every mirrored receipt, TLS enforced for worker/drill URIs, loopback ledger refused in production, the probe no longer drops foreign databases.
-
-Still not built (only if chosen): NAT-instance template variant (R9 alternative), a′ / d connectivity clients, synchronous mirror-on-accept (required before erasure is enabled), a mirror-signing key separate from the ledger key (today a compromised worker could upload a forged mirror that makes later restores fail closed until break-glass cleanup — availability, not resurrection).
-
-## 6. Decisions needed, in order
-1. D1 AWS account + D9 alarm recipients + D12 break-glass custodian.
-2. R2/D3 SSE-S3 (recommended for staging) or KMS.
-3. R10/D6 Flex ledger (recommended) or M0 for staging.
-4. R9/D5 staging `EgressMode=none`; production NAT Gateway vs NAT instance (later).
-5. R12/D8 staging option a; production option later.
-6. Explicit ledger opt-out: when no ledger is configured, require `FINANCIAL_OS_DELETION_LEDGER=disabled` (refused in production) instead of treating absence as "no ledger". Recommended before any production ledger exists; not applied yet because the next deployment would make open-banking claims on the current staging deployment fail until you set that variable.
-7. Approve S0 → S1 (ledger + probe) → S2 (main-cluster probe) first: both probes cost nothing and settle R10/R11 before any AWS spend.
-
-Sources: [Atlas Flex limitations](https://www.mongodb.com/docs/atlas/reference/flex-limitations/) · [Atlas pause/resume](https://www.mongodb.com/docs/atlas/pause-terminate-cluster/) · [Atlas pricing](https://www.mongodb.com/pricing) · [Vercel Static IPs](https://vercel.com/docs/networking/static-ips) · [Vercel OIDC with AWS](https://vercel.com/docs/oidc/aws) · [S3 conditional writes enforcement](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes-enforce.html) · [CloudWatch PutMetricAlarm limits](https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_PutMetricAlarm.html) · [AWS public IPv4 pricing](https://aws.amazon.com/vpc/pricing/)
+Sources: [Atlas Free limits](https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/) · [Atlas Flex limits](https://www.mongodb.com/docs/atlas/reference/flex-limitations/) · [Atlas pause](https://www.mongodb.com/docs/atlas/pause-terminate-cluster/) · [Atlas scaling](https://www.mongodb.com/docs/atlas/scale-cluster/) · [Atlas SLA (M10+ only)](https://www.mongodb.com/cloud/atlas/sla) · [Atlas pricing](https://www.mongodb.com/pricing) · [AWS plans](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html) · [Lambda](https://aws.amazon.com/lambda/pricing/) · [CloudWatch](https://aws.amazon.com/cloudwatch/pricing/) · [EventBridge](https://aws.amazon.com/eventbridge/pricing/) · [CloudTrail](https://aws.amazon.com/cloudtrail/pricing/) · [KMS](https://aws.amazon.com/kms/pricing/) · [Budgets](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/) · [S3](https://aws.amazon.com/s3/pricing/) · [Vercel OIDC](https://vercel.com/docs/oidc/reference) · [Vercel Static IPs](https://vercel.com/docs/networking/static-ips)

@@ -1,4 +1,4 @@
-/** BackupObjectStore implementations. Object names are content-addressed (`…-<sha256 prefix>.bson`) under two fixed prefixes,
+/** BackupObjectStore implementations. Object names are content-addressed (`…-<sha256 prefix>.bson`) under three fixed prefixes,
  * so "already exists" on a write-once store means "already stored" and never needs read or delete permission.
  */
 import "server-only";
@@ -6,8 +6,8 @@ import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { BackupObjectStore } from "@/lib/operations/backup-capture";
 
-const objectName = /^(packages|ledger-mirror)\/[0-9]{1,20}-[a-f0-9]{16}\.bson$/;
-const prefixes = new Set(["packages/", "ledger-mirror/"]);
+const objectName = /^(packages|ledger-mirror|ledger-journal)\/[0-9]{1,20}-[a-f0-9]{16}\.bson$/;
+const prefixes = new Set(["packages/", "ledger-mirror/", "ledger-journal/"]);
 const fail = (reason: string): never => { throw new Error(`Object store refused: ${reason}`); };
 const checkName = (name: string) => { if (!objectName.test(name)) fail("unexpected object name"); };
 const checkPrefix = (prefix: string) => { if (!prefixes.has(prefix)) fail("unexpected prefix"); };
@@ -42,6 +42,28 @@ export function s3ObjectStore(client: S3Client): BackupObjectStore {
         token = result.nextToken;
       }
       return fail("listing too long");
+    },
+  };
+}
+
+/** A local copy is only as good as its completeness: a truncated `aws s3 sync` would hide the newest mirrors and journal writes.
+ * This view refuses to list a prefix unless the local names equal the authoritative bucket listing exactly (the JSON of
+ * `aws s3api list-objects-v2 --bucket <bucket> --output json`, taken right after the sync; ListObjectsV2 is strongly consistent). */
+export function listedDirectoryObjectStore(root: string, listingJson: string): BackupObjectStore {
+  let keys: string[];
+  try {
+    const listing = JSON.parse(listingJson) as { Contents?: { Key?: unknown }[] };
+    keys = (listing.Contents ?? []).map(item => (typeof item.Key === "string" ? item.Key : fail("listing unreadable")));
+  } catch { return fail("listing unreadable"); }
+  const local = directoryObjectStore(root);
+  return {
+    putOnce: async () => fail("read-only copy"),
+    get: local.get,
+    async list(prefix) {
+      const names = await local.list(prefix);
+      const listed = keys.filter(key => key.startsWith(prefix)).sort();
+      if (listed.length !== names.length || listed.some((key, index) => key !== names[index])) fail("local copy incomplete");
+      return names;
     },
   };
 }
