@@ -1,19 +1,104 @@
 {
-  "description": "Atlas alert configurations (Admin API v2 alertConfigs shape) for the Free/Flex primary and ledger clusters. Free and Flex alerts support only Connections, Logical Size, Network and Opscounter conditions. Limits (verified 2026-09-29): Free = 100 ops/s, 500 connections, 512 MB, 10 GB in + 10 GB out per rolling 7 days; Flex = 100 ops/s at the base price (up to 500 at higher cost), 500 connections, 5 GB. There is no total-operations metric: NETWORK_NUM_REQUESTS approximates it, and per-type opcounters localise it. Rendered per cluster by scripts/atlas-alerts.mjs; applied by the owner (atlas alerts settings create --file).",
+  "description": "Intended Atlas alert conditions (Admin API v2 alertConfigs) for the primary and ledger clusters, plus which of them each tier can actually raise. Verified 2026-09-30 against the Atlas docs and a failed P4 run (UNSUPPORTED_MATCHER_FIELD): OUTSIDE_METRIC_THRESHOLD is a host alert (host matchers only, host metrics not collected on Free), so it must never be used for Free clusters - it would be accepted without a matcher yet never fire. A Free (M0) cluster raises only Logical Size, as OUTSIDE_SERVERLESS_METRIC_THRESHOLD, which accepts no matchers (project scope = the project's single cluster). Flex adds Connections, Network and Opcounter conditions (OUTSIDE_FLEX_METRIC_THRESHOLD, FLEX_* metric names) - not rendered until those names are verified. Rendered per cluster by scripts/atlas-alerts.mjs, which lists every intended alert its tier cannot raise.",
   "clusters": {
-    "primary": { "logicalSizeMegabytes": 400 },
-    "ledger": { "logicalSizeMegabytes": 100, "deleteOpsAlert": true }
+    "primary": {
+      "logicalSizeMegabytes": 400
+    },
+    "ledger": {
+      "logicalSizeMegabytes": 100,
+      "deleteOpsAlert": true
+    }
   },
   "alerts": [
-    { "id": "requests-near-ops-cap", "metricName": "NETWORK_NUM_REQUESTS", "operator": "GREATER_THAN", "threshold": 60, "units": "RAW", "why": "Approaching the 100 ops/s cap (Free: throttled; Flex: next price tier)" },
-    { "id": "queries-high", "metricName": "OPCOUNTER_QUERY", "operator": "GREATER_THAN", "threshold": 40, "units": "RAW", "why": "One operation type using 40% of the cap" },
-    { "id": "commands-high", "metricName": "OPCOUNTER_CMD", "operator": "GREATER_THAN", "threshold": 40, "units": "RAW", "why": "Transactions and findAndModify count as commands" },
-    { "id": "inserts-high", "metricName": "OPCOUNTER_INSERT", "operator": "GREATER_THAN", "threshold": 25, "units": "RAW", "why": "Write burst" },
-    { "id": "updates-high", "metricName": "OPCOUNTER_UPDATE", "operator": "GREATER_THAN", "threshold": 25, "units": "RAW", "why": "Write burst" },
-    { "id": "connections-high", "metricName": "CONNECTIONS_PERCENT", "operator": "GREATER_THAN", "threshold": 80, "units": "RAW", "why": "500-connection limit; serverless instances each hold a small pool" },
-    { "id": "logical-size-high", "metricName": "LOGICAL_SIZE", "operator": "GREATER_THAN", "threshold": "logicalSizeMegabytes", "units": "MEGABYTES", "why": "Free: 512 MB hard limit" },
-    { "id": "network-in-high", "metricName": "NETWORK_BYTES_IN", "operator": "GREATER_THAN", "threshold": 12000, "units": "BYTES", "why": "Sustained ~7 GB per 7 days of the 10 GB Free allowance" },
-    { "id": "network-out-high", "metricName": "NETWORK_BYTES_OUT", "operator": "GREATER_THAN", "threshold": 12000, "units": "BYTES", "why": "Sustained ~7 GB per 7 days of the 10 GB Free allowance (daily capture reads)" },
-    { "id": "delete-ops-seen", "metricName": "OPCOUNTER_DELETE", "operator": "GREATER_THAN", "threshold": 0, "units": "RAW", "only": "deleteOpsAlert", "why": "The ledger never deletes receipts; any delete is an anomaly (the ledger-app role has no remove)" }
-  ]
+    {
+      "id": "requests-near-ops-cap",
+      "metricName": "NETWORK_NUM_REQUESTS",
+      "operator": "GREATER_THAN",
+      "threshold": 60,
+      "units": "RAW",
+      "why": "Approaching the 100 ops/s cap (Free: throttled; Flex: next price tier)"
+    },
+    {
+      "id": "queries-high",
+      "metricName": "OPCOUNTER_QUERY",
+      "operator": "GREATER_THAN",
+      "threshold": 40,
+      "units": "RAW",
+      "why": "One operation type using 40% of the cap"
+    },
+    {
+      "id": "commands-high",
+      "metricName": "OPCOUNTER_CMD",
+      "operator": "GREATER_THAN",
+      "threshold": 40,
+      "units": "RAW",
+      "why": "Transactions and findAndModify count as commands"
+    },
+    {
+      "id": "inserts-high",
+      "metricName": "OPCOUNTER_INSERT",
+      "operator": "GREATER_THAN",
+      "threshold": 25,
+      "units": "RAW",
+      "why": "Write burst"
+    },
+    {
+      "id": "updates-high",
+      "metricName": "OPCOUNTER_UPDATE",
+      "operator": "GREATER_THAN",
+      "threshold": 25,
+      "units": "RAW",
+      "why": "Write burst"
+    },
+    {
+      "id": "connections-high",
+      "metricName": "CONNECTIONS_PERCENT",
+      "operator": "GREATER_THAN",
+      "threshold": 80,
+      "units": "RAW",
+      "why": "500-connection limit; serverless instances each hold a small pool"
+    },
+    {
+      "id": "logical-size-high",
+      "metricName": "LOGICAL_SIZE",
+      "operator": "GREATER_THAN",
+      "threshold": "logicalSizeMegabytes",
+      "units": "MEGABYTES",
+      "why": "Free: 512 MB hard limit"
+    },
+    {
+      "id": "network-in-high",
+      "metricName": "NETWORK_BYTES_IN",
+      "operator": "GREATER_THAN",
+      "threshold": 12000,
+      "units": "BYTES",
+      "why": "Sustained ~7 GB per 7 days of the 10 GB Free allowance"
+    },
+    {
+      "id": "network-out-high",
+      "metricName": "NETWORK_BYTES_OUT",
+      "operator": "GREATER_THAN",
+      "threshold": 12000,
+      "units": "BYTES",
+      "why": "Sustained ~7 GB per 7 days of the 10 GB Free allowance (daily capture reads)"
+    },
+    {
+      "id": "delete-ops-seen",
+      "metricName": "OPCOUNTER_DELETE",
+      "operator": "GREATER_THAN",
+      "threshold": 0,
+      "units": "RAW",
+      "only": "deleteOpsAlert",
+      "why": "The ledger never deletes receipts; any delete is an anomaly (the ledger-app role has no remove)"
+    }
+  ],
+  "tiers": {
+    "free": {
+      "eventTypeName": "OUTSIDE_SERVERLESS_METRIC_THRESHOLD",
+      "matchers": false,
+      "alerts": [
+        "logical-size-high"
+      ]
+    }
+  }
 }

@@ -129,16 +129,29 @@ describe("Atlas capacity and anomaly alert definitions (Free/Flex)", () => {
     expect(Number(byId("network-out-high").threshold) * 7 * 86_400).toBeLessThan(10 * 1024 ** 3); // 10 GB per rolling 7 days
     expect(byId("delete-ops-seen")).toMatchObject({ threshold: 0, only: "deleteOpsAlert" });
   });
-  it("renders per-cluster files with the ledger-only delete anomaly and refuses bad arguments", () => {
+  it("renders only what a Free cluster can raise (Logical Size, serverless event, no matchers) and lists every alert it cannot", () => {
     const out = join(tmpdir(), `fos-alerts-${randomBytes(4).toString("hex")}`);
+    const read = (file: string) => JSON.parse(execFileSync(process.execPath, ["-e", `process.stdout.write(require("fs").readFileSync(${JSON.stringify(join(out, file))}, "utf8"))`], { encoding: "utf8" }));
     try {
-      const run = (role: string) => execFileSync(process.execPath, ["scripts/atlas-alerts.mjs", "--role", role, "--cluster", `${role}-staging`, "--email", "owner@example.invalid", "--out", out], { encoding: "utf8" });
-      expect(run("ledger")).toContain(`wrote ${atlasAlerts.alerts.length} alert files`);
-      expect(run("primary")).toContain(`wrote ${atlasAlerts.alerts.length - 1} alert files`);
-      const size = JSON.parse(execFileSync(process.execPath, ["-e", `process.stdout.write(require("fs").readFileSync(${JSON.stringify(join(out, "primary-logical-size-high.json"))}, "utf8"))`], { encoding: "utf8" }));
-      expect(size).toMatchObject({ eventTypeName: "OUTSIDE_METRIC_THRESHOLD", matchers: [{ fieldName: "CLUSTER_NAME", operator: "EQUALS", value: "primary-staging" }],
-        metricThreshold: { metricName: "LOGICAL_SIZE", threshold: 400, units: "MEGABYTES" }, notifications: [{ typeName: "EMAIL" }] });
-      expect(() => execFileSync(process.execPath, ["scripts/atlas-alerts.mjs", "--role", "other", "--cluster", "x", "--email", "a@b.c", "--out", out], { stdio: "pipe" })).toThrow();
+      const run = (role: string, tier = "free") => execFileSync(process.execPath, ["scripts/atlas-alerts.mjs", "--role", role, "--tier", tier, "--cluster", `${role}-staging`, "--email", "owner@example.invalid", "--out", out], { encoding: "utf8" });
+      const ledger = run("ledger"); const primary = run("primary");
+      expect(ledger).toContain("wrote 1 alert files"); expect(primary).toContain("wrote 1 alert files");
+      // Nothing intended is dropped silently: every alert a Free cluster cannot raise is named.
+      const unavailable = (output: string) => output.split("\n").find(line => line.startsWith("not available on free: "))!.slice("not available on free: ".length).split(", ");
+      expect(unavailable(ledger).sort()).toEqual(atlasAlerts.alerts.map((alert: Alert) => alert.id).filter((id: string) => id !== "logical-size-high").sort());
+      expect(unavailable(primary)).not.toContain("delete-ops-seen");
+      for (const [role, megabytes] of [["primary", 400], ["ledger", 100]] as const) {
+        const size = read(`${role}-logical-size-high.json`);
+        expect(size).toEqual({ eventTypeName: "OUTSIDE_SERVERLESS_METRIC_THRESHOLD", enabled: true,
+          metricThreshold: { metricName: "LOGICAL_SIZE", operator: "GREATER_THAN", units: "MEGABYTES", mode: "AVERAGE", threshold: megabytes },
+          notifications: [{ typeName: "EMAIL", emailAddress: "owner@example.invalid", intervalMin: 60, delayMin: 0 }] });
+        expect(size).not.toHaveProperty("matchers"); // the serverless event type accepts no matchers
+      }
+      // Never the host-metric event type for a Free cluster: accepted without a matcher, it would never fire.
+      expect(JSON.stringify(atlasAlerts.tiers)).not.toContain("OUTSIDE_METRIC_THRESHOLD\"");
+      for (const bad of [["--role", "other", "--tier", "free"], ["--role", "ledger", "--tier", "flex"], ["--role", "ledger", "--tier", "dedicated"], ["--role", "ledger"]]) {
+        expect(() => execFileSync(process.execPath, ["scripts/atlas-alerts.mjs", ...bad, "--cluster", "x", "--email", "a@b.c", "--out", out], { stdio: "pipe" })).toThrow();
+      }
     } finally { execFileSync(process.execPath, ["-e", `require("fs").rmSync(${JSON.stringify(out)}, { recursive: true, force: true })`]); }
   });
 });

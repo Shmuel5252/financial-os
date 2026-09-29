@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 P3 PASS; P4 needs an owner decision — 2026-09-30
+
+The primary M0 supports consistent snapshot capture across its 40 collections. Atlas Free clusters can alert only on Logical Size; the other intended capacity alerts need Flex or compensating signals (owner decision). Alert generator fixed to never emit alerts that cannot fire.
+
 ## Phase 18 P2 — ledger bootstrap and least privilege PASS — 2026-09-30
 
 Ledger initialized (head revision 0, idempotent bootstrap with a readWrite-only temporary admin); `ledger-app` proven to read and write only the two ledger collections and to be refused delete, drop, create and foreign writes, with no state change; temporary admin and network access removed.
