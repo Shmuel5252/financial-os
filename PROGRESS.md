@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 P1 — independent ledger M0 capability probe PASS — 2026-09-30
+
+Atlas M0 (AWS Frankfurt) in a separate organization/project passed both ledger capabilities with a readWrite-only temporary user and a verified cleanup; temporary user and IP removed. The ledger stays on M0. P2 not started.
+
 ## Phase 18 Configuration B hardening — 2026-09-29
 
 Ledger disaster recovery (deterministic rebuild from signed mirrors + mirror-on-accept journal, fail-closed on any unprovable evidence), separate mirror signing key, capacity/anomaly alert definitions, stronger capture probe, IAM-auth preparation; decision sheet and runbook moved to Configuration B (M0 only after probes pass, Flex fallback). Nothing provisioned; no real erasure.

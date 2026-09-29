@@ -35,7 +35,10 @@ Prices are USD list prices before credits and taxes, verified on the vendor page
 - One probe fails: + $8 (that cluster on Flex). Both fail: + $16. A capability that also fails on Flex is the exact reason to consider M10 (≈ $57, verified) and is a new decision.
 - Not needed for A+B: KMS, NAT/VPC, Static IPs, Secure Compute, private endpoints, M10, Secrets Manager.
 
-## 4. Probe order and PASS/FAIL (all free; temporary IP allowlist entry for one hour, removed afterwards)
+## 4. Probe order and PASS/FAIL
+
+**P1 PASS — 2026-09-30.** Atlas organization `Financial OS Ledger`, project `financial-os-ledger-staging`, cluster `ledger-staging`: Free (M0), AWS Frankfurt (eu-central-1), no sample data. Temporary SCRAM user `ledger-probe` with only `readWrite@ledger_probe`, restricted to `ledger-staging`, 6-hour expiry; temporary current-IP /32 access-list entry (6 hours); no `0.0.0.0/0`. Output: `supported: transaction (snapshot read concern, majority write concern) — pass`, `supported: snapshot session pinned without a collection read — pass`, `cleanup: done`, exit code 0. Cleanup confirmed by the owner: user and access-list entry deleted (both lists empty); the Data Explorer check was skipped (it would need extra access) — the probe's own listing verified the cleanup. Decision: the independent ledger stays on M0 (no Flex). Cluster, project and organization kept for P2. P2–P4, AWS and Vercel not started. The organization banner asking for security/operations contacts is still open (owner, optional).
+ (all free; temporary IP allowlist entry for one hour, removed afterwards)
 
 | Order | Probe | Command (owner shell) | PASS | FAIL / INCONCLUSIVE |
 |---|---|---|---|---|
