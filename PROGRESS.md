@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 F design and A+B proposal — 2026-09-29
+
+Identity-key continuity design with an unwired, tested prototype; combined backup/ledger proposal with a local snapshot-consistency experiment. Awaiting owner decisions; no infrastructure or credential change.
+
 ## Phase 18 owner decisions G/C implemented — 2026-09-29
 
 Original checkout aligned to origin/main after proof and checksum backup (G). ADR-076 (C1–C3): minimized retired development manifests, development archive excluded from backups (coverage 46/46), signed provider-subject anti-reimport markers bounded by receipt retention. Reviewed, mutation-checked and rehearsed on real local Mongo. No infrastructure, credential or live change; A/B provisioning not authorized.

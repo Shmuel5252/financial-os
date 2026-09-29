@@ -107,6 +107,8 @@ Wording per `PHASE_18_ENTRY_REVIEW.md` / `PHASE_18_HARDENING_PACKAGE.md`. "R" re
 
 ## 6. Decisions and actions required from the owner
 
+**Status update (later 2026-09-29):** G done — original checkout aligned to `origin/main` after line-level proof and checksum backup (`C:\dev\financial-os-wip-backup-20260929`). C done — ADR-076 (commit `093d2d5`). F designed — `PHASE_18_KEY_CONTINUITY_DESIGN.md` with an unwired prototype and synthetic tests. A+B — proposal `PHASE_18_BACKUP_LEDGER_PROPOSAL.md` awaiting decision; no provisioning. D/E deferred. The original list follows.
+
 Presented as options; the builder recommends starting with A–C because they unblock the most rows.
 - **A. Backup capture/storage (18-10/11):** choose the logical filtered backup store (managed encrypted object storage in the staging region vs. Atlas paid tier with a reviewed secret-exclusion architecture). Recommendation: filtered logical BSON packages to encrypted object storage, since full Atlas snapshots include auth tokens that the approved boundary forbids. Requires a purchase/setup decision and credentials — owner only.
 - **B. Independent deletion ledger + release fence (18-11/12):** approve where the ledger lives (separate project/cluster vs. separate database with a separate principal) so fence/watermark code can be written against it.
