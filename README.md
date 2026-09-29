@@ -1,13 +1,13 @@
 # Financial OS
 
-Financial OS is being built phase by phase from the requirements in `MASTER_PLAN.md`. Phase 0 establishes the secure application and engineering foundation only; it intentionally contains no financial profile, dashboard, or Safe to Spend implementation.
+Financial OS is being built phase by phase from `MASTER_PLAN.md`. Phases 0–17 have recorded acceptance (Phase 9 at its documented staged-provider boundary); Phase 18 remains in progress and unaccepted. New builders must start with [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md) for the current checkpoint, preserved uncommitted work, evidence limitations and continuation instructions.
 
 ## Local setup
 
-1. Install Node.js 20.9 or newer and run `npm install`.
-2. Copy `.env.example` to `.env.local` and replace placeholders with real development credentials. Never commit that file.
+1. Install Node.js 20.9 or newer and use `npm ci` with the committed lockfile when dependencies need installing.
+2. For a new checkout only, configure `.env.local` privately from `.env.example`. Preserve an existing file; never overwrite, print or commit it. Missing credentials are an explicit gate, not permission to copy staging secrets.
 3. Configure a Google OAuth web client callback for `/api/auth/callback/google` and a least-privilege MongoDB database user.
-4. Run `npm run dev`.
+4. Run `npm run dev -- --port 3001`. Do not use or disturb port 3000, which belongs to an unrelated application.
 
 Without credentials, the application still lints, tests, type-checks, and builds. Auth requests return an explicit unavailable response; no fake user or fake database is used.
 
