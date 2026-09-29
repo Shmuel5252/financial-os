@@ -17,6 +17,7 @@ import { projectRecoveryBudgetPeriod } from "@/lib/operations/budget-period-reco
 import { projectRecoveryNetWorthItem, projectRecoveryNetWorthSnapshot } from "@/lib/operations/net-worth-recovery";
 import { projectRecoveryIntelligenceRun, projectRecoveryIntelligenceReview } from "@/lib/operations/intelligence-recovery";
 import { projectRecoveryProgressEvent, projectRecoveryProgressPreference } from "@/lib/operations/progress-recovery";
+import { projectRecoveryAiConversation, projectRecoveryReportSummary } from "@/lib/operations/ai-history-recovery";
 import { projectRecoveryDebtStrategy } from "@/lib/operations/debt-recovery";
 import { projectRecoveryBudgetCategory, projectRecoveryBudgetCorrection } from "@/lib/operations/budget-category-recovery";
 import { projectRecoveryForecast, projectRecoveryForecastScenario } from "@/lib/operations/forecast-recovery";
@@ -57,6 +58,8 @@ export const initialRecoverySchemas: RecoverySchemas = {
   transactionIntelligenceReviews: { version: "intelligence-review-v1", project: projectRecoveryIntelligenceReview },
   progressJourneyEvents: { version: "progress-event-v1", project: projectRecoveryProgressEvent },
   progressJourneyPreferences: { version: "progress-preference-v1", project: projectRecoveryProgressPreference },
+  aiConversations: { version: "ai-conversation-v1", project: projectRecoveryAiConversation },
+  reportAiSummaries: { version: "report-summary-v1", project: projectRecoveryReportSummary },
   debtStrategyScenarios: { version: "debt-strategy-v1", project: projectRecoveryDebtStrategy },
   budgetCategories: { version: "budget-category-v1", project: projectRecoveryBudgetCategory },
   budgetCategoryCorrections: { version: "budget-correction-v1", project: projectRecoveryBudgetCorrection },
