@@ -46,6 +46,17 @@ describe("budget category recovery", () => {
     row.auditTrail[1].before = before; row.auditTrail[1].after.unknown = true;
     expect(() => project(row)).toThrow();
   });
+  it("drops only the exact legacy expectedVersion artifact (always version - 1) and refuses any other value", () => {
+    for (const row of [category(), category(true)]) {
+      const legacy = { ...row, expectedVersion: row.version - 1 };
+      expect(project(legacy)).toEqual(row);
+      expect(Object.keys(project(legacy)!)).toEqual(Object.keys(row));
+      for (const expectedVersion of [row.version, row.version - 2, String(row.version - 1), null, { $numberInt: "0" }]) {
+        expect(() => project({ ...row, expectedVersion })).toThrow();
+      }
+    }
+    expect(initialRecoverySchemas.budgetCategories?.version).toBe("budget-category-v2");
+  });
   it("preserves immutable correction ownership and rejects unexpected or malformed evidence", () => {
     const owner = new ObjectId();
     const row = { _id: new ObjectId(), userId: owner, actorUserId: owner, at: new Date(),

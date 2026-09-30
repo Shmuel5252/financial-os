@@ -64,7 +64,7 @@ export const initialRecoverySchemas: RecoverySchemas = {
   aiConversations: { version: "ai-conversation-v1", project: projectRecoveryAiConversation },
   reportAiSummaries: { version: "report-summary-v1", project: projectRecoveryReportSummary },
   debtStrategyScenarios: { version: "debt-strategy-v1", project: projectRecoveryDebtStrategy },
-  budgetCategories: { version: "budget-category-v1", project: projectRecoveryBudgetCategory },
+  budgetCategories: { version: "budget-category-v2", project: projectRecoveryBudgetCategory },
   budgetCategoryCorrections: { version: "budget-correction-v1", project: projectRecoveryBudgetCorrection },
   forecastSnapshots: { version: "forecast-snapshot-v1", project: projectRecoveryForecast },
   forecastScenarios: { version: "forecast-scenario-v1", project: projectRecoveryForecastScenario },

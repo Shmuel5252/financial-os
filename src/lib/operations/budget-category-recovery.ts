@@ -25,7 +25,12 @@ const fail = (): never => { throw new Error("Budget category recovery requires r
 
 export function projectRecoveryBudgetCategory(input: Document): Document {
   try {
-    assertRecoveryContent(input); const row = category.parse(input);
+    assertRecoveryContent(input);
+    // budget-category-v2: before the writer fix, category updates also persisted the command's expectedVersion.
+    // Every such write leaves it at exactly version - 1; anything else still fails. It is dropped, never restored.
+    const { expectedVersion, ...clean } = input;
+    if (expectedVersion !== undefined && expectedVersion !== clean.version - 1) return fail();
+    const row = category.parse(clean);
     if ((row.idempotencyKeyHash === undefined) !== (row.idempotencyPayloadHash === undefined)
       || row.auditTrail.length !== row.version) return fail();
     if (row.kind === "custom") {
@@ -42,7 +47,7 @@ export function projectRecoveryBudgetCategory(input: Document): Document {
     }
     const current = { hidden: row.hidden, label: row.label, rolloverPolicy: row.rolloverPolicy, sortOrder: row.sortOrder };
     if (stable(current) !== stable(row.auditTrail[row.auditTrail.length - 1]!.after)) return fail();
-    return input;
+    return clean;
   } catch { return fail(); }
 }
 

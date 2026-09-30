@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { BSON, ObjectId, type Document } from "mongodb";
 import { describe, expect, it } from "vitest";
 import { budgetRepositoryForDatabase } from "@/lib/budgets/budget-repository";
+import { createBudgetCategory, updateBudgetCategory } from "@/lib/budgets/budget-service";
 import { createIsolatedRecoveryTarget } from "@/lib/operations/isolated-recovery-target";
 import { createBackupPackage, openBackupPackage } from "@/lib/operations/backup-package";
 import { initialRecoverySchemas } from "@/lib/operations/recovery-schemas";
@@ -13,6 +14,25 @@ import { money } from "@/lib/domain/money/money";
 
 const uri = process.env.MONGODB_TEST_URI;
 (uri ? describe : describe.skip)("real isolated category and correction recovery", () => {
+  it("stores exactly the reviewed shape when categories are changed through the service (the API path)", async () => {
+    // Staging capture rejected a category updated via the API: the service passed the whole command, so expectedVersion was persisted.
+    const source = await createIsolatedRecoveryTarget(uri!);
+    try {
+      const actor = { kind: "user" as const, userId: new ObjectId().toHexString() };
+      const budgetRepository = budgetRepositoryForDatabase(source.database); await budgetRepository.ensureIndexes();
+      const custom = await createBudgetCategory(actor, { idempotencyKey: randomUUID(), label: "Synthetic", rolloverPolicy: "reset" }, { budgetRepository });
+      const settings = { hidden: true, label: "Synthetic updated", rolloverPolicy: "carry" as const, sortOrder: 15 };
+      await updateBudgetCategory(actor, { categoryId: custom.categoryId, expectedVersion: 1, ...settings }, { budgetRepository });
+      await updateBudgetCategory(actor, { categoryId: "system:food", expectedVersion: 0, ...settings }, { budgetRepository });
+      await updateBudgetCategory(actor, { categoryId: "system:food", expectedVersion: 1, ...settings, hidden: false }, { budgetRepository });
+      const rows = await source.database.collection("budgetCategories").find().sort({ _id: 1 }).toArray();
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row).not.toHaveProperty("expectedVersion");
+        expect(BSON.serialize(initialRecoverySchemas.budgetCategories!.project(row))).toEqual(BSON.serialize(row));
+      }
+    } finally { await source.dispose(); }
+  }, 30000);
   it("preserves repository audit BSON and retry identity while suppressing the erased owner's records", async () => {
     const source = await createIsolatedRecoveryTarget(uri!); const target = await createIsolatedRecoveryTarget(uri!);
     try {

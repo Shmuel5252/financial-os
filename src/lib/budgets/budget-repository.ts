@@ -445,6 +445,13 @@ export class BudgetRepository {
     }>,
   ): Promise<BudgetCategory> {
     budgetCategoryIdSchema.parse(categoryId);
+    // Persist exactly the four settings: callers may pass the wider command (categoryId, expectedVersion).
+    const next = {
+      hidden: settings.hidden,
+      label: settings.label,
+      rolloverPolicy: settings.rolloverPolicy,
+      sortOrder: settings.sortOrder,
+    };
     const actorUserId = parseObjectId(actor.userId, "actor.userId");
     const existing = await this.categoryCollection.findOne({
       categoryId,
@@ -472,7 +479,7 @@ export class BudgetRepository {
         ],
         categoryId,
         createdAt: now,
-        ...settings,
+        ...next,
         kind: "system",
         systemKey: key,
         updatedAt: now,
@@ -510,7 +517,7 @@ export class BudgetRepository {
             revision: expectedVersion + 1,
           },
         },
-        $set: { ...settings, updatedAt: now },
+        $set: { ...next, updatedAt: now },
       },
       { returnDocument: "after" },
     );
