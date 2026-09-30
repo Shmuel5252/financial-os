@@ -31,7 +31,8 @@ export function recoveryPlan(names: readonly string[]) {
 export function projectAuthLink(input: Record<string, unknown>) {
   const keys = ["_id", "userId", "provider", "providerAccountId", "type"] as const;
   const validId = (value: unknown) => value instanceof ObjectId || (typeof value === "string" && /^[a-f0-9]{24}$/.test(value));
-  if (input.provider !== "google" || input.type !== "oauth" || typeof input.providerAccountId !== "string" || !/^[A-Za-z0-9_-]{1,255}$/.test(input.providerAccountId) || !validId(input._id) || !validId(input.userId)) throw new Error("Invalid recovery linkage");
+  // Auth.js v5 stores Google accounts as "oidc" (its Google provider is OIDC); "oauth" is the plain OAuth 2 account type.
+  if (input.provider !== "google" || (input.type !== "oidc" && input.type !== "oauth") || typeof input.providerAccountId !== "string" || !/^[A-Za-z0-9_-]{1,255}$/.test(input.providerAccountId) || !validId(input._id) || !validId(input.userId)) throw new Error("Invalid recovery linkage");
   return Object.fromEntries(keys.map(key => [key, input[key]]));
 }
 

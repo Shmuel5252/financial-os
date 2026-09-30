@@ -26,7 +26,7 @@ type Manifest = z.infer<typeof manifestSchema>;
 export type BackupPackage = Readonly<{ manifest: Manifest; signature: string; parts: readonly RecoveryEnvelope[] }>;
 type Key = Readonly<{ version: number; material: Uint8Array }>;
 const excluded: readonly string[] = recoveryPlan(recoveryCollections).collections.filter(c => c.action === "exclude" || c.action === "rebuild").map(c => c.name);
-const authSchema: RecoverySchema = { version: "auth-link-v1", project: projectAuthLink };
+const authSchema: RecoverySchema = { version: "auth-link-v2", project: projectAuthLink };
 /** Reasons name collections, counts and schema versions only — never a value or an identifier. */
 class PackageRejected extends Error {}
 function fail(reason?: string): never { throw new PackageRejected(`Backup package validation failed${reason ? `: ${reason}` : ""}`); }
@@ -47,20 +47,23 @@ export function createBackupPackage(records: Readonly<Record<string, readonly Do
     const names = Object.keys(records);
     // Complete declared inventory, even absent/empty collections, prevents accidental omitted classes.
     if (names.length !== recoveryCollections.length || names.some(n => !recoveryCollections.includes(n))) return fail();
-    const parts: RecoveryEnvelope[] = []; const entries: Manifest["entries"] = [];
+    const parts: RecoveryEnvelope[] = []; const entries: Manifest["entries"] = []; const rejections: string[] = [];
     for (const name of recoveryCollections) {
       const rows = records[name]; if (!Array.isArray(rows)) return fail();
       if (excluded.includes(name)) continue;
       const schema = adapter(name, schemas);
       // A known collection is NOT sufficient evidence its fields are safe. No raw-copy fallback.
-      if (rows.length && !schema) return fail(`${name}: no reviewed adapter`);
+      // Every collection is checked so one run reports all problems; nothing is packaged if any is found.
+      if (rows.length && !schema) { rejections.push(`${name}: no reviewed adapter`); continue; }
       const projected: Document[] = []; let rejected = 0;
       for (const row of rows) { try { projected.push(schema!.project(row)); } catch { rejected++; } }
-      if (rejected > 0) return fail(`${name}: ${rejected} of ${rows.length} records rejected by ${schema!.version}`);
+      if (rejected > 0) { rejections.push(`${name}: ${rejected} of ${rows.length} records rejected by ${schema!.version}`); continue; }
+      if (rejections.length > 0) continue;
       const bson = BSON.serialize({ records: projected });
       const part = encryptRecoveryBson(bson, name, indexManifestDigest, key);
       parts.push(part); entries.push({ collection: name, schema: schema?.version ?? "empty-unreviewed-v1", count: projected.length, digest: part.header.digest });
     }
+    if (rejections.length > 0) return fail(rejections.join("; "));
     const manifest = manifestSchema.parse({ version, source: recoveryPoint === null ? "isolated-synthetic" : "snapshot-capture", indexManifestDigest,
       inventory: [...recoveryCollections], excluded, entries, recoveryPoint, releaseAllowed: false });
     return { manifest, parts, signature: signature(manifest, key) };

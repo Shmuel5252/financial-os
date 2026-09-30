@@ -50,6 +50,9 @@ describe("complete inventory package framing with explicitly reviewed synthetic 
     expect(message).not.toMatch(new RegExp(`SYNTHETIC-SECRET-VALUE|${secretId.toHexString()}|${owner.toHexString()}`));
     const unadapted = fixture(); unadapted.profiles = [{ userId: owner }];
     expect(() => createBackupPackage(unadapted, schemas, manifest, key)).toThrow("Backup package validation failed: profiles: no reviewed adapter");
+    // Every problem in one run, in inventory order.
+    const both = fixture(); both.accounts = [{ _id: new ObjectId(), bad: true }]; both.profiles = [{ userId: owner }];
+    expect(() => createBackupPackage(both, schemas, manifest, key)).toThrow(/^Backup package validation failed: .*accounts: 1 of 1 records rejected by synthetic-account-v1; .*profiles: no reviewed adapter$|^Backup package validation failed: .*profiles: no reviewed adapter; .*accounts: 1 of 1 records rejected by synthetic-account-v1$/);
   });
   it("rejects manifest/part omission, tampering, replacement and schema/index drift", () => {
     const pack = createBackupPackage(fixture(), schemas, manifest, key);

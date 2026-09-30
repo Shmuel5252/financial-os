@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { BSON, Long, ObjectId } from "mongodb";
 import { describe, expect, it, vi } from "vitest";
+import Google from "next-auth/providers/google";
 import { errorResponse } from "@/lib/http/route-response";
 import { recoveryCollections, recoveryPlan, projectAuthLink, bsonIntegrity, validateBsonIntegrity, isExactMoney } from "@/lib/operations/recovery-plan";
 import config from "../../next.config";
@@ -30,6 +31,16 @@ describe("Phase 18 safe hardening", () => {
     const input = { _id: new ObjectId(), userId: new ObjectId(), provider: "google", providerAccountId: "synthetic", type: "oauth", access_token: "SYNTHETIC_SECRET", refresh_token: "SYNTHETIC_SECRET", id_token: "SYNTHETIC_SECRET", unknown: "SYNTHETIC_SECRET" };
     expect(Object.keys(projectAuthLink(input))).toEqual(["_id", "userId", "provider", "providerAccountId", "type"]);
     expect(JSON.stringify(projectAuthLink(input))).not.toContain("SYNTHETIC_SECRET");
+  });
+  it("accepts the account type Auth.js actually stores for the configured Google provider, and nothing looser", () => {
+    // Staging capture found every real account rejected: Auth.js v5's Google provider is OIDC, so accounts carry type "oidc".
+    const stored = { _id: new ObjectId(), userId: new ObjectId(), provider: "google", providerAccountId: "109876543210987654321", type: Google({}).type as string | undefined,
+      access_token: "SYNTHETIC_SECRET", id_token: "SYNTHETIC_SECRET", expires_at: 1, scope: "openid email profile", token_type: "bearer" };
+    expect(stored.type).toBe("oidc");
+    expect(projectAuthLink(stored)).toEqual({ _id: stored._id, userId: stored.userId, provider: "google", providerAccountId: stored.providerAccountId, type: "oidc" });
+    expect(JSON.stringify(projectAuthLink(stored))).not.toContain("SYNTHETIC_SECRET");
+    for (const type of ["email", "credentials", "webauthn", "OIDC", undefined]) expect(() => projectAuthLink({ ...stored, type })).toThrow("Invalid recovery linkage");
+    expect(() => projectAuthLink({ ...stored, provider: "github" })).toThrow("Invalid recovery linkage");
   });
   it("preserves signed BSON int64 and rejects tampered bytes", () => {
     const bytes = BSON.serialize({ amount: Long.fromString("-9007199254740993") });
