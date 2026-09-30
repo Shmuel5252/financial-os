@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 S0 (AWS account and guardrails) PASS — 2026-09-30
+
+Paid-plan account, root MFA, Identity Center with always-on MFA, SSO-only CLI, multi-region CloudTrail to an SSE-S3 bucket with verified delivery. Next: S1–S7 (secrets, stack, first capture).
+
 ## Phase 18 P4 closed (decision A) — 2026-09-30
 
 M0 capacity early warning via the backup worker: data-size metrics for both clusters with CloudWatch alarms at 400 MB / 100 MB; ops/s, connections and app network by weekly chart review. $0.
