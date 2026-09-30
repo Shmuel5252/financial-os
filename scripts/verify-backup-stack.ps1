@@ -62,7 +62,9 @@ try {
 
   $subs = (Invoke-Aws sns list-subscriptions-by-topic --topic-arn $out.AlarmTopicArn).Subscriptions
   "== alert topic subscriptions: $(($subs | ForEach-Object { "$($_.Protocol):$(if ($_.SubscriptionArn -like 'arn:*') { 'confirmed' } else { $_.SubscriptionArn })" }) -join ', ')"
-  "== event rules: $(((Invoke-Aws events list-rules --name-prefix $stack).Rules | ForEach-Object { "$($_.Name.Substring($stack.Length).Trim('-'))=$($_.State)" }) -join ', ')"
+  # By stack resource, not name prefix: generated rule names are truncated to 64 characters.
+  $rules = (Invoke-Aws cloudformation list-stack-resources --stack-name $stack).StackResourceSummaries | Where-Object ResourceType -eq "AWS::Events::Rule"
+  "== event rules: $(($rules | ForEach-Object { "$($_.LogicalResourceId)=$((Invoke-Aws events describe-rule --name $_.PhysicalResourceId).State)/targets=$(@((Invoke-Aws events list-targets-by-rule --rule $_.PhysicalResourceId).Targets).Count)" }) -join ', ')"
 
   $trail = Invoke-Aws cloudtrail get-trail-status --name $TrailName
   $selectors = Invoke-Aws cloudtrail get-event-selectors --trail-name $TrailName
