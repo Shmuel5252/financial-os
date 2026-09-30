@@ -27,7 +27,9 @@ export type BackupPackage = Readonly<{ manifest: Manifest; signature: string; pa
 type Key = Readonly<{ version: number; material: Uint8Array }>;
 const excluded: readonly string[] = recoveryPlan(recoveryCollections).collections.filter(c => c.action === "exclude" || c.action === "rebuild").map(c => c.name);
 const authSchema: RecoverySchema = { version: "auth-link-v1", project: projectAuthLink };
-function fail(): never { throw new Error("Backup package validation failed"); }
+/** Reasons name collections, counts and schema versions only — never a value or an identifier. */
+class PackageRejected extends Error {}
+function fail(reason?: string): never { throw new PackageRejected(`Backup package validation failed${reason ? `: ${reason}` : ""}`); }
 function signature(manifest: Manifest, key: Key): string {
   if (key.material.length !== 32 || !Number.isSafeInteger(key.version) || key.version < 1) return fail();
   return createHmac("sha256", key.material).update(JSON.stringify([version, "manifest", key.version, manifest])).digest("hex");
@@ -51,8 +53,10 @@ export function createBackupPackage(records: Readonly<Record<string, readonly Do
       if (excluded.includes(name)) continue;
       const schema = adapter(name, schemas);
       // A known collection is NOT sufficient evidence its fields are safe. No raw-copy fallback.
-      if (rows.length && !schema) return fail();
-      const projected = rows.map(row => schema!.project(row));
+      if (rows.length && !schema) return fail(`${name}: no reviewed adapter`);
+      const projected: Document[] = []; let rejected = 0;
+      for (const row of rows) { try { projected.push(schema!.project(row)); } catch { rejected++; } }
+      if (rejected > 0) return fail(`${name}: ${rejected} of ${rows.length} records rejected by ${schema!.version}`);
       const bson = BSON.serialize({ records: projected });
       const part = encryptRecoveryBson(bson, name, indexManifestDigest, key);
       parts.push(part); entries.push({ collection: name, schema: schema?.version ?? "empty-unreviewed-v1", count: projected.length, digest: part.header.digest });
@@ -60,7 +64,7 @@ export function createBackupPackage(records: Readonly<Record<string, readonly Do
     const manifest = manifestSchema.parse({ version, source: recoveryPoint === null ? "isolated-synthetic" : "snapshot-capture", indexManifestDigest,
       inventory: [...recoveryCollections], excluded, entries, recoveryPoint, releaseAllowed: false });
     return { manifest, parts, signature: signature(manifest, key) };
-  } catch { return fail(); }
+  } catch (error) { if (error instanceof PackageRejected) throw error; return fail(); }
 }
 
 /** Verifies all parts before returning any records. Caller must apply CURRENT ledger and remain quarantined.

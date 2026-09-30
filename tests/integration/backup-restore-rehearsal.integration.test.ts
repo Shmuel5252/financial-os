@@ -198,19 +198,19 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
 
   it("never leaves a usable partial capture or restore, and retries start clean", async () => {
     const w = await world(disposables);
-    await expect(w.capture({ store: { putOnce: async () => { throw new Error("synthetic storage timeout"); }, get: async () => null, list: async () => [] } })).rejects.toThrow("Backup capture failed closed");
+    await expect(w.capture({ store: { putOnce: async () => { throw new Error("synthetic storage timeout"); }, get: async () => null, list: async () => [] } })).rejects.toThrow("Backup capture failed closed: storage");
     const withoutProfiles = { ...initialRecoverySchemas }; delete withoutProfiles.profiles;
-    await expect(w.capture({ schemas: withoutProfiles })).rejects.toThrow("Backup capture failed closed");
-    let tick = Date.now(); await expect(w.capture({ now: () => (tick += 61_000), maxDurationMs: 60_000 })).rejects.toThrow("Backup capture failed closed");
+    await expect(w.capture({ schemas: withoutProfiles })).rejects.toThrow("Backup capture failed closed: package: profiles: no reviewed adapter");
+    let tick = Date.now(); await expect(w.capture({ now: () => (tick += 61_000), maxDurationMs: 60_000 })).rejects.toThrow("Backup capture failed closed: duration exceeded");
     expect(w.store.objects.size).toBe(0);
     await w.app.database.createCollection("unreviewedCollection");
-    await expect(w.capture()).rejects.toThrow("Backup capture failed closed");
+    await expect(w.capture()).rejects.toThrow("Backup capture failed closed: unreviewed collections: unreviewedCollection");
     await w.app.database.collection("unreviewedCollection").drop();
     if (standalone) {
       // A server without snapshot sessions cannot guarantee cross-collection consistency: capture refuses.
       const plain = await createIsolatedRecoveryTarget(standalone); disposables.push(plain);
       await expect(captureBackup({ client: plain.database.client, databaseName: plain.database.databaseName, schemas: initialRecoverySchemas, indexManifestDigest: digest,
-        key: packageKey, ledgerHead: async () => 0, store: w.store, now: () => Date.now(), maxDurationMs: 60_000 })).rejects.toThrow("Backup capture failed closed");
+        key: packageKey, ledgerHead: async () => 0, store: w.store, now: () => Date.now(), maxDurationMs: 60_000 })).rejects.toThrow(/^Backup capture failed closed: (snapshot pin \(\w+\)|no snapshot time)$/);
     }
     const captured = await w.capture(); expect(w.store.objects.size).toBe(1);
     // Retrying the identical upload is idempotent; a different object under the same name is refused (object lock).
@@ -371,7 +371,7 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
         .rejects.toThrow("synthetic ledger outage");
       // Capture refuses (unreviewed collection): the ledger mirror may be written, but no package and no success.
       await w.app.database.createCollection("unreviewedCollection");
-      await expect(worker()).rejects.toThrow("Backup capture failed closed");
+      await expect(worker()).rejects.toThrow("Backup capture failed closed: unreviewed collections: unreviewedCollection");
       await w.app.database.collection("unreviewedCollection").drop();
       expect(await store.list("packages/")).toEqual(packagesBefore);
       expect(recordSuccess).not.toHaveBeenCalled();

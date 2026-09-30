@@ -16,7 +16,11 @@ export type BackupObjectStore = Readonly<{
 }>;
 type Key = Readonly<{ version: number; material: Uint8Array }>;
 
-const fail = (): never => { throw new Error("Backup capture failed closed"); };
+/** Categories and collection names only — never a value, identifier or URI (the worker's error reaches logs and the operator). */
+const fail = (reason?: string): never => { throw new Error(`Backup capture failed closed${reason ? `: ${reason}` : ""}`); };
+const safeName = (name: string) => (/^[A-Za-z0-9_.-]{1,64}$/.test(name) ? name : "?");
+const codeOf = (error: unknown) => { const value = (error as { codeName?: unknown; name?: unknown })?.codeName ?? (error as { name?: unknown })?.name;
+  return typeof value === "string" && /^[A-Za-z]{1,64}$/.test(value) ? value : "error"; };
 const excluded = new Set<string>(recoveryPlan(recoveryCollections).collections.filter(item => item.action === "exclude" || item.action === "rebuild").map(item => item.name));
 // Restore bookkeeping created by the restore process itself; it belongs to one target and is never captured.
 const operational = new Set(["recoveryQuarantine"]);
@@ -40,33 +44,42 @@ export async function captureBackup(input: Readonly<{
   const startedAt = input.now();
   // Read before the snapshot: a restore needs a ledger at least this new, or the ledger was rolled back behind the backup.
   const ledgerHead = await input.ledgerHead();
-  if (!Number.isSafeInteger(ledgerHead) || ledgerHead < 0 || !Number.isSafeInteger(input.maxDurationMs) || input.maxDurationMs < 1) return fail();
+  if (!Number.isSafeInteger(ledgerHead) || ledgerHead < 0 || !Number.isSafeInteger(input.maxDurationMs) || input.maxDurationMs < 1) return fail("configuration");
   const database = input.client.db(input.databaseName);
+  let present: string[];
   try {
-    const present = (await database.listCollections({}, { nameOnly: true }).toArray()).map(item => item.name)
+    present = (await database.listCollections({}, { nameOnly: true }).toArray()).map(item => item.name)
       .filter(name => !name.startsWith("system.") && !operational.has(name));
-    if (present.some(name => !recoveryCollections.includes(name))) return fail();
-  } catch { return fail(); }
+  } catch (error) { return fail(`collection listing (${codeOf(error)})`); }
+  const unreviewed = present.filter(name => !recoveryCollections.includes(name));
+  if (unreviewed.length > 0) return fail(`unreviewed collections: ${unreviewed.slice(0, 10).map(safeName).join(", ")}${unreviewed.length > 10 ? ", …" : ""}`);
   const session = input.client.startSession({ snapshot: true });
   let pack: BackupPackage; let atClusterTime: string;
   try {
     // Pin the cluster time before any collection read: a read of a missing collection returns no cluster time,
     // which would otherwise let later reads choose a later snapshot.
-    await database.aggregate([{ $documents: [{}] }], { session }).toArray();
-    if ((session as unknown as { snapshotTime?: Timestamp }).snapshotTime === undefined) return fail();
+    try { await database.aggregate([{ $documents: [{}] }], { session }).toArray(); } catch (error) { return fail(`snapshot pin (${codeOf(error)})`); }
+    if ((session as unknown as { snapshotTime?: Timestamp }).snapshotTime === undefined) return fail("no snapshot time");
     const records: Record<string, Document[]> = {};
     for (const name of recoveryCollections) {
       // Excluded/rebuilt collections (sessions, tokens, archive) are never read at all; every other one is read in the snapshot.
-      records[name] = excluded.has(name) ? []
-        : await database.collection(name).find({}, { session, promoteLongs: false }).sort({ _id: 1 }).toArray();
+      try {
+        records[name] = excluded.has(name) ? []
+          : await database.collection(name).find({}, { session, promoteLongs: false }).sort({ _id: 1 }).toArray();
+      } catch (error) { return fail(`snapshot read of ${name} (${codeOf(error)})`); }
     }
     const snapshotTime = (session as unknown as { snapshotTime?: Timestamp }).snapshotTime;
-    if (snapshotTime === undefined || input.now() - startedAt > input.maxDurationMs) return fail();
+    if (snapshotTime === undefined) return fail("no snapshot time");
+    if (input.now() - startedAt > input.maxDurationMs) return fail("duration exceeded");
     atClusterTime = snapshotTime.toString();
-    pack = createBackupPackage(records, input.schemas, input.indexManifestDigest, input.key, { atClusterTime, capturedAt: startedAt, ledgerHead });
-  } catch { return fail(); } finally { await session.endSession().catch(() => undefined); }
+    try { pack = createBackupPackage(records, input.schemas, input.indexManifestDigest, input.key, { atClusterTime, capturedAt: startedAt, ledgerHead }); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      return fail(message.startsWith("Backup package validation failed: ") ? `package: ${message.slice("Backup package validation failed: ".length)}` : "package");
+    }
+  } finally { await session.endSession().catch(() => undefined); }
   const bytes = encodeBackupPackage(pack);
   const name = `packages/${atClusterTime.padStart(20, "0")}-${createHash("sha256").update(bytes).digest("hex").slice(0, 16)}.bson`;
-  try { await input.store.putOnce(name, bytes); } catch { return fail(); }
+  try { await input.store.putOnce(name, bytes); } catch { return fail("storage"); }
   return { name, atClusterTime, ledgerHead };
 }

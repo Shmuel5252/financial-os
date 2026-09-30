@@ -42,6 +42,15 @@ describe("complete inventory package framing with explicitly reviewed synthetic 
     rows.profiles = [{ userId: owner }]; expect(() => createBackupPackage(rows, schemas, manifest, key)).toThrow();
     expect(() => createBackupPackage(fixture(), {}, manifest, key)).toThrow();
   });
+  it("names the collection, count and schema version of a rejection — never a value or identifier", () => {
+    const rows = fixture(); const secretId = new ObjectId();
+    rows.accounts = [...rows.accounts!, { _id: secretId, userId: owner, amount: 12, extra: "SYNTHETIC-SECRET-VALUE" }];
+    let message = ""; try { createBackupPackage(rows, schemas, manifest, key); } catch (error) { message = (error as Error).message; }
+    expect(message).toBe("Backup package validation failed: accounts: 1 of 2 records rejected by synthetic-account-v1");
+    expect(message).not.toMatch(new RegExp(`SYNTHETIC-SECRET-VALUE|${secretId.toHexString()}|${owner.toHexString()}`));
+    const unadapted = fixture(); unadapted.profiles = [{ userId: owner }];
+    expect(() => createBackupPackage(unadapted, schemas, manifest, key)).toThrow("Backup package validation failed: profiles: no reviewed adapter");
+  });
   it("rejects manifest/part omission, tampering, replacement and schema/index drift", () => {
     const pack = createBackupPackage(fixture(), schemas, manifest, key);
     for (const altered of [{ ...pack, signature: "b".repeat(64) }, { ...pack, parts: pack.parts.slice(1) },
