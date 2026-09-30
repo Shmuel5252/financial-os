@@ -59,6 +59,11 @@ jobs:
       - name: Verify source index inventory
         run: npm run operations:index-check
 
+      - name: Validate the CloudFormation template against AWS resource schemas
+        run: |
+          python3 -m pip install --quiet cfn-lint==1.57.1
+          cfn-lint --regions eu-central-1 -- infra/aws/financial-os-backup.template.json
+
       - name: Start single-node replica set for recovery rehearsals
         run: |
           docker run -d --name mongo-rs --network host mongo:8.0 --replSet rs0 --port 27018 --bind_ip 127.0.0.1

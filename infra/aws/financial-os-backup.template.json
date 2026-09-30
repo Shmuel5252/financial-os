@@ -89,8 +89,8 @@
         { "IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "CidrIp": "0.0.0.0/0" },
         { "IpProtocol": "tcp", "FromPort": 27015, "ToPort": 27017, "CidrIp": "0.0.0.0/0" }
       ] } },
-    "WorkerDeadLetterQueue": { "Type": "AWS::SQS::Queue", "Properties": { "SqsManagedSseEnabled": true, "MessageRetentionPeriod": 1209600 } },
-    "WorkerLogGroup": { "Type": "AWS::Logs::LogGroup", "Properties": { "LogGroupName": { "Fn::Sub": "/aws/lambda/financial-os-${Environment}-backup-worker" }, "RetentionInDays": 30 } },
+    "WorkerDeadLetterQueue": { "Type": "AWS::SQS::Queue", "DeletionPolicy": "Delete", "UpdateReplacePolicy": "Delete", "Properties": { "SqsManagedSseEnabled": true, "MessageRetentionPeriod": 1209600 } },
+    "WorkerLogGroup": { "Type": "AWS::Logs::LogGroup", "DeletionPolicy": "Delete", "UpdateReplacePolicy": "Delete", "Properties": { "LogGroupName": { "Fn::Sub": "/aws/lambda/financial-os-${Environment}-backup-worker" }, "RetentionInDays": 30 } },
     "WorkerRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {

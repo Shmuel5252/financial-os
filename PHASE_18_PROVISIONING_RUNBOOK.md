@@ -78,6 +78,8 @@ For Vercel, pipe the variable into `vercel env add <NAME> production` in the sam
 - Verify: CloudTrail on; budget alert exists; templates reviewed.
 - Rollback: nothing provisioned yet.
 
+- Configuration B staging specifics (2026-09-30): the account is on the **Paid plan** from the start; create the CloudTrail trail with **SSE-S3** (the console's default SSE-KMS creates a customer key billed $1/month); new accounts often have a Lambda concurrency quota of 10, which blocks reserved concurrency 1 — check `aws lambda get-account-settings` and, if 10, request an increase (free; Service Quotas `L-B99A9384`) before deploying; `OperatorPrincipalArn` / `BreakGlassPrincipalArn` = `arn:aws:iam::<account>:root` (only administrators of this single-owner account can assume the roles, and Identity Center enforces MFA at sign-in); the template is validated with `cfn-lint` in CI.
+
 ### S1 — Ledger cluster (B1) [OWNER]
 1. Create Atlas project `financial-os-ledger-<env>`; cluster tier per D6 in AWS Frankfurt (`eu-central-1`).
 2. Database users: `ledger-app` → custom role `ledgerAppNoRemove` with only `find`, `insert`, `update` on **the two collections** `deletion_ledger.deletionReceipts` and `deletion_ledger.deletionLedgerHead` (not database-wide: MongoDB authorizes collection creation with `insert`, so a database-wide grant could create collections; no `remove`/`dropCollection`: the ledger never deletes receipts), restricted to the ledger cluster, permanent, password only in your password manager until S9; `ledger-mirror` → `read@deletion_ledger`; a temporary `ledger-probe` user → `readWrite@ledger_probe` for step 5 only, deleted afterwards. No other roles. (Restore also refuses a live ledger missing any mirrored receipt.)
