@@ -81,6 +81,7 @@ Evidence: a lost ledger rebuilt exactly on a loopback replica set; adversarial c
 Still required before any real erasure (unchanged gates): the app's write path to `ledger-journal/` (S3 client with Vercel OIDC — same dependency decision), the erase executor and policy gates, and the explicit ledger opt-out (§7.2).
 
 ## 7. Decisions still open
+0. (Open follow-up, decided 2026-09-30) Staging runs with `WorkerReservedConcurrency=0` until the account's applied Lambda concurrency limit permits reserving 1; then restore 1 and verify.
 1. D1 AWS account (Paid plan), D9 alarm recipients, D12 break-glass custodian.
 2. Explicit ledger opt-out: when no ledger is configured, require `FINANCIAL_OS_DELETION_LEDGER=disabled` (refused in production). Recommended before any production ledger exists; not applied yet because the next deployment would make staging open-banking claims fail until the variable is set.
 3. Enabling IAM auth / the app's journal writer: add `aws4` and `@vercel/oidc` (pinned) — only when erasure or password-less ledger access is scheduled.
