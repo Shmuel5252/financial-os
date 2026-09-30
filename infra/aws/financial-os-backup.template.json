@@ -17,6 +17,7 @@
     "ScheduleTimezone": { "Type": "String", "Default": "Asia/Jerusalem" },
     "VpcCidr": { "Type": "String", "Default": "10.40.0.0/24" },
     "MonthlyBudgetUsd": { "Type": "Number", "Default": 100 },
+    "WorkerReservedConcurrency": { "Type": "Number", "AllowedValues": [0, 1], "Default": 1, "Description": "1 = at most one worker run at a time (design default). 0 = no reservation, only for a new account whose applied Lambda concurrency limit (e.g. 10) leaves no room to reserve; runs are idempotent (content-addressed write-once objects), so an overlap cannot corrupt evidence" },
     "VercelTeamSlug": { "Type": "String", "Default": "", "AllowedPattern": "^[a-z0-9-]{0,64}$", "Description": "Optional (IAM-auth preparation): Vercel team slug; empty = no Vercel OIDC trust. The Vercel project must use the Global OIDC issuer mode." },
     "VercelProjectName": { "Type": "String", "Default": "", "AllowedPattern": "^[a-z0-9._-]{0,100}$" },
     "VercelEnvironment": { "Type": "String", "Default": "production", "AllowedValues": ["production"], "Description": "Only production deployments may reach the ledger or write the journal; preview deployments never" }
@@ -25,6 +26,7 @@
     "UseKms": { "Fn::Equals": [{ "Ref": "UseKms" }, "true"] },
     "UseVpc": { "Fn::Equals": [{ "Ref": "EgressMode" }, "nat-gateway"] },
     "RequireStsMfa": { "Fn::Equals": [{ "Ref": "OperatorSignIn" }, "iam-user-mfa"] },
+    "ReserveWorkerConcurrency": { "Fn::Equals": [{ "Ref": "WorkerReservedConcurrency" }, 1] },
     "EnableVercelOidc": { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "VercelTeamSlug" }, ""] }] }
   },
   "Resources": {
@@ -117,7 +119,7 @@
         "FunctionName": { "Fn::Sub": "financial-os-${Environment}-backup-worker" },
         "Runtime": "nodejs22.x", "Handler": "index.handler", "Architectures": ["arm64"],
         "Code": { "S3Bucket": { "Ref": "WorkerCodeBucket" }, "S3Key": { "Ref": "WorkerCodeKey" } },
-        "Role": { "Fn::GetAtt": ["WorkerRole", "Arn"] }, "MemorySize": 1024, "Timeout": 600, "ReservedConcurrentExecutions": 1,
+        "Role": { "Fn::GetAtt": ["WorkerRole", "Arn"] }, "MemorySize": 1024, "Timeout": 600, "ReservedConcurrentExecutions": { "Fn::If": ["ReserveWorkerConcurrency", 1, { "Ref": "AWS::NoValue" }] },
         "VpcConfig": { "Fn::If": ["UseVpc", { "SubnetIds": [{ "Ref": "PrivateSubnet" }], "SecurityGroupIds": [{ "Ref": "WorkerSecurityGroup" }] }, { "Ref": "AWS::NoValue" }] },
         "Environment": { "Variables": {
           "FINANCIAL_OS_ENVIRONMENT": { "Ref": "Environment" },

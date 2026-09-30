@@ -58,7 +58,10 @@ describe("backup infrastructure template (runbook S3-S8)", () => {
     expect(statements.find(statement => actions(statement).includes("cloudwatch:PutMetricData"))?.Condition).toEqual({ StringEquals: { "cloudwatch:namespace": "FinancialOS/Backup" } });
     expect(statements.find(statement => actions(statement).includes("kms:Decrypt"))?.Condition).toEqual({ StringEquals: { "kms:ViaService": { "Fn::Sub": "ssm.${AWS::Region}.amazonaws.com" } } });
     const worker = resources.WorkerFunction!.Properties;
-    expect([worker.ReservedConcurrentExecutions, worker.Timeout]).toEqual([1, 600]);
+    expect(worker.Timeout).toBe(600);
+    // One run at a time by default; 0 only as an explicit choice for a new account with no room to reserve.
+    expect(worker.ReservedConcurrentExecutions).toEqual({ "Fn::If": ["ReserveWorkerConcurrency", 1, { Ref: "AWS::NoValue" }] });
+    expect(template.Parameters.WorkerReservedConcurrency).toMatchObject({ Default: 1, AllowedValues: [0, 1] });
     expect(Object.keys(worker.Environment.Variables).some(name => /KEY_V|URI|PASSWORD|SECRET/.test(name))).toBe(false);
   });
   it("requires MFA for the restore operator (read-only) and break-glass roles", () => {
