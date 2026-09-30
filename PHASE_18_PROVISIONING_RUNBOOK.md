@@ -148,6 +148,7 @@ Create the secrets of §2 in SSM and Vercel as shown; record escrow. Add the led
 - Rollback: `delete-parameter` / remove Vercel variables; generate new values (no package exists yet).
 
 ### S7 — Backup worker [OWNER deploys C1/C2]
+- Redeploying the worker: `powershell -ExecutionPolicy Bypass -File scripts\deploy-backup-worker.ps1 [-Invoke]` — fails fast at the first failed step (standard AWS CLI retries for transient connection/DNS errors) and invokes only after the live Lambda `CodeSha256` equals the uploaded build; verified locally against a fake CLI (endpoint unreachable, code mismatch: no invocation).
 1. `npm run workers:build`; zip `.build/backup-worker/index.mjs` as `index.mjs` and upload it to an artifact bucket; deploy the C1 template with `WorkerCodeBucket`/`WorkerCodeKey`. Lambda `nodejs22.x` arm64 (verify still supported), 1024 MB, timeout 10 minutes, **reserved concurrency 1**; `FINANCIAL_OS_CAPTURE_MAX_MS` 240 s (below the 300 s snapshot window).
 2. EventBridge Scheduler: D11 schedule in `Asia/Jerusalem`, retry policy (2 retries, 1-hour maximum age), SQS dead-letter queue.
 3. Order inside a run: `mirrorLedger` then `captureBackup` (the capture reads the ledger head before its snapshot).
