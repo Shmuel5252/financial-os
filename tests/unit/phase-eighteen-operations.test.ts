@@ -69,6 +69,23 @@ describe("Phase 18 operational safety", () => {
     const alive = liveness.GET(); expect(alive.status).toBe(200);
     expect(await alive.json()).toEqual({ service: "financial-os", status: "ok" });
   });
+  it("includes the configured deletion ledger in operator readiness, and nothing when none is configured", async () => {
+    const operator = "100000000000000000000001";
+    vi.stubEnv("OPERATIONS_OPERATOR_USER_IDS", operator); vi.stubEnv("FINANCIAL_OS_ENVIRONMENT", "staging");
+    vi.doMock("@/lib/auth/actor", () => ({ requireActor: async () => ({ kind: "user", userId: operator }) }));
+    vi.doMock("@/lib/db/mongodb", () => ({ getDatabase: async () => ({ command: async () => ({ ok: 1 }) }) }));
+    const ready = await (await import("@/app/api/ops/readiness/route")).GET();
+    expect(ready.status).toBe(200); expect(await ready.json()).toEqual({ status: "ready" });
+    vi.resetModules(); vi.stubEnv("FINANCIAL_OS_LEDGER_DATABASE", "deletion_ledger"); // partial configuration
+    const partial = await (await import("@/app/api/ops/readiness/route")).GET();
+    expect(partial.status).toBe(503); expect(await partial.json()).toEqual({ status: "unavailable" });
+    const { probeDeletionLedger } = await import("@/lib/operations/deletion-ledger-runtime");
+    const seen: string[] = [];
+    await probeDeletionLedger(async () => null);
+    await probeDeletionLedger(async () => ({ isProviderSubjectErased: async (alias: string) => { seen.push(alias); return false; } }) as never);
+    expect(seen).toEqual(["0".repeat(64)]);
+    await expect(probeDeletionLedger(async () => ({ isProviderSubjectErased: async () => { throw new Error("Deletion ledger unavailable"); } }) as never)).rejects.toThrow("unavailable");
+  });
   it("does not start a database probe after slow authentication exceeds the response budget", async () => {
     vi.useFakeTimers();
     const probe = vi.fn();

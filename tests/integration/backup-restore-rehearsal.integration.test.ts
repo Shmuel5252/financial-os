@@ -408,6 +408,15 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
     const configured = await load();
     await expect(configured.claimConfiguredOpenBankingSubject(newcomer, { provider, repository })).rejects.toBeInstanceOf(configured.ConflictError);
     expect(await claimDb.database.collection("bankProviderBindings").countDocuments()).toBe(0);
+    // Operator readiness runs the guard's own read on the real ledger (the S9 staging proof, with no provider call).
+    await expect((await import("@/lib/operations/deletion-ledger-runtime")).probeDeletionLedger()).resolves.toBeUndefined();
+    // An unreachable ledger fails closed on both paths, and nothing is bound.
+    vi.stubEnv("FINANCIAL_OS_LEDGER_MONGODB_URI", "mongodb://127.0.0.1:9/");
+    const unreachable = await load();
+    await expect(unreachable.claimConfiguredOpenBankingSubject(newcomer, { provider, repository })).rejects.toThrow("Deletion ledger unavailable");
+    await expect((await import("@/lib/operations/deletion-ledger-runtime")).probeDeletionLedger()).rejects.toThrow("Deletion ledger unavailable");
+    expect(await claimDb.database.collection("bankProviderBindings").countDocuments()).toBe(0);
+    vi.stubEnv("FINANCIAL_OS_LEDGER_MONGODB_URI", replica!);
     vi.stubEnv("FINANCIAL_OS_LEDGER_DATABASE", "");
     const partial = await load();
     await expect(partial.claimConfiguredOpenBankingSubject(newcomer, { provider, repository })).rejects.toBeInstanceOf(partial.ConfigurationError);

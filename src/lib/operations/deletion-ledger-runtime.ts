@@ -84,6 +84,13 @@ const renewBeforeMs = 5 * 60_000;
 
 /** The configured ledger store, or null when no ledger is configured (non-production only). IAM clients are replaced before
  * their credentials expire; the previous client is closed after a grace period so in-flight operations can finish. */
+/** Operator readiness: the claim guard's own ledger read (configuration, keyring, TLS connection, query) with a synthetic
+ * all-zero alias that no real subject digest equals — no provider call, no identifier. No ledger configured: nothing to check. */
+export async function probeDeletionLedger(get: () => Promise<DeletionReceiptStore | null> = getDeletionLedger): Promise<void> {
+  const ledger = await get();
+  if (ledger !== null) await ledger.isProviderSubjectErased("0".repeat(64));
+}
+
 export async function getDeletionLedger(runtime: LedgerRuntime = {}): Promise<DeletionReceiptStore | null> {
   const now = runtime.now ?? Date.now;
   if (current !== undefined && (current === null || now() < current.expiresAt)) return current?.store ?? null;
