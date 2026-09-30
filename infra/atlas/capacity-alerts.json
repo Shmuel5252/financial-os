@@ -1,5 +1,5 @@
 {
-  "description": "Intended Atlas alert conditions (Admin API v2 alertConfigs) for the primary and ledger clusters, plus which of them each tier can actually raise. Verified 2026-09-30 against the Atlas docs and a failed P4 run (UNSUPPORTED_MATCHER_FIELD): OUTSIDE_METRIC_THRESHOLD is a host alert (host matchers only, host metrics not collected on Free), so it must never be used for Free clusters - it would be accepted without a matcher yet never fire. A Free (M0) cluster raises only Logical Size, as OUTSIDE_SERVERLESS_METRIC_THRESHOLD, which accepts no matchers (project scope = the project's single cluster). Flex adds Connections, Network and Opcounter conditions (OUTSIDE_FLEX_METRIC_THRESHOLD, FLEX_* metric names) - not rendered until those names are verified. Rendered per cluster by scripts/atlas-alerts.mjs, which lists every intended alert its tier cannot raise.",
+  "description": "Intended Atlas alert conditions (Admin API v2 alertConfigs) for the primary and ledger clusters, and which a tier can actually raise. Established 2026-09-30 from live API responses, the official Admin API OpenAPI spec (mongodb/openapi v2.json) and the Atlas UI: a Free (M0) cluster has NO native metric alert. LOGICAL_SIZE exists only as a host metric (OUTSIDE_METRIC_THRESHOLD, host matchers only; refused with CLUSTER_NAME, and host metrics are not collected on Free); OUTSIDE_SERVERLESS_METRIC_THRESHOLD accepts only SERVERLESS_* series (refused LOGICAL_SIZE: METRIC_NAME_AND_EVENT_TYPE_MISMATCH) that belong to the Serverless product; OUTSIDE_FLEX_METRIC_THRESHOLD (FLEX_* series, CLUSTER_NAME matcher) applies to Flex clusters only, even though the generic UI lists it. Accepting any of these on M0 would be monitoring that never fires, so nothing is rendered for Free; every intended alert is listed as unavailable. Flex rendering is added only when a Flex cluster exists and its names are verified live.",
   "clusters": {
     "primary": {
       "logicalSizeMegabytes": 400
@@ -94,11 +94,9 @@
   ],
   "tiers": {
     "free": {
-      "eventTypeName": "OUTSIDE_SERVERLESS_METRIC_THRESHOLD",
+      "eventTypeName": null,
       "matchers": false,
-      "alerts": [
-        "logical-size-high"
-      ]
+      "alerts": []
     }
   }
 }

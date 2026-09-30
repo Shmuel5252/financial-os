@@ -1,6 +1,7 @@
 // Owner-run: renders infra/atlas/capacity-alerts.json into one Atlas alert-configuration file per alert that the cluster's tier can
 // actually raise, for `atlas alerts settings create --projectId <id> --file <file>`, and lists every intended alert the tier cannot
-// raise (never silently dropped). Needs no credentials and contacts nothing. Only verified tiers render (today: free).
+// raise (never silently dropped). Needs no credentials and contacts nothing. Only verified tiers render; a Free (M0) cluster has no
+// native metric alert (see the definition's description), so it renders none and lists all as unavailable.
 // Usage: node scripts/atlas-alerts.mjs --role ledger|primary --tier free --cluster <cluster name> --email <address> --out <directory>
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";

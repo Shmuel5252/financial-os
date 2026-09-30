@@ -129,26 +129,18 @@ describe("Atlas capacity and anomaly alert definitions (Free/Flex)", () => {
     expect(Number(byId("network-out-high").threshold) * 7 * 86_400).toBeLessThan(10 * 1024 ** 3); // 10 GB per rolling 7 days
     expect(byId("delete-ops-seen")).toMatchObject({ threshold: 0, only: "deleteOpsAlert" });
   });
-  it("renders only what a Free cluster can raise (Logical Size, serverless event, no matchers) and lists every alert it cannot", () => {
+  it("renders no alert for a Free cluster (no native metric alert exists) and lists every intended alert as unavailable", () => {
     const out = join(tmpdir(), `fos-alerts-${randomBytes(4).toString("hex")}`);
-    const read = (file: string) => JSON.parse(execFileSync(process.execPath, ["-e", `process.stdout.write(require("fs").readFileSync(${JSON.stringify(join(out, file))}, "utf8"))`], { encoding: "utf8" }));
     try {
       const run = (role: string, tier = "free") => execFileSync(process.execPath, ["scripts/atlas-alerts.mjs", "--role", role, "--tier", tier, "--cluster", `${role}-staging`, "--email", "owner@example.invalid", "--out", out], { encoding: "utf8" });
       const ledger = run("ledger"); const primary = run("primary");
-      expect(ledger).toContain("wrote 1 alert files"); expect(primary).toContain("wrote 1 alert files");
-      // Nothing intended is dropped silently: every alert a Free cluster cannot raise is named.
-      const unavailable = (output: string) => output.split("\n").find(line => line.startsWith("not available on free: "))!.slice("not available on free: ".length).split(", ");
-      expect(unavailable(ledger).sort()).toEqual(atlasAlerts.alerts.map((alert: Alert) => alert.id).filter((id: string) => id !== "logical-size-high").sort());
+      expect(ledger).toContain("wrote 0 alert files"); expect(primary).toContain("wrote 0 alert files");
+      const unavailable = (output: string) => output.split(/\r?\n/).find(line => line.startsWith("not available on free: "))!.slice("not available on free: ".length).split(", ");
+      expect(unavailable(ledger).sort()).toEqual(atlasAlerts.alerts.map((alert: Alert) => alert.id).sort()); // nothing dropped silently
       expect(unavailable(primary)).not.toContain("delete-ops-seen");
-      for (const [role, megabytes] of [["primary", 400], ["ledger", 100]] as const) {
-        const size = read(`${role}-logical-size-high.json`);
-        expect(size).toEqual({ eventTypeName: "OUTSIDE_SERVERLESS_METRIC_THRESHOLD", enabled: true,
-          metricThreshold: { metricName: "LOGICAL_SIZE", operator: "GREATER_THAN", units: "MEGABYTES", mode: "AVERAGE", threshold: megabytes },
-          notifications: [{ typeName: "EMAIL", emailAddress: "owner@example.invalid", intervalMin: 60, delayMin: 0 }] });
-        expect(size).not.toHaveProperty("matchers"); // the serverless event type accepts no matchers
-      }
-      // Never the host-metric event type for a Free cluster: accepted without a matcher, it would never fire.
-      expect(JSON.stringify(atlasAlerts.tiers)).not.toContain("OUTSIDE_METRIC_THRESHOLD\"");
+      expect(execFileSync(process.execPath, ["-e", `process.stdout.write(String(require("fs").existsSync(${JSON.stringify(out)}) ? require("fs").readdirSync(${JSON.stringify(out)}).length : 0))`], { encoding: "utf8" })).toBe("0");
+      // Never an event type that would be accepted on M0 yet never fire.
+      expect(atlasAlerts.tiers.free).toEqual({ eventTypeName: null, matchers: false, alerts: [] });
       for (const bad of [["--role", "other", "--tier", "free"], ["--role", "ledger", "--tier", "flex"], ["--role", "ledger", "--tier", "dedicated"], ["--role", "ledger"]]) {
         expect(() => execFileSync(process.execPath, ["scripts/atlas-alerts.mjs", ...bad, "--cluster", "x", "--email", "a@b.c", "--out", out], { stdio: "pipe" })).toThrow();
       }

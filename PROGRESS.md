@@ -2,7 +2,7 @@
 
 ## Phase 18 P3 PASS; P4 needs an owner decision — 2026-09-30
 
-The primary M0 supports consistent snapshot capture across its 40 collections. Atlas Free clusters can alert only on Logical Size; the other intended capacity alerts need Flex or compensating signals (owner decision). Alert generator fixed to never emit alerts that cannot fire.
+The primary M0 supports consistent snapshot capture across its 40 collections. Atlas Free (M0) clusters have no native metric alert at all (verified against the live API, the official OpenAPI spec and the UI); capacity early warning needs compensating signals or Flex (owner decision A/B/C). Alert generator fixed to never emit alerts that cannot fire.
 
 ## Phase 18 P2 — ledger bootstrap and least privilege PASS — 2026-09-30
 
