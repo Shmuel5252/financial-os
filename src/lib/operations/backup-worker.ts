@@ -21,12 +21,20 @@ export type BackupWorkerInput = Readonly<{
   environment: LedgerEnvironment; appDatabase: string; ledgerDatabase: string; indexManifestDigest: string;
   connect: (uri: string) => Promise<MongoClient>;
   store: BackupObjectStore;
-  /** Emitted only after both objects are stored; `ledgerHead` is the mirrored head (an independent lower bound for rebuilds). */
-  recordSuccess: (result: Readonly<{ ledgerHead: number }>) => Promise<void>;
+  /** Emitted only after both objects are stored; `ledgerHead` is the mirrored head (an independent lower bound for rebuilds). The
+   * logical sizes (data + indexes, from dbStats) are the M0 capacity early warning: Atlas Free has no native metric alert. */
+  recordSuccess: (result: BackupWorkerSignals) => Promise<void>;
   now: () => number; maxDurationMs: number;
 }>;
 
+export type BackupWorkerSignals = Readonly<{ ledgerHead: number; primaryLogicalBytes: number; ledgerLogicalBytes: number }>;
 const fail = (reason: string): never => { throw new Error(`Backup worker failed closed: ${reason}`); };
+/** Data + index size, as Atlas counts against the Free tier's storage limit. Needs only `read` (dbStats). */
+async function logicalBytes(client: MongoClient, database: string): Promise<number> {
+  const stats = await client.db(database).stats();
+  const total = Number(stats.dataSize) + Number(stats.indexSize);
+  return Number.isFinite(total) && total >= 0 ? total : fail("database statistics");
+}
 
 export async function runBackupWorker(input: BackupWorkerInput) {
   if (!/^[a-f0-9]{64}$/.test(input.indexManifestDigest) || !/^[A-Za-z0-9_-]{1,63}$/.test(input.appDatabase)
@@ -51,7 +59,9 @@ export async function runBackupWorker(input: BackupWorkerInput) {
     const capture = await captureBackup({ client: appClient, databaseName: input.appDatabase, schemas: initialRecoverySchemas,
       indexManifestDigest: input.indexManifestDigest, key: packageKeys.active, ledgerHead: async () => (await ledger.snapshot()).head,
       store: input.store, now: input.now, maxDurationMs: input.maxDurationMs });
-    await input.recordSuccess({ ledgerHead: mirror.head });
+    // Measured after the backup is stored; a failure here withholds the success signal (the missing-backup alarm then fires).
+    const [primaryLogicalBytes, ledgerLogicalBytes] = [await logicalBytes(appClient, input.appDatabase), await logicalBytes(ledgerClient, input.ledgerDatabase)];
+    await input.recordSuccess({ ledgerHead: mirror.head, primaryLogicalBytes, ledgerLogicalBytes });
     return { package: capture.name, atClusterTime: capture.atClusterTime, ledgerHead: capture.ledgerHead, mirror: mirror.name } as const;
   } finally { await Promise.all(clients.map(client => client.close().catch(() => undefined))); }
 }

@@ -4,7 +4,7 @@
  */
 import { MongoClient } from "mongodb";
 import type { LedgerEnvironment } from "@/lib/operations/deletion-ledger";
-import { runBackupWorker } from "@/lib/operations/backup-worker";
+import { runBackupWorker, type BackupWorkerSignals } from "@/lib/operations/backup-worker";
 import { s3ObjectStore, type S3Client } from "@/lib/operations/object-stores";
 
 declare const __INDEX_MANIFEST_DIGEST__: string;
@@ -38,6 +38,17 @@ export function mapParameters(prefix: string, parameters: readonly Readonly<{ Na
   return secrets;
 }
 
+/** CloudWatch metrics for one successful run (namespace FinancialOS/Backup, dimension Environment). */
+export function backupMetrics(environment: string, signals: BackupWorkerSignals) {
+  const dimensions = [{ Name: "Environment", Value: environment }];
+  return [
+    { MetricName: "BackupSucceeded", Value: 1, Unit: "Count", Dimensions: dimensions },
+    { MetricName: "LedgerHead", Value: signals.ledgerHead, Unit: "None", Dimensions: dimensions },
+    { MetricName: "PrimaryLogicalSizeBytes", Value: signals.primaryLogicalBytes, Unit: "Bytes", Dimensions: dimensions },
+    { MetricName: "LedgerLogicalSizeBytes", Value: signals.ledgerLogicalBytes, Unit: "Bytes", Dimensions: dimensions },
+  ];
+}
+
 export async function handler() {
   const region = env("AWS_REGION"); const prefix = env("FINANCIAL_OS_SSM_PREFIX"); const bucket = env("FINANCIAL_OS_BACKUP_BUCKET");
   const environment = env("FINANCIAL_OS_ENVIRONMENT");
@@ -69,8 +80,7 @@ export async function handler() {
   return runBackupWorker({ secrets: mapParameters(prefix, parameters), environment: environment as LedgerEnvironment,
     appDatabase: env("FINANCIAL_OS_APP_DATABASE"), ledgerDatabase: env("FINANCIAL_OS_LEDGER_DATABASE"), indexManifestDigest: __INDEX_MANIFEST_DIGEST__,
     connect: uri => new MongoClient(uri, { serverSelectionTimeoutMS: 10_000 }).connect(), store: s3ObjectStore(store),
-    recordSuccess: async ({ ledgerHead }) => { await metrics.send(command(cloudwatch, "PutMetricDataCommand", { Namespace: "FinancialOS/Backup",
-      MetricData: [{ MetricName: "BackupSucceeded", Value: 1, Unit: "Count", Dimensions: [{ Name: "Environment", Value: environment }] },
-        { MetricName: "LedgerHead", Value: ledgerHead, Unit: "None", Dimensions: [{ Name: "Environment", Value: environment }] }] })); },
+    recordSuccess: async signals => { await metrics.send(command(cloudwatch, "PutMetricDataCommand", { Namespace: "FinancialOS/Backup",
+      MetricData: backupMetrics(environment, signals) })); },
     now: () => Date.now(), maxDurationMs: Number(process.env.FINANCIAL_OS_CAPTURE_MAX_MS ?? 240_000) });
 }

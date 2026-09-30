@@ -328,12 +328,16 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
         connect: async uri => { const client = await new MongoClient(uri).connect(); opened.push(client); return client; },
         store, recordSuccess, now: () => Date.now(), maxDurationMs: 60_000, ...overrides });
       const first = await worker();
-      expect(first).toMatchObject({ ledgerHead: 0 }); expect(recordSuccess).toHaveBeenCalledTimes(1); expect(recordSuccess).toHaveBeenCalledWith({ ledgerHead: 0 });
+      expect(first).toMatchObject({ ledgerHead: 0 }); expect(recordSuccess).toHaveBeenCalledTimes(1); expect(recordSuccess).toHaveBeenCalledWith({ ledgerHead: 0, primaryLogicalBytes: expect.any(Number), ledgerLogicalBytes: expect.any(Number) });
+      // M0 capacity early warning: data + index sizes measured read-only from both clusters (the app database holds synthetic data).
+      const [{ primaryLogicalBytes, ledgerLogicalBytes }] = recordSuccess.mock.calls[0] as unknown as [{ primaryLogicalBytes: number; ledgerLogicalBytes: number }];
+      const appStats = await w.app.database.stats(); expect(primaryLogicalBytes).toBe(appStats.dataSize + appStats.indexSize); expect(primaryLogicalBytes).toBeGreaterThan(0);
+      const ledgerStats = await w.ledgerDb.database.stats(); expect(ledgerLogicalBytes).toBe(ledgerStats.dataSize + ledgerStats.indexSize);
       expect([await store.list("packages/"), await store.list("ledger-mirror/")]).toEqual([[first.package], [first.mirror]]);
       // Every client the worker opened is closed again.
       await expect(opened[0]!.db("admin").command({ ping: 1 })).rejects.toThrow();
       // The owner is erased after the newest capture: the drill restores that package without them and the fence passes.
-      await w.erase(w.actors[0]!); const second = await worker(); expect(second.ledgerHead).toBe(2); expect(recordSuccess).toHaveBeenLastCalledWith({ ledgerHead: 2 });
+      await w.erase(w.actors[0]!); const second = await worker(); expect(second.ledgerHead).toBe(2); expect(recordSuccess).toHaveBeenLastCalledWith(expect.objectContaining({ ledgerHead: 2 }));
       await w.erase(w.actors[1]!, false).catch(() => undefined); // suppressed but unverified: the ledger is now ahead of every package (head 3)
       const drill = await runRestoreDrill({ ...w.ledgerInput(), mirror: store, store, targetUri: replica!, packageKey, indexManifestDigest: digest });
       expect(drill).toMatchObject({ package: second.package, ledgerHead: 3, releaseAllowed: false,
@@ -370,6 +374,13 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
       await expect(worker()).rejects.toThrow("Backup capture failed closed");
       await w.app.database.collection("unreviewedCollection").drop();
       expect(await store.list("packages/")).toEqual(packagesBefore);
+      expect(recordSuccess).not.toHaveBeenCalled();
+      // A statistics failure after the backup is stored withholds the success signal (the missing-backup alarm then fires); the backup stays.
+      const statsDown = async (uri: string) => { const client = await new MongoClient(uri).connect(); const original = client.db.bind(client);
+        return Object.assign(client, { db: (name: string) => Object.assign(Object.create(original(name)), { stats: async () => { throw new Error("synthetic stats outage"); } }) }); };
+      const packagesBeforeStats = (await store.list("packages/")).length;
+      await expect(worker({ connect: statsDown })).rejects.toThrow("synthetic stats outage");
+      expect((await store.list("packages/")).length).toBe(packagesBeforeStats + 1);
       expect(recordSuccess).not.toHaveBeenCalled();
     } finally { await rm(root, { recursive: true, force: true }); }
   }, 120_000);

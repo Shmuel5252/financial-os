@@ -1,5 +1,9 @@
 # Financial OS Progress
 
+## Phase 18 P4 closed (decision A) — 2026-09-30
+
+M0 capacity early warning via the backup worker: data-size metrics for both clusters with CloudWatch alarms at 400 MB / 100 MB; ops/s, connections and app network by weekly chart review. $0.
+
 ## Phase 18 P3 PASS; P4 needs an owner decision — 2026-09-30
 
 The primary M0 supports consistent snapshot capture across its 40 collections. Atlas Free (M0) clusters have no native metric alert at all (verified against the live API, the official OpenAPI spec and the UI); capacity early warning needs compensating signals or Flex (owner decision A/B/C). Alert generator fixed to never emit alerts that cannot fire.

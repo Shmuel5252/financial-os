@@ -170,6 +170,20 @@
         "ComparisonOperator": "LessThanThreshold", "TreatMissingData": "breaching", "AlarmActions": [{ "Ref": "AlarmTopic" }], "OKActions": [{ "Ref": "AlarmTopic" }]
       }
     },
+    "PrimaryLogicalSizeAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": { "AlarmDescription": "Primary data + indexes above 400 MB of the Atlas Free 512 MB limit (M0 has no native metric alert)",
+        "Namespace": "FinancialOS/Backup", "MetricName": "PrimaryLogicalSizeBytes", "Dimensions": [{ "Name": "Environment", "Value": { "Ref": "Environment" } }],
+        "Statistic": "Maximum", "Period": 86400, "EvaluationPeriods": 1, "Threshold": 419430400, "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching", "AlarmActions": [{ "Ref": "AlarmTopic" }] }
+    },
+    "LedgerLogicalSizeAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": { "AlarmDescription": "Ledger data + indexes above 100 MB (the ledger holds only minimal receipts; growth is an anomaly)",
+        "Namespace": "FinancialOS/Backup", "MetricName": "LedgerLogicalSizeBytes", "Dimensions": [{ "Name": "Environment", "Value": { "Ref": "Environment" } }],
+        "Statistic": "Maximum", "Period": 86400, "EvaluationPeriods": 1, "Threshold": 104857600, "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching", "AlarmActions": [{ "Ref": "AlarmTopic" }] }
+    },
     "WorkerErrorsAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": { "AlarmDescription": "Backup worker invocation failed", "Namespace": "AWS/Lambda", "MetricName": "Errors",

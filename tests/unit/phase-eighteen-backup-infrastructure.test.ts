@@ -8,7 +8,7 @@ import { ConfigurationError } from "@/lib/errors/application-error";
 import { assumeRoleWithWebIdentity, deletionLedgerConfig, getDeletionLedger, resetDeletionLedger } from "@/lib/operations/deletion-ledger-runtime";
 import { MongoClient } from "mongodb";
 import { directoryObjectStore, listedDirectoryObjectStore, s3ObjectStore, type S3Client } from "@/lib/operations/object-stores";
-import { mapParameters } from "../../workers/backup/index";
+import { backupMetrics, mapParameters } from "../../workers/backup/index";
 import template from "../../infra/aws/financial-os-backup.template.json";
 import atlasAlerts from "../../infra/atlas/capacity-alerts.json";
 
@@ -71,6 +71,24 @@ describe("backup infrastructure template (runbook S3-S8)", () => {
     // (Fn::If statements carry the optional KMS grant and have no Effect at the top level.)
     const operator = statementsOf(resources.RestoreOperatorRole!.Properties.Policies[0].PolicyDocument).filter(statement => statement.Effect !== undefined).flatMap(actions);
     expect(operator.filter(action => action.startsWith("s3:")).sort()).toEqual(["s3:GetObject", "s3:ListBucket"]);
+  });
+  it("publishes the M0 capacity signals and alarms on them against the Free 512 MB limit, within the free metric allowance", () => {
+    expect(backupMetrics("staging", { ledgerHead: 7, primaryLogicalBytes: 1000, ledgerLogicalBytes: 20 })).toEqual([
+      { MetricName: "BackupSucceeded", Value: 1, Unit: "Count", Dimensions: [{ Name: "Environment", Value: "staging" }] },
+      { MetricName: "LedgerHead", Value: 7, Unit: "None", Dimensions: [{ Name: "Environment", Value: "staging" }] },
+      { MetricName: "PrimaryLogicalSizeBytes", Value: 1000, Unit: "Bytes", Dimensions: [{ Name: "Environment", Value: "staging" }] },
+      { MetricName: "LedgerLogicalSizeBytes", Value: 20, Unit: "Bytes", Dimensions: [{ Name: "Environment", Value: "staging" }] }]);
+    const megabyte = 1024 * 1024;
+    for (const [name, metric, megabytes] of [["PrimaryLogicalSizeAlarm", "PrimaryLogicalSizeBytes", 400], ["LedgerLogicalSizeAlarm", "LedgerLogicalSizeBytes", 100]] as const) {
+      expect(resources[name]!.Properties).toMatchObject({ Namespace: "FinancialOS/Backup", MetricName: metric, Statistic: "Maximum",
+        Threshold: megabytes * megabyte, ComparisonOperator: "GreaterThanThreshold", AlarmActions: [{ Ref: "AlarmTopic" }] });
+      expect(resources[name]!.Properties.Threshold).toBeLessThan(512 * megabyte);
+    }
+    // Same thresholds as the intended Atlas Logical Size alerts that M0 cannot raise natively.
+    expect([atlasAlerts.clusters.primary.logicalSizeMegabytes, atlasAlerts.clusters.ledger.logicalSizeMegabytes]).toEqual([400, 100]);
+    const alarms = Object.values(resources).filter(resource => resource.Type === "AWS::CloudWatch::Alarm");
+    expect(alarms.length).toBeLessThanOrEqual(10); // CloudWatch free tier: 10 alarms
+    expect(new Set(backupMetrics("staging", { ledgerHead: 0, primaryLogicalBytes: 0, ledgerLogicalBytes: 0 }).map(item => item.MetricName)).size).toBeLessThanOrEqual(10); // 10 free custom metrics
   });
   it("alarms on a missing daily success as breaching, on errors, dead letters and long runs, and on break-glass use", () => {
     const missing = resources.MissingBackupAlarm!.Properties;

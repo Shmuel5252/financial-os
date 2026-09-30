@@ -156,7 +156,7 @@ Create the secrets of §2 in SSM and Vercel as shown; record escrow. Add the led
 - `FinancialOS/Backup` success metric: alarm when **no data for 26 hours** (missing data = breaching) → SNS → D9.
 - Lambda `Errors` > 0, dead-letter queue depth > 0, duration > 80 % of timeout → SNS.
 - Break-glass assumption and any `DeleteObjectVersion`/`BypassGovernanceRetention` CloudTrail event → SNS.
-- Budget alert; capacity early warning per the decision sheet §5a (no native Atlas metric alert on M0).
+- Budget alert; M0 capacity early warning (decision sheet §5a, option A): `PrimaryLogicalSizeBytes` > 400 MB and `LedgerLogicalSizeBytes` > 100 MB alarms (worker `dbStats` after each backup); weekly owner review of the Atlas M0 metrics charts (Connections, Network, Opcounters) against the §5 triggers.
 - Verify: temporarily disable the schedule → missing-data alarm fires within the window; force an error (wrong parameter name in a test alias) → error alarm; re-enable.
 - Rollback: delete alarms/topic.
 
