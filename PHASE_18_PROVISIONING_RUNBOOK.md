@@ -156,6 +156,7 @@ Create the secrets of §2 in SSM and Vercel as shown; record escrow. Add the led
 - Rollback: disable the schedule; delete the function (objects stay until retention ends, as designed).
 
 ### S8 — Monitoring and alarms [OWNER, template from C1]
+- Evidence (read-only, also the S10 daily check): `powershell -ExecutionPolicy Bypass -File scriptserify-backup-stack.ps1` — worker code/concurrency and the account limit, schedule, every object's encryption and retention, `FinancialOS/Backup` metrics, alarm states and recent transitions, alert subscriptions and rules, the trail's event selectors (the bucket-change rule needs S3 data events on the bucket, decision sheet R7) and dead-letter depth. Calls only describe/get/list verbs; prints no secret or e-mail address.
 - `FinancialOS/Backup` success metric: alarm when **no data for 26 hours** (missing data = breaching) → SNS → D9.
 - Lambda `Errors` > 0, dead-letter queue depth > 0, duration > 80 % of timeout → SNS.
 - Break-glass assumption and any `DeleteObjectVersion`/`BypassGovernanceRetention` CloudTrail event → SNS.
