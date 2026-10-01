@@ -1,0 +1,66 @@
+name: CodeQL
+
+# Phase 18 row 18-16: dedicated SAST. JavaScript/TypeScript with the security-extended query suite; results go to code
+# scanning, and a data-free summary (rule, severity, file:line) is published as one check-run annotation so the evidence
+# is readable without repository settings access. Actions are pinned to immutable commit SHAs.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:javascript-typescript
+          output: codeql-sarif
+
+      - name: Publish a data-free result summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, json
+          rows = []
+          for path in glob.glob("codeql-sarif/*.sarif"):
+              for run in json.load(open(path))["runs"]:
+                  rules = {}
+                  for component in [run["tool"]["driver"]] + run["tool"].get("extensions", []):
+                      for rule in component.get("rules", []):
+                          rules[rule["id"]] = rule
+                  for result in run.get("results", []):
+                      rule = rules.get(result.get("ruleId"), {})
+                      severity = rule.get("properties", {}).get("security-severity", "-")
+                      location = result["locations"][0]["physicalLocation"]
+                      rows.append(f'{result.get("ruleId")} | {result.get("level", "warning")} | security-severity {severity} | '
+                                  f'{location["artifactLocation"]["uri"]}:{location.get("region", {}).get("startLine", 0)}')
+          if not glob.glob("codeql-sarif/*.sarif"):
+              print("::warning title=CodeQL summary::no SARIF produced - the analysis did not complete")
+          else:
+              text = f"CodeQL security-extended: {len(rows)} result(s)" + "".join("%0A" + row for row in sorted(rows))
+              print(f"::notice title=CodeQL summary::{text}")
+          PY
