@@ -45,22 +45,31 @@ jobs:
         run: |
           python3 - <<'PY'
           import glob, json
-          rows = []
+          escape = lambda s: str(s).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          rows, extracted = [], set()
           for path in glob.glob("codeql-sarif/*.sarif"):
-              for run in json.load(open(path))["runs"]:
+              for run in json.load(open(path)).get("runs", []):
+                  tool = run.get("tool", {})
                   rules = {}
-                  for component in [run["tool"]["driver"]] + run["tool"].get("extensions", []):
+                  for component in [tool.get("driver", {})] + tool.get("extensions", []):
                       for rule in component.get("rules", []):
-                          rules[rule["id"]] = rule
+                          rules[rule.get("id")] = rule
+                  # Files the extractor reports as successfully extracted: evidence that real source was analysed.
+                  for invocation in run.get("invocations", []):
+                      for note in invocation.get("toolExecutionNotifications", []):
+                          if note.get("descriptor", {}).get("id", "").endswith("successfully-extracted-files"):
+                              for location in note.get("locations", []):
+                                  extracted.add(location.get("physicalLocation", {}).get("artifactLocation", {}).get("uri"))
                   for result in run.get("results", []):
                       rule = rules.get(result.get("ruleId"), {})
                       severity = rule.get("properties", {}).get("security-severity", "-")
-                      location = result["locations"][0]["physicalLocation"]
-                      rows.append(f'{result.get("ruleId")} | {result.get("level", "warning")} | security-severity {severity} | '
-                                  f'{location["artifactLocation"]["uri"]}:{location.get("region", {}).get("startLine", 0)}')
+                      location = (result.get("locations") or [{}])[0].get("physicalLocation", {})
+                      where = f'{location.get("artifactLocation", {}).get("uri", "?")}:{location.get("region", {}).get("startLine", 0)}'
+                      rows.append(escape(f'{result.get("ruleId")} | {result.get("level", "warning")} | security-severity {severity} | {where}'))
           if not glob.glob("codeql-sarif/*.sarif"):
               print("::warning title=CodeQL summary::no SARIF produced - the analysis did not complete")
           else:
-              text = f"CodeQL security-extended: {len(rows)} result(s)" + "".join("%0A" + row for row in sorted(rows))
+              count = len(extracted - {None}) if extracted else "not reported"
+              text = f"CodeQL security-extended: {len(rows)} result(s); extracted files: {count}" + "".join("%0A" + row for row in sorted(rows))
               print(f"::notice title=CodeQL summary::{text}")
           PY
