@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { emissionSites, operatorOutputs as scannedOutputs } from "../security/emission-sites";
+import { emissionSites, operatorFileDigests } from "../security/emission-sites";
 import { files, liveTestIds } from "../security/live-test-ids";
-import { operatorOutputs, operatorPowerShell, sinkMatrix } from "../security/logging-sink-matrix";
+import { operatorFiles, operatorPowerShell, sinkMatrix } from "../security/logging-sink-matrix";
 
 // Phase 18 rows 18-07/18-20: every emission point (console.*, process stdout/stderr/emitWarning, telemetry .emit(), logger/debug/
 // logging configuration keys) in src/, workers/, scripts/ and next.config is classified exactly once, with a live sentinel test.
@@ -26,8 +26,8 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
     expect(Object.fromEntries([...emissionSites()].sort())).toEqual(Object.fromEntries([...classified].sort()));
   }, 30_000);
 
-  it("pins exactly what operator-run code prints (workers' CLIs and scripts)", () => {
-    expect(scannedOutputs()).toEqual(operatorOutputs);
+  it("pins every operator-run file (scripts/, workers/*/cli.ts): any change to what an operator terminal can print needs re-review", () => {
+    expect(operatorFileDigests()).toEqual(operatorFiles);
   }, 30_000);
 
   it("lists every PowerShell operator script", () => {

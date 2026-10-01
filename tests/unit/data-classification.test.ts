@@ -4,8 +4,9 @@ import type { ZodType } from "zod";
 import { sectionCollections } from "@/lib/onboarding/manual-record-repository";
 import { manualSectionDomainSchemas } from "@/lib/onboarding/manual-record";
 import { uncoveredPaths } from "../security/classification-coverage";
-import { discoverCollections, retentionSites, typedCollectionFields } from "../security/collection-discovery";
-import { authAdapterVersions, dataClassification, rawSecretsAtRest, retentionMechanisms, templateRetention, unresolvedCollectionSites } from "../security/data-classification";
+import { discoverCollections, retentionSites, typedCollectionFields, undeclaredWrites } from "../security/collection-discovery";
+import { authAdapterVersions, dataClassification, rawSecretsAtRest, retentionMechanisms, subtreeShapes, templateRetention, unresolvedCollectionSites } from "../security/data-classification";
+import { subtreeShapeDigests } from "../security/subtree-shapes";
 
 // Phase 18 rows 18-07/18-20 (repository portion): the classification in tests/security/data-classification.ts must describe exactly
 // what the code stores today. New collections, fields, raw secrets, TTL indexes or hard-delete paths fail here until classified.
@@ -27,9 +28,9 @@ function zodKeys(schema: ZodType): Set<string> {
 describe("data classification inventory (18-07/18-20)", () => {
   const typed = typedCollectionFields();
 
-  it("classifies exactly every governed collection, and every collection the type checker can resolve", () => {
+  it("classifies exactly every governed collection, and every collection name the type checker can resolve (typed or not)", () => {
     expect(Object.keys(dataClassification).sort()).toEqual([...discoverCollections()].sort());
-    for (const name of typed.trees.keys()) expect(name in dataClassification, `${name}: typed collection is not classified`).toBe(true);
+    for (const name of typed.names) expect(name in dataClassification, `${name}: collection opened in code is not classified`).toBe(true);
   }, 120_000);
 
   it("explains every .collection(name) call whose name is not a single string literal", () => {
@@ -58,6 +59,14 @@ describe("data classification inventory (18-07/18-20)", () => {
       const tree = entry.fieldSource === "manual-section" ? new Map([...typed.manualTree, ...(typed.trees.get(name) ?? [])]) : typed.trees.get(name)!;
       expect(uncoveredPaths(tree, Object.keys(entry.fields)), `${name}: unclassified nested fields`).toEqual([]);
     }
+  });
+
+  it("writes no literal field that the collection's document type does not declare (insert/update/replace on Collection<T>)", () => {
+    expect(undeclaredWrites()).toEqual([]);
+  }, 120_000);
+
+  it("pins the shape of every subtree that one row classifies as a whole (a new nested field below it fails until re-reviewed)", () => {
+    expect(subtreeShapeDigests(typed.trees, typed.manualTree)).toEqual(subtreeShapes);
   });
 
   it("pins the Auth.js versions whose adapter writes the auth collections (an upgrade needs a field re-review)", () => {

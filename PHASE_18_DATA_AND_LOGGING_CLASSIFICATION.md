@@ -1,6 +1,6 @@
 # Phase 18 rows 18-07 and 18-20: data classification, retention inventory and logging/telemetry sinks (repository portion)
 
-Status: **repository portion built 2026-10-01, reviewed and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
+Status: **repository portion built 2026-10-01, reviewed, re-reviewed and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
 today. It adopts no retention period, access role or deletion mechanism; the recommendations live separately in
 `PHASE_18_RETENTION_DRAFT.md` (**DRAFT / NOT ADOPTED**). No runtime code, TTL index, deletion job, logging behaviour, application data
 or infrastructure was changed in this item.
@@ -9,16 +9,19 @@ or infrastructure was changed in this item.
 
 | Artifact | What it holds | CI test |
 | --- | --- | --- |
-| `tests/security/data-classification.ts` | 55 collections, 1,141 field rows (class, personal-data level, transform, note), current retention with `file:line`, raw secrets at rest, retention-mechanism inventory, template retention, data stores outside MongoDB, the explained non-literal collection calls, pinned Auth.js adapter versions, out-of-scope list | `tests/unit/data-classification.test.ts` (10 tests) |
-| `tests/security/logging-sink-matrix.ts` | 9 entries (8 log/telemetry sinks + 1 classified non-log external I/O) covering every emission point and SDK call, per-field treatment, pinned operator output, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (6 tests) |
+| `tests/security/data-classification.ts` | 55 collections, 1,189 field rows (class, personal-data level, transform, note), current retention with `file:line`, raw secrets at rest, retention-mechanism inventory, template retention, data stores outside MongoDB, the explained non-literal collection calls, pinned Auth.js adapter versions, 50 pinned subtree shapes, out-of-scope list | `tests/unit/data-classification.test.ts` (12 tests) |
+| `tests/security/logging-sink-matrix.ts` | 13 entries (8 log/telemetry sinks + 5 classified non-log egress/I/O entries) covering all 56 emission-site keys (83 occurrences), per-field treatment, 16 pinned operator-run files, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (6 tests) |
 | `tests/unit/logging-sentinels.test.ts` (11), `tests/integration/logging-sentinels.integration.test.ts` (1), `[log-…]` tests in the recovery suites (2) | sentinel tests per sink, plus a self-test of the capture and matcher | run in `npm test` |
 
 CI fails when:
-- **Collections.** A collection appears or disappears. Discovery is AST-based (literals, `as const` names, manual-section/auth/ledger maps) over `src/` and `workers/`. Additionally:
-  - any collection the type checker resolves from a `.collection<T>(name)` call must be classified;
-  - every `.collection(name)` call whose name is not a single literal must be explained per file (14 today).
+- **Collections.** A collection appears or disappears. Discovery is AST-based (literals and the manual-section/auth/ledger maps) over `src/` and `workers/`. Additionally:
+  - every name the type checker resolves in a `.collection(name)` / `.createCollection(name)` call (typed or not, including `as const` and `const` names) must be classified;
+  - every such call whose name is not a single literal must be explained per file (15 today).
 - **Fields, top level.** A typed collection's top-level fields differ from its TypeScript document type(s).
-- **Fields, nested.** Once a row goes below a field, every child of that field in the type must be classified, recursively (e.g. a new `notifications.email.recipientEmail` fails).
+- **Fields, nested.** Two rules:
+  - once a row goes below a field, every child of that field in the type must be classified, recursively;
+  - every subtree that one row classifies as a whole has its exact shape pinned (50 pins), so any new nested field anywhere fails until it is re-reviewed.
+- **Fields written but not declared.** A literal field written through `insert*`/`update*`/`replace*` (`$set`, `$setOnInsert`, `$push`, …) on a typed `Collection<T>` does not exist in `T`. MongoDB's typings would accept it.
 - **Manual-section fields.** A manual section's `fields.*` keys differ from its zod domain schema.
 - **Auth.js versions.** The installed `@auth/mongodb-adapter`/`@auth/core` versions change: their adapter defines the auth collections.
 - **Pseudonymized identifiers.** Any of these fails:
@@ -27,30 +30,44 @@ CI fails when:
   - any value is described as "anonymous".
 - **Raw secrets.** A new raw secret field appears.
 - **Retention mechanisms.** Any of these appears without classification:
-  - a TTL index option (including computed keys);
-  - a hard-delete or replace call (`deleteOne`/`deleteMany`/`findOneAndDelete`/`drop*`/`bulkWrite`/`remove`/`replaceOne`/`findOneAndReplace`);
-  - an `$unset`;
-  - a `db.command` that drops or alters collections.
+  - a TTL index option;
+  - a hard-delete or replace call;
+  - a field-removal or rewrite key (`$unset`, `$pull`, `$pop`, `$rename`, `$replaceWith`, `$replaceRoot`);
+  - an aggregation-pipeline update;
+  - a `db.command` that drops or alters collections, or any non-literal `db.command`.
+
+  Computed keys are resolved through same-file constants. An unresolvable computed key inside a MongoDB call is itself a site.
 - **Backup template retention.** The backup template's lifecycle, Object Lock or log-group retention changes.
-- **Emission points.** Any emission point or SDK call is unclassified, stale or miscounted:
-  - `console.*`;
-  - any other use of `console` (aliasing, destructuring, `globalThis.console`, element access);
-  - any `process` member outside the inert set `env`/`argv`/`cwd`/`execPath`/`exit`/`exitCode`, and any aliasing of `process`;
-  - imports or requires of `node:console`/`node:process`, `util.debuglog`, `fs.writeSync`;
-  - `Console`, `sendBeacon`;
-  - telemetry `.emit()`;
+- **Emission points and egress.** Any of these is unclassified, stale or miscounted:
+  - `console.*`, and any other use of `console`;
+  - any use of `process` outside `env`/`argv`/`cwd`/`execPath`/`exit`/`exitCode`, including `globalThis.process`;
+  - the strings `"console"`/`"process"`/`"stdout"`/`"stderr"` anywhere;
+  - `globalThis`/`global`/`self`, and computed `window[…]`;
+  - import / export-from / require / `import()` (string or template) of `console`, `process`, `child_process`, network or worker modules, and of `util.debuglog` and the fs write functions; any computed import;
+  - sink APIs (`Console`, `debuglog`, fs write functions, `sendBeacon`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `eval`, `Function`);
+  - every fetch-like call whose URL is not a same-origin path literal;
   - AWS SDK command names and `@aws-sdk/*` modules;
+  - telemetry `.emit()`;
   - `logger`/`debug`/`logging` config keys in `src/`, `workers/`, `scripts/` and `next.config`.
-- **Operator output.** What operator-run code prints changes: the exact console arguments of the worker CLIs and `scripts/*.mjs` are pinned. Separately, an operator script prints env values, URIs, secrets or raw error messages.
-- **Sentinel tests.** A sink's sentinel test is not live. "Live" means a real `it`/`test` that asserts (directly or through a same-file helper) and is not `skip`/`todo`/`skipIf` or inside an `if`.
+- **Operator-run files.** Any file in `scripts/` (including PowerShell) or any `workers/*/cli.ts` changes: their SHA-256 is pinned, so a changed value behind an unchanged console call also fails. Separately, an operator script prints env values, URIs, secrets or raw error messages.
+- **Sentinel tests.** A sink's sentinel test is not live. "Live" means all of:
+  - a real `it`/`test` that calls an assertion (`expect…`), directly or through a same-file helper;
+  - it never calls `.skip()`;
+  - it is not placed conditionally (`if`, `switch`, loop, `&&`, ternary);
+  - it is not inside `describe.skip`/`todo` or a chained `describe.skipIf(…)(…)`/`runIf(…)(…)`.
 - **Dependencies and driver logging.** A logging or telemetry SDK is added, or MongoDB driver command logging is enabled in code.
 - **Auth.js logging.** Auth.js `debug` or the redacting logger changes.
+
+**Limits (stated, not hidden):**
+- **Syntactic enforcement.** These checks are syntactic and type-based regression guards against *accidental* logging, egress or unclassified storage. Code that deliberately evades them beyond the flagged primitives (eval, `Function`, computed imports, global objects, sink strings) remains a code-review and CodeQL concern.
+- **Writes the checks cannot see.** Writes to untyped (`Document`) collections, and writes whose keys are built at run time (spread or computed), are not checked against a type.
+- **Platform and provider side.** Logging and retention there is outside the repository (§2, out of scope).
 
 ## 2. Collection and field coverage
 
 The classification was produced by three independent read-only source traces and then reconciled against the type checker. The
-reconciliation is exact for every typed collection, at the top level and wherever a row goes deeper (nested coverage). The Auth.js adapter collections are checked as a superset of the app's typed views, with the adapter versions pinned.
-The independent review corrected 31 rows (see §7) and the nested check added 107 audit-trail rows.
+reconciliation is exact for every typed collection, at the top level and wherever a row goes deeper (nested coverage); every other subtree's shape is pinned. The Auth.js adapter collections are checked as a superset of the app's typed views, with the adapter versions pinned.
+The independent review corrected 31 rows (see §7). The nested check added 107 audit-trail rows, and the re-review added the open-banking `source.*` rows that `ManualRecordDocument` permits in all 10 manual sections (48 rows).
 
 Scope covered:
 - **Collections:** 55. They split into 44 app, 4 Auth.js, 1 operational (`rateLimits`), 2 deletion ledger (separate database), 3 offline-migration and 1 restore-target collection.
@@ -86,18 +103,18 @@ Field rows by personal-data level:
 | Level | Field rows |
 | --- | --- |
 | direct | 10 |
-| indirect | 500 |
-| pseudonymous | 31 |
-| none | 600 |
+| indirect | 508 |
+| pseudonymous | 47 |
+| none | 624 |
 
 Field rows by transform:
 
 | Transform | Field rows |
 | --- | --- |
-| raw | 907 |
+| raw | 931 |
 | derived | 105 |
-| sha256 | 80 |
-| hmac | 34 |
+| sha256 | 88 |
+| hmac | 50 |
 | truncated | 15 |
 
 Every financial value, amount, label, note, merchant text, AI text and identifier has a row.
@@ -179,7 +196,12 @@ OAuth tokens are **not** in backups: the backup keeps only `provider` and `provi
 
 ## 3. Logging and telemetry sink coverage
 
-There are 33 emission-site keys and 53 occurrences, in 9 matrix entries: 8 log/telemetry sinks, plus the backup worker's SSM/S3 calls, which are classified as external I/O and are not logs. Treatments in the table:
+There are 56 emission-site keys and 83 occurrences, in 13 matrix entries: 8 log/telemetry sinks and 5 classified non-log egress or I/O entries. The non-log entries are:
+- the backup worker's SSM/S3 calls;
+- the Anthropic/Resend/Financy adapters' HTTP calls (their minimization is tested in Phases 8, 15 and 9);
+- browser calls to the app's own `/api` routes;
+- operator file writes and subprocesses;
+- the process-wide MongoDB client cache. Treatments in the table:
 - **literal:** fixed text.
 - **enum:** a closed allowlist; anything else is replaced.
 - **count:** a bounded integer, else null.
@@ -250,7 +272,10 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 
 All pass.
 
-**Mutation probes:** 46 temporary probes over two rounds (L01–L20 with L09b, D01–D08, and R01–R17 from the review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
+**Mutation probes:** 67 temporary probes over three rounds:
+- L01–L20 with L09b, and D01–D08 (the original build);
+- R01–R17 (from the first review);
+- N01–N21 (from the re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
 
 ## 5. Findings (no actual application logging leak found)
 
@@ -310,7 +335,7 @@ It found **no actual leak in current code** and no scope violation. But 7 of its
 | 5 | Important | The CloudWatch `PutMetricData` sink was missing | AWS command names and `@aws-sdk` modules are sites. Added the `backup-metrics` sink with `[log-backup-metrics]`, and the SSM/S3 calls as classified non-log I/O (R15 detected) |
 | 6 | Minor | Retention scanner gaps: computed TTL keys, `$unset`, `replaceOne`, `findOneAndReplace`, `db.command` | All added. 3 `$unset` and 2 `replaceOne` sites classified (R11, R12 detected) |
 | 7 | Minor | The capture missed `console.dir`/`dirxml` | Every console method is spied; `[log-capture-self-test]` |
-| 8 | Minor | The matcher missed base64, case-changed and partial leaks | Base64/base64url/hex, case-insensitive and 12-character tails; covered by the self-test |
+| 8 | Minor | The matcher missed base64, case-changed and partial leaks | Base64/base64url at all three byte alignments, hex, case-insensitive, 12-character head and tail, per-run unique e-mail domain; covered by the self-test |
 | 9 | Minor | Dead tests counted as live (`describe.skip`, `if (false)`, empty bodies) | AST-based liveness check (R13 detected) |
 | 10 | Minor | Validation responses echo key names | Recorded as F-18-20-10 and pinned by `[log-validation-key-echo]` (runtime fix out of scope) |
 | 11 | Minor | Misclassifications and copied notes | 31 rows corrected. New rules: hashed ids must be pseudonymous identifiers; hashes over personal input are personal |
@@ -321,11 +346,37 @@ Two suspected items were recorded:
 - **`vercel-ledger-env.ps1`** rethrows the Vercel CLI output on failure. Noted in `operatorPowerShell`; not tested.
 - **Auth.js adapter field drift.** Covered by the version pin.
 
-**Re-review:** pending (next step).
+**Round 2: re-review (2026-10-01) of commit `79ef468`**, read-only, with its own mutations in a scratch copy.
+
+Its main results:
+- **First-review findings:** M1–M7 detected and the scope clean. Of the 13 first-review findings, 5 were fixed and 8 partially fixed.
+- **Leaks:** no actual leak in current code.
+- **New bypasses:** 18 of 20 new bypass probes still passed CI.
+
+All were fixed in tests and documents only, again with no runtime change:
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | Important | `globalThis.process.stderr.write(…)` bypassed the scanner (`process` as a property name) | `process` is a site in any position; `globalThis`/`global`/`self` are sites (N01) |
+| 2 | Important | Re-export `export { stderr as out } from "node:process"` | `export … from` is treated like an import (N02) |
+| 3 | Important | Other sink APIs were not caught: `writeFileSync(2, …)`, template-literal `import()`, `Reflect.get(globalThis, "console")`, `new Function(…)`, `child_process` | fs write functions, computed or template imports, sink strings anywhere, `eval`/`Function`, and the `child_process`/network/worker modules are all sites (N03–N07) |
+| 4 | Important | Outbound HTTP was not inventoried | Every fetch-like call outside same-origin path literals is a site. The provider adapters, client API calls, file writes, subprocesses and the client cache are classified (N08) |
+| 5 | Important | The pinned console text was blind to a changed value | Replaced by SHA-256 pins of every operator-run file (N09) |
+| 6 | Minor | PowerShell scripts were listed by name only | Included in the file pins (N10) |
+| 7 | Important | Live-test false negatives: `describe.skipIf(…)(…)`, `ctx.skip()`, assertion-free bodies, `cond && it(…)` | Assertion means an `expect…` call; self-skips, conditional placement and chained skip callees are dead (N11–N13, N21) |
+| 8 | Important | Blind subtrees covered by one row (e.g. a new `accountNumber` in TI evidence) | 50 subtree shape pins. Added `source.*` rows (with HMAC aliases) to the 8 other manual sections (N14) |
+| 9 | Important | Writes outside the document type (`$set: { recipientEmail }`) | Undeclared literal write paths on typed collections fail (N15); the remaining limit is stated in §1 |
+| 10 | Important | Collections opened untyped through a const name, or via `createCollection` | Every type-resolved name in `collection`/`createCollection` must be classified; one more non-literal site explained (N16, N17) |
+| 11 | Minor | Retention-scanner variants: const-key TTL, `db.command(cmd)`, pipeline `$replaceWith`, `$pull`/`$rename` | Same-file constant resolution, `command:dynamic`, `pipeline-update` and the removal keys (N18–N20) |
+| 12 | Minor | Matcher weaknesses: base64 alignment, head truncation, constant e-mail domain | Fixed and covered by the self-test |
+| 13 | Minor | `Console` flagged in type positions | Type positions are ignored |
+| 14–15 | Minor | Stale counts (§3, hardening package) and overstated §1 claims | Recounted; §1 rewritten with an explicit limits paragraph |
+
+**Re-review 2:** pending (next step).
 
 ## 8. Mutation evidence
 
-Two rounds of temporary probes were run on 2026-10-01: 46 probes in total. Each probe edited a single file, ran the named tests, then restored the exact bytes; every restore was SHA-256-verified, nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after each round. Round 2 re-ran every round-1 probe against the strengthened tests.
+Three rounds of temporary probes were run on 2026-10-01: 67 probes in total. Each probe edited a single file, ran the named tests, then restored the exact bytes; every restore was SHA-256-verified, nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests.
 
 | Probe | Mutation | Result |
 | --- | --- | --- |
@@ -375,5 +426,26 @@ Two rounds of temporary probes were run on 2026-10-01: 46 probes in total. Each 
 | R15 | A new metric dimension | Detected by `log-backup-metrics` |
 | R16 | `const p = process; p.stdout.write(…)` | Detected by the emission inventory |
 | R17 | `const { log } = console; log(items)` | Detected by the emission inventory |
+| N01 | `globalThis.process.stderr.write(items)` | Detected by the emission inventory |
+| N02 | `export { stderr as out } from "node:process"` | Detected by the emission inventory |
+| N03 | `writeFileSync(2, …)` from `node:fs` | Detected by the emission inventory |
+| N04 | ``(await import(`node:process`)).stderr.write(…)`` | Detected by the emission inventory |
+| N05 | `Reflect.get(globalThis, "console").log(items)` | Detected by the emission inventory |
+| N06 | `new Function("return this")()["con" + "sole"].log(items)` | Detected by the emission inventory |
+| N07 | `execFileSync(…, { stdio: "inherit" })` | Detected by the emission inventory |
+| N08 | `fetch("https://collector…", { body: items })` | Detected by the emission inventory |
+| N09 | Restore-drill CLI: `Object.assign(result, { targetUri })` before an unchanged print | Detected by the operator-file pins |
+| N10 | `Write-Host "target: $env:RESTORE_TARGET_URI"` in `recovery-drill.ps1` | Detected by the operator-file pins |
+| N11 | Sentinel suite wrapped in `describe.skipIf(true)(…)` | Detected by the live-test check |
+| N12 | `ctx.skip()` inside `[log-backup-metrics]` | Detected by the live-test check |
+| N13 | `[log-backup-metrics]` body without an assertion | Detected by the live-test check |
+| N14 | `accountNumber` added to TI `StoredEvidence` | Detected by the subtree shape pins |
+| N15 | `$set: { recipientEmail }` on `Collection<NotificationDocument>` | Detected by the undeclared-write check |
+| N16 | Untyped collection opened through a const name | Detected by the resolved-collection check |
+| N17 | `createCollection<…>("probeSecrets2")` | Detected by the resolved-collection check |
+| N18 | TTL through a const computed key | Detected by the retention-mechanism inventory |
+| N19 | `db.command(cmd)` with a non-literal drop | Detected by the retention-mechanism inventory |
+| N20 | Pipeline update with `$replaceWith` | Detected by the retention-mechanism inventory |
+| N21 | `Date.now() > 0 && it("[log-backup-metrics]…")` | Detected by the live-test check |
 
-45 of 46 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every mutation that survived the review's round 1 is now detected.
+66 of 67 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every mutation and bypass that survived either review is now detected.

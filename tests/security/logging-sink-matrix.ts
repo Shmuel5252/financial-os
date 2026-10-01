@@ -106,9 +106,47 @@ export const sinkMatrix: Readonly<Record<string, SinkEntry>> = {
   "backup-aws-data-plane": {
     logSink: false,
     sites: { "workers/backup/index.ts aws:GetParametersByPathCommand": 1, "workers/backup/index.ts aws:PutObjectCommand": 1, "workers/backup/index.ts sdk:@aws-sdk/client-s3": 1,
-      "workers/backup/index.ts sdk:@aws-sdk/client-ssm": 1, "scripts/build-workers.mjs sdk:@aws-sdk/credential-providers": 1 },
-    destination: "not a log: SSM parameter reads (keys/URIs, held in memory) and create-only S3 writes of encrypted packages / signed ledger mirrors (see dataStores); the build script only marks an optional driver dependency external",
+      "workers/backup/index.ts sdk:@aws-sdk/client-ssm": 1, "workers/backup/index.ts import:dynamic": 1, "scripts/build-workers.mjs sdk:@aws-sdk/credential-providers": 1 },
+    destination: "not a log: SSM parameter reads (keys/URIs, held in memory) and create-only S3 writes of encrypted packages / signed ledger mirrors (see dataStores); `import:dynamic` is the worker's load() of exactly those three @aws-sdk modules; the build script only marks an optional driver dependency external",
     payload: { "object bodies": ["omitted", "packages are AES-256-GCM encrypted; mirrors are pseudonymous and signed (PHASE_18_DATA_AND_LOGGING_CLASSIFICATION.md §2)"] },
+    sentinelTests: [],
+  },
+  "provider-egress": {
+    logSink: false,
+    sites: { "src/lib/adapters/anthropic/anthropic-ai-provider.ts http:fetch": 1, "src/lib/adapters/resend/resend-notification-email-provider.ts http:fetch": 2,
+      "src/lib/adapters/financy/financy-open-banking-provider.ts http:fetch": 2 },
+    destination: "not a log: the three external processors, each behind its server-only adapter",
+    payload: {
+      anthropic: ["omitted", "only the minimized, redacted AI context (evidence facts, sanitized question) - Phase 8 minimization tests (phase-eight-ai.integration, ai-safety)"],
+      resend: ["omitted", "the fixed generic template, the recipient address and an idempotency key - Phase 15 minimization tests (notification-provider)"],
+      financy: ["omitted", "token request with the provider credentials, then read requests for the user's provider data; responses are aliased before storage (Phase 9)"],
+    },
+    sentinelTests: [],
+  },
+  "browser-same-origin-api": {
+    logSink: false,
+    sites: Object.fromEntries(["budgets/budget-planner", "debt-strategies/debt-strategy-center", "forecasts/forecast-center", "goals/goal-center",
+      "households/household-center", "notifications/notification-center", "open-banking/open-banking-center", "progress-journeys/progress-journey-center",
+      "reports/report-center", "transaction-intelligence/transaction-intelligence-review"].map((name) => [`src/components/${name}.tsx http:fetch`, 1])
+      .concat([["src/components/onboarding/manual-section-form.tsx http:fetch", 4]])),
+    destination: "not a log: client components calling the app's own /api routes through a path variable (request helpers); same origin, session cookie",
+    payload: { body: ["raw", "the user's own form input to their own API (validated server-side)"] },
+    sentinelTests: [],
+  },
+  "local-files-and-processes": {
+    logSink: false,
+    sites: { "scripts/atlas-alerts.mjs api:writeFileSync": 1, "scripts/atlas-alerts.mjs import:node:fs.writeFileSync": 1, "src/lib/operations/object-stores.ts api:writeFile": 1,
+      "src/lib/operations/object-stores.ts import:node:fs/promises.writeFile": 1, "scripts/build-workers.mjs import:node:child_process": 1,
+      "scripts/security-check.mjs import:node:child_process": 1 },
+    destination: "not a log: atlas-alerts writes alert JSON definitions to an operator directory; object-stores' directory store writes backup objects to a local directory (tests and the operator's drill copy); build-workers runs esbuild, security-check runs git ls-files",
+    payload: { content: ["omitted", "alert definitions carry the operator-supplied notification address; directory objects are the same encrypted/signed objects as the bucket"] },
+    sentinelTests: [],
+  },
+  "process-wide-client-cache": {
+    logSink: false,
+    sites: { "src/lib/db/mongodb.ts global:globalThis": 3 },
+    destination: "not a log: the MongoDB client promise cached on globalThis across hot reloads",
+    payload: { value: ["omitted", "a client promise; nothing is written anywhere"] },
     sentinelTests: [],
   },
   "operator-scripts": {
@@ -144,57 +182,26 @@ export const implicitSinks = [
 ] as const;
 
 /**
- * Exact text of every console call argument in operator-run code (workers' CLIs, scripts/*.mjs). Pinned so that any change to what
- * an operator terminal prints (e.g. printing a URI, a whole error object or an extra result field) fails CI until re-reviewed.
+ * SHA-256 (LF-normalized) of every operator-run file: all of scripts/ (including PowerShell) and every workers/<name>/cli.ts. These
+ * print to an operator terminal; any edit - a new console argument, a changed value behind an unchanged one, a Write-Host - fails
+ * CI until this pin is updated in a reviewed change (re-check the file against the matrix, operatorPowerShell and the forbidden-
+ * identifier rule first).
  */
-export const operatorOutputs: Readonly<Record<string, readonly string[]>> = {
-  "scripts/atlas-alerts.mjs": [
-    "`wrote ${alerts.length} alert files`",
-    "`not available on ${argument(\"--tier\")}: ${unavailable.join(\", \")}`",
-    "\"failed: --role ledger|primary --tier free --cluster <name> --email <address> --out <directory>\"",
-  ],
-  "scripts/build-workers.mjs": [
-    "`built .build/${name}/index.mjs (index manifest ${digest.slice(0, 12)}…)`",
-  ],
-  "scripts/index-manifest.mjs": [
-    "createHash(\"sha256\").update(JSON.stringify([\"index-source-manifest-v1\", entries])).digest(\"hex\")",
-    "\"Index manifest: 90 source definitions; 88 runtime, 2 offline; no DB operation\"",
-    "JSON.stringify({ version: \"index-source-manifest-v1\", executable: false, requiresCollectionResolution: true, definitions }, null, 2)",
-  ],
-  "scripts/ledger-bootstrap.mjs": [
-    "\"failed: LEDGER_BOOTSTRAP_URI and a valid LEDGER_BOOTSTRAP_DATABASE are required\"",
-    "\"failed: the ledger database contains other collections\"",
-    "`ok: ledger collections present; head revision ${current?.revision}`",
-    "`failed: ${error?.codeName ?? error?.name ?? \"error\"}`",
-  ],
-  "scripts/ledger-privilege-check.mjs": [
-    "\"failed: LEDGER_CHECK_URI and a valid LEDGER_CHECK_DATABASE are required\"",
-    "line",
-    "`failed: connection (${code(error)})`",
-  ],
-  "scripts/ledger-probe.mjs": [
-    "\"failed: PROBE_MONGODB_URI and a valid, dedicated PROBE_DATABASE are required\"",
-    "line",
-    "`unsupported: connection — fail (${code(error)})`",
-    "\"cleanup: done\"",
-  ],
-  "scripts/security-check.mjs": [
-    "`Security check: ${findings.join(\",\")} (${file})`",
-    "`Security check: ${new Set(files).size} files; ${failures} findings`",
-  ],
-  "scripts/snapshot-session-probe.mjs": [
-    "\"unsupported: PROBE_MONGODB_URI and PROBE_DATABASE are required\"",
-    "\"unsupported: no snapshot time returned\"",
-    "stable ? `supported: snapshot session and snapshot reads of ${read} collections at one cluster time` : \"unsupported: cluster time moved\"",
-    "`unsupported: ${error?.codeName ?? error?.name ?? \"error\"}`",
-  ],
-  "workers/ledger-rebuild/cli.ts": [
-    "JSON.stringify(summary(await planLedgerRebuild({ store, environment, ledgerKeys, mirrorKeys, minimumHead })), null, 2)",
-    "JSON.stringify(summary(await rebuildLedger({ store, environment, ledgerKeys, mirrorKeys, minimumHead, target: client.db(database) })), null, 2)",
-    "error instanceof Error ? error.message : \"Ledger rebuild failed\"",
-  ],
-  "workers/restore-drill/cli.ts": [
-    "JSON.stringify(result, null, 2)",
-    "error instanceof Error ? error.message : \"Restore drill failed\"",
-  ],
+export const operatorFiles: Readonly<Record<string, string>> = {
+  "scripts/atlas-alerts.mjs": "eb0a9111661c5e8e9037cfd73cca4e4cabb2c8a43bcd2bd76d755c5746df9a51",
+  "scripts/build-workers.mjs": "00c7613db51ed08d5525ea986a106fde0bb5634e46d1830b9212a8ab050184e6",
+  "scripts/deploy-backup-worker.ps1": "4b43402978c348cecacfd6b10802d4280b65046999f9189e75e04e29b5fb5aca",
+  "scripts/index-manifest.mjs": "f75ae14c5889103abe0f930dbf410584635db65665cc8a8324e85a1b7153272f",
+  "scripts/ledger-bootstrap.mjs": "021d0d65cb47c5106c4255442369f5a3ef178cacb0ecceae7bed1e13ed180c15",
+  "scripts/ledger-privilege-check.mjs": "7433a79569ec7c77add9f390b17ec3bbed66e33ddc63128dfb1d2238c5063d12",
+  "scripts/ledger-probe.mjs": "046d3a175b95160afa92d5b734edb6ded94d3c9135d5cba15755df6706deec6e",
+  "scripts/recovery-drill.ps1": "957b77ccdf68e3aab35aa68d38482c544951fa1378bed31916350ee3bb8e8918",
+  "scripts/s8-alert-tests.ps1": "71b00b1481d77a1b8cd3cbc47a98e76066e0400beea43e344311252f5504d36d",
+  "scripts/security-check.d.mts": "7760654d47512c5d0fd4182d3ff2bbe003f317eb265aa5c4f5e335cebfadb200",
+  "scripts/security-check.mjs": "94177e8be29c23b87d92bc1986a5e9399aeaa1dea485289f36fb78de8581ecf1",
+  "scripts/snapshot-session-probe.mjs": "aba4160b539a812177bb975ca99d230b0e4922f47a3514962b13aa48ed0631ba",
+  "scripts/vercel-ledger-env.ps1": "9deb94a2be44320bd911176afc005e22f22824d8d6e2f3ed5bc3a16a451a2676",
+  "scripts/verify-backup-stack.ps1": "ab3a993ee4ce658e92dc3a1136105650bc4989e6662730bf833ae5ace5501d2f",
+  "workers/ledger-rebuild/cli.ts": "cc0baaaa88eb751e7f72a71efbd34e05b2ffb5b904f0dae3cc980279739d120d",
+  "workers/restore-drill/cli.ts": "c7935fbbab9b4a2d92f6424dfd740d3bddec0eab1c224417438267757d2e2078",
 };

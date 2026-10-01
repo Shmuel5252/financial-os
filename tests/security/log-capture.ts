@@ -14,7 +14,7 @@ export function sentinels() {
     bearer: `ya29.${hex(24)}`,
     sessionToken: `${hex(8)}-${hex(4)}-${hex(4)}`,
     jwt: [Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url"), Buffer.from(JSON.stringify({ sub: hex(8) })).toString("base64url"), hex(16)].join("."),
-    email: `sentinel.${id}@example.test`,
+    email: `sentinel.${id}@${hex(5)}.example.test`,
     userId: hex(12),
     resourceId: hex(12),
     householdId: hex(12),
@@ -53,14 +53,23 @@ export function dump(values: readonly unknown[]): string {
   }).join("\n");
 }
 
-/** Every recognisable form of each sentinel: raw, URL-encoded, JSON-escaped, base64/base64url, hex; case-insensitive; and, for long
- * values, their distinctive tail (a truncated leak still fails). */
+/** base64 of `value` as it appears inside a larger blob at each of the three byte alignments (edges that depend on neighbours dropped). */
+function base64Forms(bytes: Buffer): string[] {
+  return [0, 1, 2].flatMap((pad) => {
+    const encoded = Buffer.concat([Buffer.alloc(pad), bytes]).toString("base64").replace(/=+$/, "");
+    const stable = encoded.slice(Math.ceil((pad * 4) / 3) + (pad ? 1 : 0), encoded.length - 3);
+    return stable.length >= 8 ? [stable, stable.replace(/\+/g, "-").replace(/\//g, "_")] : [];
+  });
+}
+
+/** Every recognisable form of each sentinel: raw, URL-encoded, JSON-escaped, base64/base64url at any alignment, hex; case-insensitive;
+ * and, for long values, a distinctive 12-character head and tail (a truncated leak still fails). */
 export function expectNoSentinel(text: string, s: Sentinels, where: string) {
   const haystack = text.toLowerCase();
   for (const value of s.list) {
     const bytes = Buffer.from(value, "utf8");
-    const forms = new Set([value, encodeURIComponent(value), JSON.stringify(value).slice(1, -1), bytes.toString("base64").replace(/=+$/, ""),
-      bytes.toString("base64url"), bytes.toString("hex"), ...(value.length >= 20 ? [value.slice(-12)] : [])]);
+    const forms = new Set([value, encodeURIComponent(value), JSON.stringify(value).slice(1, -1), ...base64Forms(bytes), bytes.toString("hex"),
+      ...(value.length >= 20 ? [value.slice(0, 12), value.slice(-12)] : [])]);
     for (const form of forms) expect(haystack.includes(form.toLowerCase()), `${where}: leaked ${form.slice(0, 12)}...`).toBe(false);
   }
 }

@@ -172,7 +172,8 @@ describe("logging and telemetry sentinels (18-07/18-20)", () => {
     console.dir({ deep: { email: s.email } }); console.table([{ id: s.userId }]); console.trace(s.merchant); process.stderr.write(s.bearer);
     expect(calls.length).toBe(4);
     expect(() => expectNoSentinel(dump(calls.flat()), s, "self-test")).toThrow();
-    for (const leaked of [Buffer.from(s.email).toString("base64"), s.anthropicKey.toUpperCase(), s.userId.slice(-12), Buffer.from(s.hebrewNote).toString("hex")]) {
+    for (const leaked of [Buffer.from(s.email).toString("base64"), Buffer.from(`x${s.email}`).toString("base64"), Buffer.from(`xy${s.jwt}`).toString("base64url"),
+      s.anthropicKey.toUpperCase(), s.userId.slice(-12), s.jwt.slice(0, 16), Buffer.from(s.hebrewNote).toString("hex")]) {
       expect(() => expectNoSentinel(`log line ${leaked}`, s, "self-test")).toThrow();
     }
   });
