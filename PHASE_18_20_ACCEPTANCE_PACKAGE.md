@@ -97,7 +97,7 @@ Wording per `PHASE_18_ENTRY_REVIEW.md` / `PHASE_18_HARDENING_PACKAGE.md`. "R" re
 | 18-13 | partially | versioned identity-key migration design + isolated rehearsal; no rotation now |
 | 18-14 | partially | authorized hosted security/isolation testing; DB/IAM roles |
 | 18-15 | partially | on-call contacts, approved live failure/rollback drills |
-| 18-16 | partially | hosted required CI checks, dedicated SAST, review |
+| 18-16 | partially — dedicated SAST and secret scanning in hosted CI (2026-10-01: CodeQL 0 results, gitleaks 0 findings after triage, actions SHA-pinned) | owner settings: required checks, push protection; external penetration review |
 | 18-17 | pending E | approved 10-user/30-minute synthetic staging load |
 | 18-18 | partially | deployed keyboard/screen-reader/mobile/RTL matrix |
 | 18-19 | partially | audited deployment control changes + rollback drill |
