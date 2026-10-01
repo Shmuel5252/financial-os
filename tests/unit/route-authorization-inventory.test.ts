@@ -78,9 +78,23 @@ describe("authorization inventory (18-14)", () => {
     expect([...classified].sort()).toEqual([...new Set(actual)].sort());
   });
 
-  it("classifies exactly every page and layout (server components read params/searchParams and sessions too)", () => {
-    const actual = files("src/app", (p) => /[\\/](page|layout|template|default)\.[a-z]+$/.test(p)).map((p) => posix(p)).sort();
+  it("classifies exactly every page, layout and other Next.js special file (they run server code with params/searchParams too)", () => {
+    const special = /[\\/](page|layout|template|default|not-found|error|global-error|loading|opengraph-image|twitter-image|icon|apple-icon|sitemap|robots|manifest)\.[a-z]+$/;
+    const actual = files("src/app", (p) => special.test(p)).map((p) => posix(p)).sort();
     expect(pageMatrix.map((e) => e.file).sort()).toEqual(actual);
+  });
+
+  it("has no unclassified request entry points outside src/app (middleware, proxy, instrumentation, pages router)", () => {
+    const roots = [...readdirSync("src").map((name) => `src/${name}`), ...readdirSync(".")];
+    expect(roots.filter((path) => /^(src\/)?(middleware|proxy|instrumentation)\.[a-z]+$/.test(path)), "classify any middleware/proxy/instrumentation in the matrix").toEqual([]);
+    expect(roots.includes("src/pages") || roots.includes("pages"), "a pages/ router must be added to the inventory").toBe(false);
+  });
+
+  it("does not let the authorization integration suites skip silently in CI", () => {
+    if (process.env.CI) {
+      expect(process.env.MONGODB_TEST_URI, "CI must provide MONGODB_TEST_URI for the authorization suites").toBeTruthy();
+      expect(process.env.MONGODB_TEST_REPLICA_URI, "CI must provide MONGODB_TEST_REPLICA_URI").toBeTruthy();
+    }
   });
 
   it("classifies exactly every server-action module", () => {

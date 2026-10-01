@@ -215,6 +215,8 @@ const sweep = ["iso-page-sweep"];
 export const pageMatrix: readonly PageEntry[] = [
   P("layout.tsx", "none", "Root layout: static shell; reads no session, params or data.", [], [], "public"),
   P("page.tsx", "none", "Landing page: static content; reads no session-bound data.", [], sweep, "public"),
+  P("not-found.tsx", "none", "Static not-found view; reads no session, params or data.", [], [], "public"),
+  P("error.tsx", "none", "Client error boundary (use client): renders the error UI only; cannot read server data.", [], [], "public"),
   P("sign-in/page.tsx", "none", "Sign-in page with an input-free server action (Auth.js sign-in); no stored data.", [], sweep, "auth-protocol"),
   P("financial-data/profile/page.tsx", "actor", `${pageAuth} Re-exports the onboarding/profile page (completed-onboarding management mode).`, [], sweep),
   ...(["copilot", "dashboard", "debt-strategies", "financial-data", "forecasts", "goals", "net-worth", "notifications", "onboarding/profile", "onboarding/review",
