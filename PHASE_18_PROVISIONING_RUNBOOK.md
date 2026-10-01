@@ -177,7 +177,7 @@ Create the secrets of §2 in SSM and Vercel as shown; record escrow. Add the led
 - Verify: 7 packages with increasing recovery points; each opens and verifies in the drill tooling; object sizes plausible; alarms quiet.
 - Rollback: disable the schedule; investigate; no data changes in the application.
 
-- Closing check (Configuration B staging): on day 7 after the 03:00 capture, `scriptserify-backup-stack.ps1`, then `scriptsecovery-drill.ps1` `-Step prepare` → `-Step sync` → `-Step restore -AllPackages` → `-Step cleanup`. `-AllPackages` opens and verifies every package; capture times must strictly increase and cluster times never go back (an idle cluster's time may stand still between captures).
+- Closing check (Configuration B staging): on day 7 after the 03:00 capture, `scripts\verify-backup-stack.ps1`, then `scripts\recovery-drill.ps1` `-Step prepare` → `-Step sync` → `-Step restore -AllPackages` → `-Step cleanup`. `-AllPackages` opens and verifies every package; capture times must strictly increase and cluster times never go back (an idle cluster's time may stand still between captures).
 
 ### S11 — Isolated restore drill (D10 local first) [OWNER runs C6]
 1. On an encrypted disk, start a local loopback single-node replica set (as in `DEVELOPER_HANDOFF.md` §8).
