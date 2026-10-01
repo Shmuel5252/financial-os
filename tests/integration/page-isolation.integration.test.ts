@@ -47,13 +47,22 @@ function texts(value: unknown): string {
   };
   walk(value); return parts.join("\n");
 }
-/** An object whose every read is recorded and, unless given, answered with `fallback` (a victim id). */
-function recording(base: Record<string, string>, fallback: string, reads: Set<string>): Record<string, string> {
-  return new Proxy({ ...base }, {
-    get(target, key) {
-      if (typeof key !== "string" || IGNORED_KEYS.has(key)) return Reflect.get(target, key);
-      reads.add(key); return key in target ? target[key] : fallback;
-    },
+// Common identifier parameter names, exposed as OWN keys so pages that spread or enumerate params/searchParams (which bypass a
+// get trap) still receive a victim id under them. Names outside this list read only by enumeration are a recorded limit.
+const COMMON_ID_KEYS = ["id", "account", "accountId", "transaction", "transactionId", "loan", "loanId", "goal", "goalId", "category", "categoryId",
+  "report", "reportId", "snapshot", "snapshotId", "household", "householdId", "scope", "conversation", "conversationId", "forecast", "forecastId",
+  "strategy", "strategyId", "simulation", "simulationId", "notification", "notificationId", "summary", "summaryId", "item", "itemId", "run", "runId",
+  "invitation", "invitationId", "membership", "membershipId", "connection", "connectionId", "record", "recordId"];
+/** An object whose every read is recorded and, unless given, answered with `fallback` (a victim id) - for direct reads (get), and for
+ * spread/Object.entries/for-in/`in` (ownKeys/has/getOwnPropertyDescriptor) through the exposed keys. */
+function recording(base: Record<string, string>, fallback: string, reads: Set<string>, exposed: readonly string[]): Record<string, string> {
+  const target: Record<string, string> = { ...Object.fromEntries(exposed.map((key) => [key, fallback])), ...base };
+  const record = (key: string | symbol) => { if (typeof key === "string" && !IGNORED_KEYS.has(key)) reads.add(key); };
+  return new Proxy(target, {
+    get(t, key) { if (typeof key !== "string" || IGNORED_KEYS.has(key)) return Reflect.get(t, key); record(key); return key in t ? t[key] : fallback; },
+    has(t, key) { record(key); return Reflect.has(t, key); },
+    getOwnPropertyDescriptor(t, key) { record(key); return Reflect.getOwnPropertyDescriptor(t, key); },
+    ownKeys(t) { return Reflect.ownKeys(t); },
   });
 }
 const allowedThrow = (error: unknown) => {
@@ -67,7 +76,9 @@ const classifiedNames = (file: string, source: "path" | "query") =>
   let h: Harness;
   const victim = newActor(); const settled = newActor(); const onboarding = newActor();
   const m = { account: marker("v-page-account"), merchant: marker("v-page-merchant"), goal: marker("v-page-goal"), category: marker("v-page-category"),
-    household: marker("v-page-household"), loan: marker("v-page-loan") };
+    household: marker("v-page-household"), loan: marker("v-page-loan"), conversation: marker("v-page-question"), summary: marker("v-page-summary"),
+    strategy: marker("v-page-strategy"), simulation: marker("v-page-simulation"), item: marker("v-page-item"), notification: marker("v-page-notification") };
+  const friend = newActor();
   const victimIds: string[] = [];
   let householdId = "";
   const as = (actor: { userId: string }) => { session.userId = actor.userId; };
@@ -75,7 +86,7 @@ const classifiedNames = (file: string, source: "path" | "query") =>
   beforeAll(async () => {
     h = await openHarness(uri!);
     vi.stubEnv("GOOGLE_CLIENT_ID", "synthetic-client"); vi.stubEnv("GOOGLE_CLIENT_SECRET", "synthetic-secret");
-    for (const [actor, email] of [[victim, "victim@example.invalid"], [settled, "settled@example.invalid"], [onboarding, "onboarding@example.invalid"]] as const) {
+    for (const [actor, email] of [[victim, "victim@example.invalid"], [settled, "settled@example.invalid"], [onboarding, "onboarding@example.invalid"], [friend, "friend@example.invalid"]] as const) {
       await h.db.collection("authUsers").insertOne({ _id: new ObjectId(actor.userId), email, name: email.split("@")[0] });
       as(actor); ok(await call("profile", "PUT", { body: profile }));
     }
@@ -97,7 +108,39 @@ const classifiedNames = (file: string, source: "path" | "query") =>
     householdId = ok(await call("households", "POST", { body: { idempotencyKey: randomUUID(), name: m.household } }), 201).household.id;
     ok(await call("households/[householdId]/shares", "POST", { params: { householdId }, body: { action: "share", expectedVersion: null, resourceId: account, resourceKind: "account" } }));
     const report = ok(await call("reports", "POST", { body: { action: "close", idempotencyKey: randomUUID(), period: { kind: "month", value: "2026-09" }, scope: { kind: "personal" } } }), 201).report.id as string;
-    victimIds.push(account, transaction, loan, goal, category, report, householdId, engine);
+    // One victim record of every other kind, so a future detail page that looks any of them up by id is exercised too.
+    const fake = (ref: string, text: string) => ({ generate: async () => ({ model: "synthetic-model", provider: "anthropic" as const,
+      response: { fact: [{ evidenceRefs: [ref], text }], insight: [], recommendation: [] }, usage: { inputTokens: 1, outputTokens: 1 } }) });
+    const { sendAiMessage } = await import("@/lib/ai/ai-service");
+    const conversation = (await sendAiMessage(victim, { focus: "safe_to_spend", includeRecentHistory: false, question: m.conversation },
+      { provider: fake("engine.safe_to_spend", m.conversation) as never })).id;
+    const { generateReportAiSummary } = await import("@/lib/reports/report-summary-service");
+    const summary = (await generateReportAiSummary(victim, { expectedSummaryVersion: null, idempotencyKey: randomUUID(), reportId: report },
+      { provider: fake("report.fact.1", m.summary) as never })).id;
+    const forecast = ok(await call("forecasts", "POST", { body: { horizonDays: 30, idempotencyKey: randomUUID() } }), 201).forecast.id as string;
+    const debtTerm = { allocationOrder: null, fees: [], feesKnown: false, feesProvenance: null, firstPaymentDate: "2026-11-01", interest: { kind: "unknown" }, loanId: loan,
+      minimumPayment: { kind: "unknown" }, prepayment: { kind: "unknown" } };
+    const strategy = ok(await call("debt-strategies", "POST", { body: { customPriority: [loan], debtTerms: [debtTerm], extraPayment: ils("1.00"),
+      extraPaymentStartDate: "2026-11-01", idempotencyKey: randomUUID(), name: m.strategy } }), 201).scenario.id as string;
+    const longEngine = ok(await call("financial-engine/snapshots", "POST", { body: { idempotencyKey: randomUUID(), horizonDays: 366 } }), 201).snapshot.id as string;
+    const simulation = ok(await call("purchase-simulations", "POST", { body: { charges: [], idempotencyKey: randomUUID(), inputMode: "one_time", installmentCount: 1,
+      name: m.simulation, proposedDate: "2026-10-15", sourceSnapshotId: longEngine, totalPurchasePrice: ils("3.00") } }), 201).simulation.id as string;
+    const item = ok(await call("net-worth/items", "POST", { body: { idempotencyKey: randomUUID(), fields: { amount: ils("30.00"), category: "other_asset",
+      effectiveAt: "2026-09-01T00:00:00.000Z", label: m.item, provenanceNote: null, relationship: { kind: "standalone" }, side: "asset", valuationType: "user_estimate" } } }), 201).item.id as string;
+    const run = ok(await call("transaction-intelligence/runs", "POST", { body: { idempotencyKey: randomUUID() } }), 201).run.id as string;
+    const { notificationRepositoryForDatabase } = await import("@/lib/notifications/notification-repository");
+    const hex64 = () => Buffer.from(randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, ""), "hex").toString("hex");
+    const notification = (await notificationRepositoryForDatabase(h.db).createForActor(victim, { allowQuietHoursBypass: false, conditionFingerprint: hex64(),
+      cooldownKey: hex64(), deduplicationKey: hex64(), messageKey: "budget_deficit", policyVersion: "notification-policy-v1", severity: "WARNING",
+      severityVersion: "notification-severity-v1", sourceKind: "budget", sourceReference: m.notification, sourceVersion: "1", targetPath: "/budgets", trigger: "budget_deficit" },
+      { notBeforeAt: null, state: "not_requested" })).notification.id;
+    const pending = ok(await call("households/[householdId]/invitations", "POST", { params: { householdId }, body: { email: "someone@example.invalid" } }), 201);
+    const friendToken = ok(await call("households/[householdId]/invitations", "POST", { params: { householdId }, body: { email: "friend@example.invalid" } }), 201).token as string;
+    as(friend); ok(await call("households/invitations/accept", "POST", { body: { token: friendToken } }));
+    const membership = String((await h.db.collection("householdMemberships").findOne({ householdId: new ObjectId(householdId) }))!._id);
+    as(victim);
+    victimIds.push(account, transaction, loan, goal, category, report, householdId, engine, conversation, summary, forecast, strategy, simulation, item, run,
+      notification, pending.invitation.id as string, membership);
   }, 120_000);
   afterAll(async () => { session.userId = ""; await h?.dispose(); });
 
@@ -122,10 +165,13 @@ const classifiedNames = (file: string, source: "path" | "query") =>
       for (const actor of [settled, onboarding]) for (const section of sectionValues) for (const fallback of victimIds)
         for (const base of [{}, { periodKind: "month", periodValue: "2026-09" }, { month: "2020-01" }]) {
           as(actor);
-          const params = recording(section === undefined ? {} : { section }, fallback, paramReads);
-          const result = await render(file, params, recording(base, fallback, queryReads));
+          const params = recording(section === undefined ? {} : { section }, fallback, paramReads, [...pathNames].filter((name) => name !== "section"));
+          const result = await render(file, params, recording(base, fallback, queryReads, [...new Set([...queryNames, ...COMMON_ID_KEYS])]));
           if (result.threw !== undefined) {
             if (!allowedThrow(result.threw)) throw new Error(`${file} threw: ${(result.threw as Error).message}`);
+            // A redirect or refusal must not carry victim data either (e.g. in its URL/digest or message).
+            const carried = `${String(result.threw)} ${String((result.threw as { digest?: unknown }).digest ?? "")}`;
+            for (const value of forbidden) if (carried.includes(value)) throw new Error(`${file} disclosed victim data through a redirect/error, reading victim id ${fallback}`);
             continue;
           }
           rendered += 1;
