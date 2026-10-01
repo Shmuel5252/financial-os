@@ -19,7 +19,10 @@ param(
   [string]$Mongod = "C:\Program Files\MongoDB\Server\8.3\bin\mongod.exe",
   [string]$AwsProfile = "financial-os",
   [string]$Region = "eu-central-1",
-  [ValidateSet("staging")][string]$Environment = "staging"
+  [ValidateSet("staging")][string]$Environment = "staging",
+  # S10: open and verify EVERY package in the copy (oldest first) instead of only the newest. Capture times must strictly
+  # increase and cluster times must never go back (an idle cluster's time may stand still between two captures).
+  [switch]$AllPackages
 )
 $ErrorActionPreference = "Stop"
 $env:AWS_RETRY_MODE = "standard"; $env:AWS_MAX_ATTEMPTS = "10"
@@ -114,8 +117,30 @@ try {
   if ($Step -eq "restore") {
     Require-Node; Require-Copy; Load-Secrets
     "drill start (UTC): $((Get-Date).ToUniversalTime().ToString('o'))"
-    Invoke-Tool "restore-drill" @("--store", $store, "--listing", $listing)
-    "restore: ok - S11 evidence above (fence, barriers, counts, timings)"
+    if (-not $AllPackages) {
+      Invoke-Tool "restore-drill" @("--store", $store, "--listing", $listing)
+      "restore: ok - S11 evidence above (fence, barriers, counts, timings)"
+    } else {
+      $packages = @((Get-Content $listing -Raw | ConvertFrom-Json).Contents.Key | Where-Object { $_ -like "packages/*" } | Sort-Object)
+      if ($packages.Count -eq 0) { throw "no package in the copy" }
+      $rows = foreach ($name in $packages) {
+        $output = & node (Join-Path $repo ".build\restore-drill\index.mjs") --store $store --listing $listing --package $name
+        if ($LASTEXITCODE -ne 0) { throw "$name did not open or verify (exit $LASTEXITCODE)" }
+        $r = ($output -join "`n") | ConvertFrom-Json
+        if (-not $r.fence.technicalChecksPassed) { throw "${name}: fence did not pass" }
+        $barriers = 0; foreach ($group in $r.barriers.PSObject.Properties) { foreach ($v in $group.Value.PSObject.Properties) { $barriers += [int]$v.Value } }
+        [pscustomobject]@{ Name = $name; Point = [decimal]$r.recoveryPoint.atClusterTime; Captured = [long]$r.recoveryPoint.capturedAt; Barriers = $barriers; RestoreMs = $r.timings.restoreMs }
+      }
+      # Names start with the cluster time, which can stand still on an idle cluster, so order by capture time.
+      "package | recovery point (atClusterTime) | captured (UTC) | fence | barriers | restore ms"
+      $previousPoint = [decimal]-1; $previousCapture = [long]-1
+      foreach ($row in @($rows | Sort-Object Captured)) {
+        "$($row.Name) | $($row.Point) | $([DateTimeOffset]::FromUnixTimeMilliseconds($row.Captured).UtcDateTime.ToString('yyyy-MM-dd HH:mm')) | True | $($row.Barriers) | $($row.RestoreMs)"
+        if ($row.Point -lt $previousPoint -or $row.Captured -le $previousCapture) { throw "$($row.Name): recovery point goes back or does not advance" }
+        $previousPoint = $row.Point; $previousCapture = $row.Captured
+      }
+      "restore -AllPackages: ok - $($packages.Count) packages opened and verified; capture times strictly increasing, cluster times never going back"
+    }
   }
 
   if ($Step -eq "rebuild") {
