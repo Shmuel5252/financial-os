@@ -53,19 +53,25 @@ export function dump(values: readonly unknown[]): string {
   }).join("\n");
 }
 
+/** Every recognisable form of each sentinel: raw, URL-encoded, JSON-escaped, base64/base64url, hex; case-insensitive; and, for long
+ * values, their distinctive tail (a truncated leak still fails). */
 export function expectNoSentinel(text: string, s: Sentinels, where: string) {
+  const haystack = text.toLowerCase();
   for (const value of s.list) {
-    for (const form of new Set([value, encodeURIComponent(value), JSON.stringify(value).slice(1, -1)])) {
-      expect(text.includes(form), `${where}: leaked ${form.slice(0, 12)}...`).toBe(false);
-    }
+    const bytes = Buffer.from(value, "utf8");
+    const forms = new Set([value, encodeURIComponent(value), JSON.stringify(value).slice(1, -1), bytes.toString("base64").replace(/=+$/, ""),
+      bytes.toString("base64url"), bytes.toString("hex"), ...(value.length >= 20 ? [value.slice(-12)] : [])]);
+    for (const form of forms) expect(haystack.includes(form.toLowerCase()), `${where}: leaked ${form.slice(0, 12)}...`).toBe(false);
   }
 }
 
-/** Captures every console level and both process streams for the duration of a test (restored by vitest's restoreMocks). */
+/** Captures every console method and both process streams for the duration of a test (restored by vitest's restoreMocks). */
 export function captureOutput(): unknown[][] {
   const calls: unknown[][] = [];
-  for (const level of ["log", "info", "warn", "error", "debug", "trace"] as const) {
-    vi.spyOn(console, level).mockImplementation((...args: unknown[]) => { calls.push([level, ...args]); });
+  const target = console as unknown as Record<string, (...args: unknown[]) => void>;
+  for (const level of Object.keys(target)) {
+    if (typeof target[level] !== "function") continue;
+    vi.spyOn(target, level).mockImplementation((...args: unknown[]) => { calls.push([level, ...args]); });
   }
   for (const stream of [process.stdout, process.stderr]) {
     vi.spyOn(stream, "write").mockImplementation(((chunk: unknown) => { calls.push(["stream", chunk]); return true; }) as typeof stream.write);

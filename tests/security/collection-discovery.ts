@@ -9,10 +9,10 @@ const sourceFiles = (root: string) => files(root, (p) => /\.(ts|tsx)$/.test(p));
 const LISTS = ["sectionCollections", "financialOsAuthCollections", "LEDGER_COLLECTIONS"];
 const BANK_DEVELOPMENT = ["archives", "manifests", "locks"];
 
-/** Literal factory, manual-section, auth, ledger and offline migration collection names under src/lib. */
+/** Literal factory, manual-section, auth, ledger and offline migration collection names under src/ and workers/. */
 export function discoverCollections(): Set<string> {
   const names = new Set<string>();
-  for (const path of sourceFiles("src/lib")) {
+  for (const path of [...sourceFiles("src"), ...sourceFiles("workers")]) {
     const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
     const visit = (node: ts.Node): void => {
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
@@ -38,30 +38,67 @@ export function discoverCollections(): Set<string> {
   return names;
 }
 
-/**
- * Top-level document properties per collection, read by the TypeScript type checker from every `.collection<T>("name")`
- * call in src (union over all declarations of a collection), plus the ManualRecordDocument properties shared by every manual
- * section. Collections only ever opened untyped are absent.
- */
-export function typedCollectionFields(): { fields: Map<string, Set<string>>; manualFields: Set<string> } {
+/** A document shape: every node path (`a`, `a[]`, `a[].b`, `a.*`) mapped to its child tokens (empty for leaves). */
+export type DocumentTree = Map<string, Set<string>>;
+const LEAF_TYPES = new Set(["Date", "ObjectId", "Binary", "Long", "Decimal128", "Timestamp", "Uint8Array", "Buffer", "RegExp", "BSONRegExp", "Double", "Int32"]);
+const join = (path: string, token: string) => (path === "" ? token : token === "[]" ? `${path}[]` : `${path}.${token}`);
+
+function addTree(checker: ts.TypeChecker, type: ts.Type, path: string, tree: DocumentTree, depth: number): void {
+  const children = tree.get(path) ?? new Set<string>(); tree.set(path, children);
+  if (depth > 10) return;
+  const parts = type.isUnion() ? type.types : [type];
+  for (const part of parts) {
+    if (part.flags & (ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike | ts.TypeFlags.BooleanLike | ts.TypeFlags.BigIntLike | ts.TypeFlags.ESSymbolLike | ts.TypeFlags.EnumLike | ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never | ts.TypeFlags.Void)) continue;
+    if (LEAF_TYPES.has(part.getSymbol()?.getName() ?? "") || LEAF_TYPES.has(part.aliasSymbol?.getName() ?? "")) continue;
+    if (checker.isArrayType(part) || checker.isTupleType(part)) {
+      children.add("[]");
+      for (const element of checker.getTypeArguments(part as ts.TypeReference)) addTree(checker, element, join(path, "[]"), tree, depth + 1);
+      continue;
+    }
+    const index = checker.getIndexTypeOfType(part, ts.IndexKind.String);
+    // `Document` (`[key: string]: any`) is an untyped view of a collection, not a shape: ignore it.
+    if (index !== undefined && !(index.flags & ts.TypeFlags.Any)) { children.add("*"); addTree(checker, index, join(path, "*"), tree, depth + 1); }
+    for (const property of checker.getPropertiesOfType(part)) {
+      if (property.flags & ts.SymbolFlags.Method) continue;
+      children.add(property.getName());
+      addTree(checker, checker.getTypeOfSymbol(property), join(path, property.getName()), tree, depth + 1);
+    }
+  }
+}
+
+let cachedProgram: ts.Program | undefined;
+/** One TypeScript program over src/ and workers/ (shared by the inventory tests; building it takes seconds). */
+export function typeProgram(): ts.Program {
+  if (cachedProgram) return cachedProgram;
   const config = ts.getParsedCommandLineOfConfigFile("tsconfig.json", {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(String(d.messageText)); } });
   if (config === undefined) throw new Error("tsconfig.json could not be read");
-  const roots = config.fileNames.filter((name) => posix(name).includes("/src/") || posix(name).startsWith("src/"));
-  const program = ts.createProgram(roots, { ...config.options, noEmit: true, incremental: false });
+  const roots = config.fileNames.filter((name) => /(^|\/)(src|workers)\//.test(posix(name)));
+  cachedProgram = ts.createProgram(roots, { ...config.options, noEmit: true, incremental: false });
+  return cachedProgram;
+}
+
+/**
+ * Document shapes per collection, read by the TypeScript type checker from every `.collection<T>(name)` call in src/ and workers/
+ * whose name resolves to one string literal (union over all declarations of a collection, recursing through nested objects, arrays
+ * and records), plus ManualRecordDocument for the manual sections. Calls whose name does NOT resolve to a literal are returned in
+ * `unresolved` (`file:line text`) so the caller can require each to be explained.
+ */
+export function typedCollectionFields(): { fields: Map<string, Set<string>>; trees: Map<string, DocumentTree>; manualTree: DocumentTree; unresolved: string[] } {
+  const program = typeProgram();
   const checker = program.getTypeChecker();
-  const fields = new Map<string, Set<string>>();
+  const trees = new Map<string, DocumentTree>(); const unresolved: string[] = [];
   for (const source of program.getSourceFiles()) {
-    if (source.isDeclarationFile || !posix(source.fileName).includes("/src/")) continue;
+    if (source.isDeclarationFile || !/\/(src|workers)\//.test(posix(source.fileName))) continue;
     const visit = (node: ts.Node): void => {
-      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "collection"
-        && node.typeArguments?.length === 1 && node.arguments[0] !== undefined) {
-        // A literal, or a constant whose type is one string literal (e.g. `as const` maps); `string`-typed names stay unresolved.
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "collection" && node.arguments[0] !== undefined) {
         const argument = checker.getTypeAtLocation(node.arguments[0]);
-        if (argument.isStringLiteral()) {
-          const names = checker.getPropertiesOfType(checker.getTypeFromTypeNode(node.typeArguments[0]!)).map((symbol) => symbol.getName());
-          const known = fields.get(argument.value) ?? new Set<string>();
-          for (const name of names) known.add(name);
-          fields.set(argument.value, known);
+        if (!argument.isStringLiteral()) {
+          const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+          unresolved.push(`${posix(source.fileName).replace(/^.*?\/(src|workers)\//, "$1/")}:${line} ${node.arguments[0].getText()}`);
+        } else if (node.typeArguments?.length === 1) {
+          const tree = trees.get(argument.value) ?? new Map<string, Set<string>>();
+          addTree(checker, checker.getTypeFromTypeNode(node.typeArguments[0]!), "", tree, 0);
+          trees.set(argument.value, tree);
         }
       }
       ts.forEachChild(node, visit);
@@ -72,13 +109,23 @@ export function typedCollectionFields(): { fields: Map<string, Set<string>>; man
   const manual = program.getSourceFile(program.getRootFileNames().find((name) => posix(name).endsWith("src/lib/onboarding/manual-record-repository.ts"))!);
   const alias = manual?.statements.find((s): s is ts.TypeAliasDeclaration => ts.isTypeAliasDeclaration(s) && s.name.text === "ManualRecordDocument");
   if (alias === undefined) throw new Error("ManualRecordDocument not found");
-  const manualFields = checker.getPropertiesOfType(checker.getTypeAtLocation(alias.name)).map((symbol) => symbol.getName());
-  return { fields, manualFields: new Set(manualFields) };
+  const manualTree: DocumentTree = new Map();
+  addTree(checker, checker.getTypeAtLocation(alias.name), "", manualTree, 0);
+  const fields = new Map([...trees].map(([name, tree]) => [name, new Set(tree.get("") ?? [])]));
+  return { fields, trees, manualTree, unresolved: unresolved.sort() };
 }
 
-const DELETE_METHODS = new Set(["deleteOne", "deleteMany", "findOneAndDelete", "drop", "dropDatabase", "dropCollection", "bulkWrite", "remove"]);
+const DELETE_METHODS = new Set(["deleteOne", "deleteMany", "findOneAndDelete", "drop", "dropDatabase", "dropCollection", "dropIndex", "dropIndexes",
+  "bulkWrite", "remove", "replaceOne", "findOneAndReplace"]);
+const COMMAND_KEYS = new Set(["drop", "dropDatabase", "collMod", "delete", "dropIndexes", "compact"]);
+const propertyName = (name: ts.PropertyName) => (ts.isIdentifier(name) || ts.isStringLiteralLike(name) ? name.text
+  : ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression) ? name.expression.text : undefined);
 
-/** Hard-delete calls and TTL index options in repository code, as `<file> <method>` / `<file> expireAfterSeconds` -> count. */
+/**
+ * Data-removal and expiry mechanisms in repository code, as `<file> <kind>` -> count: hard-delete/replace calls (`deleteOne`, ...,
+ * `replaceOne`), field removal (`$unset`, incl. computed keys), database commands that drop or change collections (`command:<key>`)
+ * and TTL index options (`expireAfterSeconds`, incl. computed keys).
+ */
 export function retentionSites(): Map<string, number> {
   const sites = new Map<string, number>();
   for (const root of ["src", "workers", "scripts"]) {
@@ -87,9 +134,20 @@ export function retentionSites(): Map<string, number> {
       const add = (kind: string) => sites.set(`${file} ${kind}`, (sites.get(`${file} ${kind}`) ?? 0) + 1);
       const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
       const visit = (node: ts.Node): void => {
-        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && DELETE_METHODS.has(node.expression.name.text)) add(node.expression.name.text);
-        if ((ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))
-          && node.name.text === "expireAfterSeconds") add("expireAfterSeconds");
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+          const method = node.expression.name.text;
+          if (DELETE_METHODS.has(method)) add(method);
+          if (method === "command" && node.arguments[0] && ts.isObjectLiteralExpression(node.arguments[0])) {
+            for (const property of node.arguments[0].properties) {
+              const key = property.name ? propertyName(property.name) : undefined;
+              if (key && COMMAND_KEYS.has(key)) add(`command:${key}`);
+            }
+          }
+        }
+        if ((ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) && ts.isObjectLiteralExpression(node.parent)) {
+          const key = propertyName(node.name);
+          if (key === "expireAfterSeconds" || key === "$unset") add(key);
+        }
         ts.forEachChild(node, visit);
       };
       visit(source);

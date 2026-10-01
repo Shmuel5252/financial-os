@@ -10,7 +10,7 @@ describe("Phase 18 source collection inventory (no database access)", () => {
     expect(names.size).toBeGreaterThan(50);
     expect(rows).toHaveLength(new Set(rows).size);
     expect(rows.sort()).toEqual([...names].sort());
-  });
+  }, 30_000);
 
   it("keeps both authoritative master-plan copies identical", () => {
     expect(readFileSync("MASTER_PLAN.md", "utf8")).toBe(readFileSync("FINANCIAL_OS_MASTER_PROMPT.md", "utf8"));

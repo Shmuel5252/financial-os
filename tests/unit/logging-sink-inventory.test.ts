@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { emissionSites } from "../security/emission-sites";
+import { emissionSites, operatorOutputs as scannedOutputs } from "../security/emission-sites";
 import { files, liveTestIds } from "../security/live-test-ids";
-import { operatorPowerShell, sinkMatrix } from "../security/logging-sink-matrix";
+import { operatorOutputs, operatorPowerShell, sinkMatrix } from "../security/logging-sink-matrix";
 
 // Phase 18 rows 18-07/18-20: every emission point (console.*, process stdout/stderr/emitWarning, telemetry .emit(), logger/debug/
 // logging configuration keys) in src/, workers/, scripts/ and next.config is classified exactly once, with a live sentinel test.
@@ -19,11 +19,15 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
         expect(classified.has(site), `${site}: classified in two sinks`).toBe(false);
         classified.set(site, count);
       }
-      expect(entry.sentinelTests.length, `${sink}: sentinel tests`).toBeGreaterThan(0);
+      if (entry.logSink) expect(entry.sentinelTests.length, `${sink}: sentinel tests`).toBeGreaterThan(0);
       for (const id of entry.sentinelTests) expect(live.has(id), `${sink}: [${id}] is a live it()/test() title`).toBe(true);
       expect(Object.keys(entry.payload).length, `${sink}: payload treatment`).toBeGreaterThan(0);
     }
     expect(Object.fromEntries([...emissionSites()].sort())).toEqual(Object.fromEntries([...classified].sort()));
+  }, 30_000);
+
+  it("pins exactly what operator-run code prints (workers' CLIs and scripts)", () => {
+    expect(scannedOutputs()).toEqual(operatorOutputs);
   }, 30_000);
 
   it("lists every PowerShell operator script", () => {

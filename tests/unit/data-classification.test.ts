@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { ZodType } from "zod";
 import { sectionCollections } from "@/lib/onboarding/manual-record-repository";
 import { manualSectionDomainSchemas } from "@/lib/onboarding/manual-record";
+import { uncoveredPaths } from "../security/classification-coverage";
 import { discoverCollections, retentionSites, typedCollectionFields } from "../security/collection-discovery";
-import { dataClassification, rawSecretsAtRest, retentionMechanisms, templateRetention } from "../security/data-classification";
+import { authAdapterVersions, dataClassification, rawSecretsAtRest, retentionMechanisms, templateRetention, unresolvedCollectionSites } from "../security/data-classification";
 
 // Phase 18 rows 18-07/18-20 (repository portion): the classification in tests/security/data-classification.ts must describe exactly
 // what the code stores today. New collections, fields, raw secrets, TTL indexes or hard-delete paths fail here until classified.
@@ -26,8 +27,15 @@ function zodKeys(schema: ZodType): Set<string> {
 describe("data classification inventory (18-07/18-20)", () => {
   const typed = typedCollectionFields();
 
-  it("classifies exactly every governed collection", () => {
+  it("classifies exactly every governed collection, and every collection the type checker can resolve", () => {
     expect(Object.keys(dataClassification).sort()).toEqual([...discoverCollections()].sort());
+    for (const name of typed.trees.keys()) expect(name in dataClassification, `${name}: typed collection is not classified`).toBe(true);
+  }, 120_000);
+
+  it("explains every .collection(name) call whose name is not a single string literal", () => {
+    const actual: Record<string, number> = {};
+    for (const site of typed.unresolved) { const file = site.split(":")[0]!; actual[file] = (actual[file] ?? 0) + 1; }
+    expect(actual).toEqual(Object.fromEntries(Object.entries(unresolvedCollectionSites).map(([file, entry]) => [file, entry.count])));
   });
 
   it("classifies exactly the top-level fields of every typed collection (type checker) and of every manual section", () => {
@@ -38,11 +46,24 @@ describe("data classification inventory (18-07/18-20)", () => {
         for (const field of declared) expect(classified(name).has(field), `${name}.${field}: classify the adapter field`).toBe(true);
         continue;
       }
-      const expected = entry.fieldSource === "manual-section" ? new Set([...declared, ...typed.manualFields]) : declared;
+      const expected = entry.fieldSource === "manual-section" ? new Set([...declared, ...(typed.manualTree.get("") ?? [])]) : declared;
       expect(expected.size, `${name}: no typed document found - type the collection or change fieldSource`).toBeGreaterThan(0);
       expect([...classified(name)].sort(), `${name}: classified top-level fields vs document type`).toEqual([...expected].sort());
     }
-  }, 120_000);
+  });
+
+  it("classifies nested fields wherever the classification goes below a field (a new nested field fails until classified)", () => {
+    for (const [name, entry] of Object.entries(dataClassification)) {
+      if (entry.fieldSource === "auth-adapter") continue;
+      const tree = entry.fieldSource === "manual-section" ? new Map([...typed.manualTree, ...(typed.trees.get(name) ?? [])]) : typed.trees.get(name)!;
+      expect(uncoveredPaths(tree, Object.keys(entry.fields)), `${name}: unclassified nested fields`).toEqual([]);
+    }
+  });
+
+  it("pins the Auth.js versions whose adapter writes the auth collections (an upgrade needs a field re-review)", () => {
+    const installed = (name: string) => (JSON.parse(readFileSync(`node_modules/${name}/package.json`, "utf8")) as { version: string }).version;
+    expect(Object.fromEntries(Object.keys(authAdapterVersions).map((name) => [name, installed(name)]))).toEqual(authAdapterVersions);
+  });
 
   it("classifies exactly the fields.* keys of every manual-section domain schema", () => {
     for (const [section, collection] of Object.entries(sectionCollections)) {
@@ -60,6 +81,12 @@ describe("data classification inventory (18-07/18-20)", () => {
         const where = `${name}.${path}`;
         if (kind === "pseudonymous-identifier") expect(personal, `${where}: a hashed/HMAC identifier is pseudonymous personal data`).toBe("pseudonymous");
         if (personal === "pseudonymous") expect(["sha256", "hmac"], `${where}: pseudonymous needs a hash/HMAC transform`).toContain(transform);
+        if (["record-id", "owner-id", "reference-id", "direct-identifier"].includes(kind)) {
+          expect(["sha256", "hmac"].includes(transform), `${where}: a hashed identifier is a pseudonymous-identifier`).toBe(false);
+        }
+        if (["sha256", "hmac"].includes(transform) && /\b(e-?mail|user ?id|owner|name)\b/i.test(note) && kind !== "pseudonymous-identifier") {
+          expect(personal, `${where}: a hash over personal input is personal data`).not.toBe("none");
+        }
         if (kind === "direct-identifier") expect(personal, `${where}: a direct identifier is personal`).not.toBe("none");
         if (kind === "owner-id") expect(personal, `${where}: a user id is personal`).not.toBe("none");
         expect(/anonym/i.test(note.replace(/not anonymous/gi, "")), `${where}: never describe a value as anonymous`).toBe(false);

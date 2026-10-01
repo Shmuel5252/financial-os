@@ -88,7 +88,7 @@ Wording per `PHASE_18_ENTRY_REVIEW.md` / `PHASE_18_HARDENING_PACKAGE.md`. "R" re
 | 18-04 | partially (R/O) | TLS/HSTS/limits/principal review on the platform |
 | 18-05 | partially (R) | auth-edge/distributed/deployed limiter evidence; capacity policy |
 | 18-06 | partially (R) | nonce/strict CSP rollout + real-browser validation |
-| 18-07 | partially (R) — repository sink inventory + sentinels 2026-10-01 | platform/crash/log-access review; owner decisions F-18-20-01, F-18-20-08 |
+| 18-07 | partially (R) — repository sink inventory + sentinels 2026-10-01 | platform/crash/log-access review; owner decisions F-18-20-01, F-18-20-08, F-18-20-10 |
 | 18-08 | partially (R) | monitoring/alert delivery with real credentials |
 | 18-09 | partially (contract) | real SLO measurement |
 | 18-10 | pending E/P | backup storage/vendor, consistent capture, schedule, alerts, retention (owner decision; may need paid tier) |

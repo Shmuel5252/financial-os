@@ -1,6 +1,6 @@
 # Phase 18 rows 18-07 and 18-20: data classification, retention inventory and logging/telemetry sinks (repository portion)
 
-Status: **repository portion built 2026-10-01; rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
+Status: **repository portion built 2026-10-01, reviewed and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
 today. It adopts no retention period, access role or deletion mechanism; the recommendations live separately in
 `PHASE_18_RETENTION_DRAFT.md` (**DRAFT / NOT ADOPTED**). No runtime code, TTL index, deletion job, logging behaviour, application data
 or infrastructure was changed in this item.
@@ -9,29 +9,48 @@ or infrastructure was changed in this item.
 
 | Artifact | What it holds | CI test |
 | --- | --- | --- |
-| `tests/security/data-classification.ts` | 55 collections, 1,034 field rows (class, personal-data level, transform, note), current retention with `file:line`, raw secrets at rest, TTL/hard-delete inventory, template retention, data stores outside MongoDB, out-of-scope list | `tests/unit/data-classification.test.ts` (7 tests) |
-| `tests/security/logging-sink-matrix.ts` | 7 sinks covering every emission point, per-field treatment, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (5 tests) |
-| `tests/unit/logging-sentinels.test.ts`, `tests/integration/logging-sentinels.integration.test.ts`, `[log-…]` tests in the recovery suites | sentinel tests per sink | run in `npm test` |
+| `tests/security/data-classification.ts` | 55 collections, 1,141 field rows (class, personal-data level, transform, note), current retention with `file:line`, raw secrets at rest, retention-mechanism inventory, template retention, data stores outside MongoDB, the explained non-literal collection calls, pinned Auth.js adapter versions, out-of-scope list | `tests/unit/data-classification.test.ts` (10 tests) |
+| `tests/security/logging-sink-matrix.ts` | 9 entries (8 log/telemetry sinks + 1 classified non-log external I/O) covering every emission point and SDK call, per-field treatment, pinned operator output, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (6 tests) |
+| `tests/unit/logging-sentinels.test.ts` (11), `tests/integration/logging-sentinels.integration.test.ts` (1), `[log-…]` tests in the recovery suites (2) | sentinel tests per sink, plus a self-test of the capture and matcher | run in `npm test` |
 
 CI fails when:
-- **Collections.** A collection appears or disappears. Discovery is AST-based: literals, `as const` names, and the manual-section, auth and ledger maps.
-- **Top-level fields.** A typed collection's top-level fields differ from the TypeScript document type. These are read with the type checker from every `.collection<T>(…)` call; manual sections also use `ManualRecordDocument`.
+- **Collections.** A collection appears or disappears. Discovery is AST-based (literals, `as const` names, manual-section/auth/ledger maps) over `src/` and `workers/`. Additionally:
+  - any collection the type checker resolves from a `.collection<T>(name)` call must be classified;
+  - every `.collection(name)` call whose name is not a single literal must be explained per file (14 today).
+- **Fields, top level.** A typed collection's top-level fields differ from its TypeScript document type(s).
+- **Fields, nested.** Once a row goes below a field, every child of that field in the type must be classified, recursively (e.g. a new `notifications.email.recipientEmail` fails).
 - **Manual-section fields.** A manual section's `fields.*` keys differ from its zod domain schema.
-- **Pseudonymized identifiers.** A hashed or HMAC identifier is not marked `pseudonymous`, or any value is described as "anonymous".
+- **Auth.js versions.** The installed `@auth/mongodb-adapter`/`@auth/core` versions change: their adapter defines the auth collections.
+- **Pseudonymized identifiers.** Any of these fails:
+  - a hashed or HMAC identifier is not a `pseudonymous-identifier`;
+  - a hash over e-mail, user, owner or name input is marked non-personal;
+  - any value is described as "anonymous".
 - **Raw secrets.** A new raw secret field appears.
-- **TTL and hard deletes.** A TTL index option or hard-delete call (`deleteOne`/`deleteMany`/`findOneAndDelete`/`drop*`/`bulkWrite`/`remove`) appears in `src/`, `workers/` or `scripts/` without classification.
+- **Retention mechanisms.** Any of these appears without classification:
+  - a TTL index option (including computed keys);
+  - a hard-delete or replace call (`deleteOne`/`deleteMany`/`findOneAndDelete`/`drop*`/`bulkWrite`/`remove`/`replaceOne`/`findOneAndReplace`);
+  - an `$unset`;
+  - a `db.command` that drops or alters collections.
 - **Backup template retention.** The backup template's lifecycle, Object Lock or log-group retention changes.
-- **Emission points.** Any emission point is unclassified, stale or miscounted. Emission points are `console.*`, `process.stdout`/`stderr`/`emitWarning`, telemetry `.emit()`, and `logger`/`debug`/`logging` config keys in `src/`, `workers/`, `scripts/` and `next.config`.
-- **Sentinel tests.** A sink's sentinel test is not a live `it()`/`test()`.
+- **Emission points.** Any emission point or SDK call is unclassified, stale or miscounted:
+  - `console.*`;
+  - any other use of `console` (aliasing, destructuring, `globalThis.console`, element access);
+  - any `process` member outside the inert set `env`/`argv`/`cwd`/`execPath`/`exit`/`exitCode`, and any aliasing of `process`;
+  - imports or requires of `node:console`/`node:process`, `util.debuglog`, `fs.writeSync`;
+  - `Console`, `sendBeacon`;
+  - telemetry `.emit()`;
+  - AWS SDK command names and `@aws-sdk/*` modules;
+  - `logger`/`debug`/`logging` config keys in `src/`, `workers/`, `scripts/` and `next.config`.
+- **Operator output.** What operator-run code prints changes: the exact console arguments of the worker CLIs and `scripts/*.mjs` are pinned. Separately, an operator script prints env values, URIs, secrets or raw error messages.
+- **Sentinel tests.** A sink's sentinel test is not live. "Live" means a real `it`/`test` that asserts (directly or through a same-file helper) and is not `skip`/`todo`/`skipIf` or inside an `if`.
 - **Dependencies and driver logging.** A logging or telemetry SDK is added, or MongoDB driver command logging is enabled in code.
 - **Auth.js logging.** Auth.js `debug` or the redacting logger changes.
-- **Operator output.** An operator script prints env values, URIs, secrets or raw error messages.
-- **Ledger-rebuild summary.** The ledger-rebuild CLI's printed summary gains a field.
 
 ## 2. Collection and field coverage
 
 The classification was produced by three independent read-only source traces and then reconciled against the type checker. The
-reconciliation is exact for every typed collection. The Auth.js adapter collections are checked as a superset of the app's typed views.
+reconciliation is exact for every typed collection, at the top level and wherever a row goes deeper (nested coverage). The Auth.js adapter collections are checked as a superset of the app's typed views, with the adapter versions pinned.
+The independent review corrected 31 rows (see §7) and the nested check added 107 audit-trail rows.
 
 Scope covered:
 - **Collections:** 55. They split into 44 app, 4 Auth.js, 1 operational (`rateLimits`), 2 deletion ledger (separate database), 3 offline-migration and 1 restore-target collection.
@@ -68,16 +87,16 @@ Field rows by personal-data level:
 | --- | --- |
 | direct | 10 |
 | indirect | 500 |
-| pseudonymous | 30 |
-| none | 494 |
+| pseudonymous | 31 |
+| none | 600 |
 
 Field rows by transform:
 
 | Transform | Field rows |
 | --- | --- |
-| raw | 796 |
+| raw | 907 |
 | derived | 105 |
-| sha256 | 84 |
+| sha256 | 80 |
 | hmac | 34 |
 | truncated | 15 |
 
@@ -160,7 +179,7 @@ OAuth tokens are **not** in backups: the backup keeps only `provider` and `provi
 
 ## 3. Logging and telemetry sink coverage
 
-There are 27 emission-site keys and 50 occurrences, grouped into 7 sinks. Treatments in the table:
+There are 33 emission-site keys and 53 occurrences, in 9 matrix entries: 8 log/telemetry sinks, plus the backup worker's SSM/S3 calls, which are classified as external I/O and are not logs. Treatments in the table:
 - **literal:** fixed text.
 - **enum:** a closed allowlist; anything else is replaced.
 - **count:** a bounded integer, else null.
@@ -185,7 +204,7 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 | Implicit sink | What it logs | Status |
 | --- | --- | --- |
 | Next.js server error logging | Pages and server actions only (route handlers catch errors) | See F-18-20-08 |
-| Lambda runtime | The backup worker's fixed fail-closed messages, sent to CloudWatch (30 days) | — |
+| Lambda runtime | The backup worker's fail-closed messages, plus **raw driver/SDK messages** from connect, dbStats, the metric call and S3 writes, sent to CloudWatch (30 days) | See F-18-20-08 |
 | Vercel request logs | URL query strings | See F-18-20-01 |
 | MongoDB driver logging | Only if `MONGODB_LOG_*` is set on the platform | No code enables it; CI-checked |
 
@@ -213,7 +232,7 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 - **Outputs:** every `console` level and both `process` streams are captured. The check uses `inspect` (hidden properties, unlimited depth) plus JSON, against raw, URL-encoded and JSON-escaped forms.
 - **Response bodies:** checked for the route-error and validation paths.
 
-**Tests (11 sentinel tests):**
+**Tests (13 sentinel tests plus a capture self-test):**
 - `log-provider-projection`
 - `log-ai-sink`
 - `log-notification-sink`
@@ -225,10 +244,13 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 - `log-ai-service-path`: real service, repository and default console sink, on MongoDB.
 - `log-restore-drill-output`: fixed result shape.
 - `log-ledger-rebuild-output`: no receipt, subject, marker, user id or key.
+- `log-backup-metrics`: fixed metric names, counts and sizes, and only the Environment dimension.
+- `log-validation-key-echo`: unrecognized keys are echoed by name to the requester (F-18-20-10), never their values; nothing is logged.
+- `log-capture-self-test`: the capture sees `console.dir`/`table`/`trace` and both streams; the matcher catches base64, hex, case-changed and truncated leaks.
 
 All pass.
 
-**Mutation probes:** 28 temporary probes (L01–L20, D01–D08). None was committed; each file was restored and verified by SHA-256. Results are in §8.
+**Mutation probes:** 46 temporary probes over two rounds (L01–L20 with L09b, D01–D08, and R01–R17 from the review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
 
 ## 5. Findings (no actual application logging leak found)
 
@@ -245,7 +267,12 @@ runtime changes.
 | F-18-20-05 | Low (pseudonymization quality) | Open | Unkeyed sha256 over low-entropy identifiers and values (e-mail, user id, household name, financial-condition fingerprint) can be linked or brute-forced. They must be treated as personal data, as classified. |
 | F-18-20-06 | Low (key management) | Open | Open-banking aliases are HMAC-keyed with `AUTH_SECRET`, shared with authentication, so a rotation orphans every alias (see 18-13). `bankAccountReconciliations.*.comparison.institution` keeps the raw provider institution label next to its HMAC alias. |
 | F-18-20-07 | Low (offline/dev data) | Open | `bankDevelopmentArchive.payload` keeps full unencrypted BSON copies of deleted records indefinitely in the database the offline migration ran against. `bankDevelopmentMigrations.protectedRecords` lists ids and digests of every record of all owners. |
-| F-18-20-08 | Info (implicit logging) | Open | Next.js prints uncaught page and server-action errors verbatim. App-thrown messages are fixed, but a third-party message would be printed as is: for example, a MongoDB E11000 message includes the duplicate key **value**. No such path was observed: pages read only, and the two server actions are sign-in and sign-out. There is no framework-level redaction hook (`onRequestError`). |
+| F-18-20-08 | Low (implicit logging) | Open | Raw third-party error messages reach framework and runtime logs without a redaction boundary:
+- **Next.js** prints uncaught page and server-action errors verbatim. App-thrown messages are fixed, but a MongoDB E11000 message includes the duplicate key **value**. No such path was observed: pages read only, and the two server actions are sign-in and sign-out.
+- **The backup Lambda** passes raw driver/SDK errors to CloudWatch: from connect (`backup-worker.ts:54-55`), dbStats (`:63`), the metric call (`:64`) and S3 writes (`workers/backup/index.ts` rethrows). The review saw host names, no keys or documents.
+
+No `onRequestError` hook and no error-message projection exist. |
+| F-18-20-10 | Low (response echo, not a log) | Open — Owner decision | Strict zod schemas report unrecognized object **key names** in the 400 response (`Unrecognized keys: "…"`). This goes back to the requester only and is never logged; values are never echoed. It is pinned by `[log-validation-key-echo]`. Proposed: map `unrecognized_keys` to a fixed message (a runtime change, outside this item). |
 | F-18-20-09 | Info (by design) | Recorded | `ledger-mirror/` and `ledger-journal/` never expire and are not app-encrypted (bucket SSE only). Their content is pseudonymous deletion evidence. |
 
 ## 6. Residual work (rows stay PARTIAL)
@@ -257,7 +284,7 @@ runtime changes.
   - CloudWatch access;
   - whether `MONGODB_LOG_*` is unset in every environment.
 - **Crash/error reporting** for pages and server actions (F-18-20-08).
-- **Owner decisions** on F-18-20-01 and F-18-20-08.
+- **Owner decisions** on F-18-20-01, F-18-20-08 and F-18-20-10.
 
 **18-20 (retention/access):**
 - **Owner adoption** (or rejection) of the retention, access and deletion recommendations in `PHASE_18_RETENTION_DRAFT.md`.
@@ -270,11 +297,35 @@ runtime changes.
 
 ## 7. Independent review
 
-Pending (the next step after this build): adversarial review → fixes → re-review, recorded here.
+**Round 1 (2026-10-01).** An adversarial reviewer worked read-only on commit `a83d5f3`, with its own mutations in a scratch copy.
+
+It found **no actual leak in current code** and no scope violation. But 7 of its mutations survived every 18-07/18-20 test, including one real leak injected into scratch code: `stderr.write` of the search index, which carries financial text. All findings were fixed in tests and documents only, with no runtime change:
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | Important | The scanner missed aliased and imported sinks: `const { stderr } = process`, `globalThis["console"]`, `node:process`/`node:console` imports, `debuglog`, `writeSync`, `new Console`, `sendBeacon` | Every `process` member outside an inert allowlist, every non-member use of `console`/`process`, sink element keys, sink imports/requires and sink APIs are now sites (R01–R06, R14, R16, R17 detected) |
+| 2 | Important | Worker CLI print lines were not pinned (M1 printed a URI, M2 the whole error) | The exact console arguments of the worker CLIs and scripts are pinned (R07, R08 detected) |
+| 3 | Important | Classification was enforced at the top level only | Type-checker document trees with the nested-coverage rule, which added 107 audit-trail rows (R09 detected) |
+| 4 | Important | Discovery was syntactic: a const-named collection was missed, and `workers/` was not scanned | Every type-resolved collection must be classified, the 14 non-literal call sites are explained per file, and discovery covers `workers/` (R10 detected) |
+| 5 | Important | The CloudWatch `PutMetricData` sink was missing | AWS command names and `@aws-sdk` modules are sites. Added the `backup-metrics` sink with `[log-backup-metrics]`, and the SSM/S3 calls as classified non-log I/O (R15 detected) |
+| 6 | Minor | Retention scanner gaps: computed TTL keys, `$unset`, `replaceOne`, `findOneAndReplace`, `db.command` | All added. 3 `$unset` and 2 `replaceOne` sites classified (R11, R12 detected) |
+| 7 | Minor | The capture missed `console.dir`/`dirxml` | Every console method is spied; `[log-capture-self-test]` |
+| 8 | Minor | The matcher missed base64, case-changed and partial leaks | Base64/base64url/hex, case-insensitive and 12-character tails; covered by the self-test |
+| 9 | Minor | Dead tests counted as live (`describe.skip`, `if (false)`, empty bodies) | AST-based liveness check (R13 detected) |
+| 10 | Minor | Validation responses echo key names | Recorded as F-18-20-10 and pinned by `[log-validation-key-echo]` (runtime fix out of scope) |
+| 11 | Minor | Misclassifications and copied notes | 31 rows corrected. New rules: hashed ids must be pseudonymous identifiers; hashes over personal input are personal |
+| 12 | Minor | Count and description errors in this document, and the Lambda claim | Corrected; the Lambda raw messages are now in F-18-20-08 |
+| 13 | Minor | The DRAFT did not name `recoveryQuarantine` or `bankDevelopmentMigrationLocks` | Named, together with every other collection |
+
+Two suspected items were recorded:
+- **`vercel-ledger-env.ps1`** rethrows the Vercel CLI output on failure. Noted in `operatorPowerShell`; not tested.
+- **Auth.js adapter field drift.** Covered by the version pin.
+
+**Re-review:** pending (next step).
 
 ## 8. Mutation evidence
 
-29 temporary probes were run on 2026-10-01. Each one edited a single file, ran the named tests, then restored the exact bytes; every restore was SHA-256-verified, nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty afterwards.
+Two rounds of temporary probes were run on 2026-10-01: 46 probes in total. Each probe edited a single file, ran the named tests, then restored the exact bytes; every restore was SHA-256-verified, nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after each round. Round 2 re-ran every round-1 probe against the strengthened tests.
 
 | Probe | Mutation | Result |
 | --- | --- | --- |
@@ -294,7 +345,7 @@ Pending (the next step after this build): adversarial review → fixes → re-re
 | L13 | New `console.log` in a service | Detected by the emission inventory |
 | L14 | New telemetry `.emit()` site | Detected by the emission inventory |
 | L15 | Ledger-rebuild summary also prints `plan.rows` | Detected by `log-operator-scripts` (pinned summary) |
-| L16 | An operator script prints the URI | Detected by `log-operator-scripts` |
+| L16 | An operator script prints the URI | Detected by `log-operator-scripts` and the pinned outputs |
 | L17 | `next.config` `logging.fetches.fullUrl` | Detected by the emission inventory |
 | L18 | `pino` dependency added | Detected by the SDK check |
 | L19 | `monitorCommands` in code | Detected by the driver-logging check |
@@ -302,10 +353,27 @@ Pending (the next step after this build): adversarial review → fixes → re-re
 | D01 | New field `email` on the profile document type | Detected by the type-checker field check |
 | D02 | New transaction field `counterpartyIban` | Detected by the manual-section zod check |
 | D03 | New collection `profileExports` | Detected by both collection inventories |
-| D04 | New TTL index on profiles | Detected by the TTL/hard-delete inventory |
-| D05 | New `deleteMany` purge path | Detected by the TTL/hard-delete inventory |
+| D04 | New TTL index on profiles | Detected by the retention-mechanism inventory |
+| D05 | New `deleteMany` purge path | Detected by the retention-mechanism inventory |
 | D06 | Package expiry changed to 365 days | Detected by the template-retention check |
 | D07 | Email hash reclassified as non-personal | Detected by the pseudonymization rule |
 | D08 | A hash field reclassified as a raw secret | Detected by the raw-secret list |
+| R01 | `const { stderr } = process; stderr.write(items)` in the search rebuild (the reviewer's real-leak mutation) | Detected by the emission inventory |
+| R02 | `globalThis["console"].log(items)` | Detected by the emission inventory |
+| R03 | `import { stdout } from "node:process"` | Detected by the emission inventory |
+| R04 | `debuglog` from `node:util` | Detected by the emission inventory |
+| R05 | `writeSync(2, …)` from `node:fs` | Detected by the emission inventory |
+| R06 | `new Console(…)` from `node:console` | Detected by the emission inventory |
+| R07 | Restore-drill CLI prints the target URI (reviewer M1) | Detected by the pinned outputs |
+| R08 | Ledger-rebuild CLI prints the whole error (reviewer M2) | Detected by the pinned outputs |
+| R09 | Nested `notifications.email.recipientEmail` (reviewer M4) | Detected by nested coverage |
+| R10 | Collection opened through a const name (reviewer M5) | Detected by the type-resolved collection check |
+| R11 | Computed `["expireAfterSeconds"]` TTL (reviewer M6) | Detected by the retention-mechanism inventory |
+| R12 | `updateMany` with `$unset` (reviewer M7) | Detected by the retention-mechanism inventory |
+| R13 | A sentinel test wrapped in `if (…)` | Detected by the live-test check |
+| R14 | `console.dir(items)` | Detected by the emission inventory |
+| R15 | A new metric dimension | Detected by `log-backup-metrics` |
+| R16 | `const p = process; p.stdout.write(…)` | Detected by the emission inventory |
+| R17 | `const { log } = console; log(items)` | Detected by the emission inventory |
 
-28 of 29 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected.
+45 of 46 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every mutation that survived the review's round 1 is now detected.

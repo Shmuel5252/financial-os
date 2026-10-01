@@ -99,5 +99,5 @@ describe("authorization inventory (18-14)", () => {
       }
       for (const identifier of entry.identifiers) expect(identifier.enforcement.length, `${entry.key} ${identifier.name}: enforcement`).toBeGreaterThan(5);
     }
-  });
+  }, 30_000);
 });

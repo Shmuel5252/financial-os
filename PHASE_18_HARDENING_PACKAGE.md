@@ -50,7 +50,7 @@ R = repository tests/source verified; L = real isolated local MongoDB evidence; 
 | 18-04 | partially satisfied | R/O prior config; E actual TLS/HSTS/limits/principal and Gate B |
 | 18-05 | partially satisfied | R/L limiter and new exports; E ingress/auth flood and measured thresholds |
 | 18-06 | partially satisfied | R headers/CSP incremental tests; E browser/nonce/HSTS |
-| 18-07 | partially satisfied | R fixed log projections; R (2026-10-01) CI-enforced inventory of every emission point (7 sinks, per-field treatment) and sentinel tests for direct/nested/Error/URL/header leakage, no application leak found (`PHASE_18_DATA_AND_LOGGING_CLASSIFICATION.md`); E platform/crash/log access/retention, findings F-18-20-01/08 |
+| 18-07 | partially satisfied | R fixed log projections; R (2026-10-01) CI-enforced inventory of every emission point (7 sinks, per-field treatment) and sentinel tests for direct/nested/Error/URL/header leakage, no application leak found (`PHASE_18_DATA_AND_LOGGING_CLASSIFICATION.md`); E platform/crash/log access/retention, findings F-18-20-01/08/10 |
 | 18-08 | partially satisfied | R/L readiness, explicit operator; Gate B E, alerts/monitor credentials E |
 | 18-09 | partially satisfied | R SLI contract/load aggregates; E actual SLO coverage/measurements |
 | 18-10 | pending external configuration and policy | R planner; E backup storage/consistent capture/history, P exclusions/retention |

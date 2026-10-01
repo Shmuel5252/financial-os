@@ -14,6 +14,7 @@ import { manualSectionInputSchemas } from "@/lib/onboarding/manual-record";
 import { safeProviderTelemetry } from "@/lib/operations/safe-telemetry";
 import { generateReportAiSummary } from "@/lib/reports/report-summary-service";
 import { searchQuerySchema } from "@/lib/search/search";
+import { backupMetrics } from "../../workers/backup/index";
 import { parseUntrusted } from "@/lib/validation/parse-untrusted";
 import { captureOutput, dump, expectNoSentinel, hostile, sentinels, type Sentinels } from "../security/log-capture";
 
@@ -154,6 +155,36 @@ describe("logging and telemetry sentinels (18-07/18-20)", () => {
       expectNoSentinel(body, s, "validation response");
     }
     expect(calls).toEqual([]);
+  });
+
+  it("[log-validation-key-echo] unrecognized keys are echoed by name to the requester only (F-18-20-10), never their values, and nothing is logged", async () => {
+    const s = sentinels(); const calls = captureOutput();
+    let error: unknown;
+    try { parseUntrusted(createHouseholdInvitationCommandSchema, { email: "member@example.test", [s.email]: s.anthropicKey }); } catch (caught) { error = caught; }
+    const body = await errorResponse(error).text();
+    expect(JSON.parse(body).error.issues).toEqual([{ field: "", message: expect.stringContaining(s.email) }]); // the KEY name (known, recorded)
+    expect(body).not.toContain(s.anthropicKey); // never the value
+    expect(calls).toEqual([]);
+  });
+
+  it("[log-capture-self-test] the capture sees every console method and stream, and the matcher sees encoded and partial leaks", () => {
+    const s = sentinels(); const calls = captureOutput();
+    console.dir({ deep: { email: s.email } }); console.table([{ id: s.userId }]); console.trace(s.merchant); process.stderr.write(s.bearer);
+    expect(calls.length).toBe(4);
+    expect(() => expectNoSentinel(dump(calls.flat()), s, "self-test")).toThrow();
+    for (const leaked of [Buffer.from(s.email).toString("base64"), s.anthropicKey.toUpperCase(), s.userId.slice(-12), Buffer.from(s.hebrewNote).toString("hex")]) {
+      expect(() => expectNoSentinel(`log line ${leaked}`, s, "self-test")).toThrow();
+    }
+  });
+
+  it("[log-backup-metrics] backup metrics carry only fixed names, counts, sizes and the environment dimension", () => {
+    const metrics = backupMetrics("staging", { ledgerHead: 7, primaryLogicalBytes: 4096, ledgerLogicalBytes: 512 });
+    expect(metrics).toEqual([
+      { MetricName: "BackupSucceeded", Value: 1, Unit: "Count", Dimensions: [{ Name: "Environment", Value: "staging" }] },
+      { MetricName: "LedgerHead", Value: 7, Unit: "None", Dimensions: [{ Name: "Environment", Value: "staging" }] },
+      { MetricName: "PrimaryLogicalSizeBytes", Value: 4096, Unit: "Bytes", Dimensions: [{ Name: "Environment", Value: "staging" }] },
+      { MetricName: "LedgerLogicalSizeBytes", Value: 512, Unit: "Bytes", Dimensions: [{ Name: "Environment", Value: "staging" }] },
+    ]);
   });
 
   it("[log-report-summary-path] the report-summary flow emits AI telemetry without report text, amounts, ids or provider errors", async () => {
