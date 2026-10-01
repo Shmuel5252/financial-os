@@ -11,10 +11,14 @@ export type RouteEntry = Readonly<{ route: string; method: Method; authenticatio
   identifiers: readonly Identifier[]; negativeTests: readonly string[] }>;
 export type ServerActionEntry = Readonly<{ file: string; authentication: Authentication; ownership: Ownership; authorization: string;
   identifiers: readonly Identifier[]; negativeTests: readonly string[] }>;
+/** Pages and layouts are server components: they authenticate with auth() + actorFromSession (not requireActor) and may read
+ * identifiers from params/searchParams. Same shape as a server-action entry. */
+export type PageEntry = ServerActionEntry;
 
 const id = (name: string, source: IdentifierSource, enforcement: string): Identifier => ({ name, source, enforcement });
 const S = "session"; const U = "iso-unauthenticated"; // every session route is also covered by the anonymous sweep
 const cursor = (file: string) => id("cursor (raw 24-hex _id)", "query", `${file}: {_id:{$lt:cursor}, userId} - a foreign id only bounds the actor's own page`);
+// Idempotency keys are lookup identifiers too; every idempotencyKeyHash lookup in the repositories is scoped by userId (reviewed 2026-10-01).
 const actorOnly = "Actor-scoped: every read and write is filtered by the session actor's userId; no client identifier selects another user's data.";
 const r = (route: string, method: Method, ownership: Ownership, authorization: string, identifiers: readonly Identifier[], negativeTests: readonly string[],
   authentication: Authentication = S): RouteEntry => ({ route: `api/${route}`, method, authentication, ownership, authorization, identifiers, negativeTests });
@@ -45,7 +49,8 @@ export const routeMatrix: readonly RouteEntry[] = [
   // Manual records (financial-data and onboarding share manual-record-service/repository)
   ...(["financial-data/[section]", "onboarding/[section]"] as const).flatMap((route) => {
     const test = route.startsWith("financial") ? "iso-financial-data" : "iso-onboarding";
-    const section = id("section", "path", "enum parse (manual-record.ts:512-520); selects a collection, never an owner");
+    const section = id("section", "path", route.startsWith("financial") ? "parseManualSection / manualSectionSchema (manual-record.ts:522, 618); selects a collection, never an owner"
+      : "parseOnboardingSection / onboardingSectionSchema (manual-record.ts:512, 622); selects a collection, never an owner");
     return [
       r(route, "GET", "actor", "List filter {deletedAt:null, userId} (manual-record-repository.ts:284-315).", [section, cursor("manual-record-repository.ts:284-315")], [U, test]),
       r(route, "POST", "actor", "Insert carries the actor's userId; referenced records must be the actor's own.", [section,
@@ -91,7 +96,7 @@ export const routeMatrix: readonly RouteEntry[] = [
   r("forecasts", "POST", "actor", "Baseline engine, manifest, intelligence run and review decisions are actor-scoped and re-checked (forecast-repository.ts:191-206).",
     [id("baseline engine / run ids", "derived", "forecast-repository.ts:191-206 {_id, kind, userId} -> 409")], [U, "iso-forecasts"]),
   r("forecast-scenarios", "POST", "actor", "forecastId must be the actor's own -> 404; repository re-check -> 409.",
-    [id("forecastId", "body", "forecast-service.ts:188-189 findForecastForActor {_id, userId}; forecast-repository.ts:252-253")], [U, "iso-forecasts"]),
+    [id("forecastId", "body", "forecast-service.ts:188-189 findForecastForActor {_id, userId}; forecast-repository.ts:261 countDocuments {_id, userId}")], [U, "iso-forecasts"]),
   // Goals
   r("goals/definitions", "POST", "actor", "Goal record and every scoped record id must be the actor's own (409/400); category ids only filter the actor's budget data.",
     [id("goalId", "body", "goal-service.ts:537-539 goals.findForActor -> 409"),
@@ -158,7 +163,7 @@ export const routeMatrix: readonly RouteEntry[] = [
   r("search", "POST", "actor", "Rebuild reads only the actor's data and authorized reports; deleteMany/insertMany by {userId}.", [], [U, "iso-search"]),
   // Households
   r("households", "GET", "household-role", "Lists only households where the actor is owner or ACTIVE member (household-repository.ts:417-439).", [], [U, "iso-household-outsider", "iso-household-removal"]),
-  r("households", "POST", "actor", "Creates a household owned by the actor; idempotency keyed by owner.", [], [U]),
+  r("households", "POST", "actor", "Creates a household owned by the actor; idempotency keyed by owner; never touches another user's data.", [], [U, "iso-household-outsider"]),
   r("households/[householdId]", "GET", "household-role", "requirePrincipal(view): owner or ACTIVE member of an ACTIVE household, checked per request -> 404.",
     [id("householdId", "path", "household-service.ts:100-111, household-repository.ts:441-468"), id("shared resources", "derived", "household-service.ts:236-311 current shares + epoch")],
     [U, "iso-household-outsider", "iso-household-member-role", "iso-household-unshare", "iso-household-removal", "iso-household-dissolve"]),
@@ -172,7 +177,7 @@ export const routeMatrix: readonly RouteEntry[] = [
     [id("householdId", "path", "requirePrincipal(revoke_invitation)"), id("invitationId", "path", "household-repository.ts revokeInvitation {_id, householdId, status:pending}")],
     [U, "iso-household-outsider", "iso-household-member-role"]),
   r("households/[householdId]/members/[membershipId]", "DELETE", "household-role", "Owner only; membership must belong to this household and be active.",
-    [id("householdId", "path", "requirePrincipal(remove_member)"), id("membershipId", "path", "household-repository.ts:567-570 {_id, householdId}")],
+    [id("householdId", "path", "requirePrincipal(remove_member)"), id("membershipId", "path", "household-repository.ts:575-582 findMembershipById {_id, householdId}")],
     [U, "iso-household-outsider", "iso-household-member-role", "iso-household-removal"]),
   r("households/[householdId]/leave", "POST", "household-role", "Active member only (owner/outsider -> 404); membership {householdId, status:active, userId}.",
     [id("householdId", "path", "household-service.ts:518-522")], [U, "iso-household-outsider", "iso-household-rejoin-left"]),
@@ -200,6 +205,32 @@ export const routeMatrix: readonly RouteEntry[] = [
   r("open-banking/reconciliation", "POST", "provider-subject-binding", "assertBinding; legacyKey is an HMAC of the actor's own legacy row; recordDecision re-reads {_id, userId, version}.",
     [id("legacyKey / candidateKey / reviewToken", "body", "account reconciliation service and repository :124-128"), id("binding", "derived", "assertBinding")],
     [U, "iso-open-banking"]),
+];
+
+
+const P = (file: string, ownership: Ownership, authorization: string, identifiers: readonly Identifier[], negativeTests: readonly string[],
+  authentication: Authentication = "session"): PageEntry => ({ file: `src/app/${file}`, authentication, ownership, authorization, identifiers, negativeTests });
+const pageAuth = "Server component: auth() + actorFromSession (src/lib/auth/actor.ts:15-26), redirect to /sign-in without a session; loads only actor-scoped data.";
+const sweep = ["iso-page-sweep"];
+export const pageMatrix: readonly PageEntry[] = [
+  P("layout.tsx", "none", "Root layout: static shell; reads no session, params or data.", [], [], "public"),
+  P("page.tsx", "none", "Landing page: static content; reads no session-bound data.", [], sweep, "public"),
+  P("sign-in/page.tsx", "none", "Sign-in page with an input-free server action (Auth.js sign-in); no stored data.", [], sweep, "auth-protocol"),
+  P("financial-data/profile/page.tsx", "actor", `${pageAuth} Re-exports the onboarding/profile page (completed-onboarding management mode).`, [], sweep),
+  ...(["copilot", "dashboard", "debt-strategies", "financial-data", "forecasts", "goals", "net-worth", "notifications", "onboarding/profile", "onboarding/review",
+    "open-banking", "open-banking/reconciliation", "progress", "purchase-simulation", "transaction-intelligence"] as const)
+    .map((page) => P(`${page}/page.tsx`, "actor", pageAuth, [], sweep)),
+  P("budgets/page.tsx", "actor", `${pageAuth} ?month only selects the actor's own budget month.`,
+    [id("month", "query", "budgets/page.tsx:39 calendarMonthSchema -> loadBudgetView(actor, month) (actor-scoped)")], sweep),
+  P("financial-data/[section]/page.tsx", "actor", `${pageAuth} [section] selects the actor's own records.`,
+    [id("section", "path", "phaseTwoFinancialSectionSchema (financial-data/sections.ts:5) -> listManualRecordPage(actor, section)")], sweep),
+  P("onboarding/[section]/page.tsx", "actor", `${pageAuth} [section] selects the actor's own records.`,
+    [id("section", "path", "onboardingSectionSchema (manual-record.ts:512) -> listManualRecords(actor, section)")], sweep),
+  P("households/page.tsx", "household-role", `${pageAuth} ?household goes through requirePrincipal (owner or active member) -> 404.`,
+    [id("household", "query", "households/page.tsx:25 loadHouseholdCenter(actor, id) -> requirePrincipal (household-service.ts:100-111)")], [...sweep, "iso-page-household"]),
+  P("reports/page.tsx", "actor+household", `${pageAuth} ?scope must be one of the actor's CURRENT households (allowlist), else personal; summaries via findSavedReport.`,
+    [id("scope", "query", "reports/page.tsx:27-29 checked against loadHouseholdCenter(actor) households"), id("periodKind / periodValue", "query", "reportPeriodSchema")],
+    sweep),
 ];
 
 export const serverActionMatrix: readonly ServerActionEntry[] = [

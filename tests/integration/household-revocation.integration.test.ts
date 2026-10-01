@@ -70,8 +70,8 @@ const MEMBER_EMAIL = "member@example.invalid";
   const expire = (householdId: string) =>
     h.db.collection("householdInvitations").updateMany({ householdId: new ObjectId(householdId) }, { $set: { expiresAt: new Date(Date.now() - 86_400_000) } });
 
-  for (const [how, testId] of [["removed", "[iso-household-rejoin-removed]"], ["left", "[iso-household-rejoin-left]"]] as const) {
-    it(`${testId} a ${how} member cannot replay the accepted token, even expired; a new invitation still works`, async () => {
+  async function rejoinScenario(how: "removed" | "left") {
+    {
       const householdId = await household();
       const token = await invite(householdId);
       expect((await accept(token)).status).toBe(200);                    // legitimate first acceptance
@@ -88,8 +88,10 @@ const MEMBER_EMAIL = "member@example.invalid";
       expect((await accept(fresh)).status).toBe(200);
       expect((await membership(householdId))!.status).toBe("active");
       expect(await memberSeesHousehold(householdId)).toBe(true);
-    });
+    }
   }
+  it("[iso-household-rejoin-removed] a removed member cannot replay the accepted token, even expired; a new invitation still works", () => rejoinScenario("removed"));
+  it("[iso-household-rejoin-left] a departed member cannot replay the accepted token, even expired; a new invitation still works", () => rejoinScenario("left"));
 
   it("[iso-household-rejoin-older-token] after a second membership cycle, neither the first nor the second token restores access", async () => {
     const householdId = await household();

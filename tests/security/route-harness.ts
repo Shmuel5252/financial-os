@@ -56,12 +56,12 @@ export async function call(route: string, method: string, init: Init = {}): Prom
 }
 
 /** Digest of every document in every collection except the rate-limiter counters (the only state a refused request may change).
- * With `ownerUserId`, only documents owned by that user (userId / ownerUserId / invitedByUserId) - for attacker requests that
- * legitimately write the attacker's own data but must leave the victim's untouched. */
+ * With `ownerUserId`, only documents owned by that user (userId / ownerUserId / invitedByUserId, or the user's own row by _id, e.g.
+ * authUsers) - for attacker requests that legitimately write the attacker's own data but must leave the victim's untouched. */
 export async function fingerprint(db: Db, ownerUserId?: string): Promise<Record<string, string>> {
   const result: Record<string, string> = {};
   const owner = ownerUserId === undefined ? undefined : new ObjectId(ownerUserId);
-  const filter = owner === undefined ? {} : { $or: [{ userId: owner }, { ownerUserId: owner }, { invitedByUserId: owner }] };
+  const filter = owner === undefined ? {} : { $or: [{ _id: owner }, { userId: owner }, { ownerUserId: owner }, { invitedByUserId: owner }] };
   for (const { name } of await db.listCollections({}, { nameOnly: true }).toArray()) {
     if (name === "rateLimits" || name.startsWith("system.")) continue;
     const documents = await db.collection(name).find(filter, { promoteLongs: false }).sort({ _id: 1 }).toArray();
@@ -85,6 +85,7 @@ export async function expectRefused(db: Db, attempt: () => Promise<Called>, vict
 /** An allowed (2xx) request by another user: nothing of the victim in the response, and the victim's own documents unchanged. */
 export async function expectIsolated(db: Db, attempt: () => Promise<Called>, victimUserId: string, victimMarkers: readonly string[]): Promise<Called> {
   const before = await fingerprint(db, victimUserId);
+  if (Object.keys(before).length === 0) throw new Error("the victim owns no documents - the isolation check would be vacuous");
   const response = await attempt();
   const after = await fingerprint(db, victimUserId);
   if (response.status < 200 || response.status > 299) throw new Error(`expected success, got ${response.status}: ${response.text.slice(0, 200)}`);

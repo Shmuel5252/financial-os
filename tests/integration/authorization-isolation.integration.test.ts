@@ -9,6 +9,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { actAs, call, expectIsolated, expectRefused, marker, newActor, openHarness, type Called, type Harness } from "../security/route-harness";
 
 vi.mock("@/lib/auth/actor", async () => (await import("../security/route-harness")).mockedActorModule());
+// The real AI provider is never reachable from these tests: a regression that skipped an ownership check would fail loudly here
+// instead of calling the network. Victim seeds pass their own fake provider explicitly.
+vi.mock("@/lib/adapters/anthropic/anthropic-ai-provider", () => ({
+  getAnthropicAiProvider: () => ({ generate: async () => { throw new Error("the AI provider must not be reached by an unauthorized request"); } }),
+}));
 
 const uri = process.env.MONGODB_TEST_URI;
 const profile = { countryCode: "IL", displayName: "Synthetic", expectedVersion: null, householdType: "single", primaryCurrency: "ILS", timeZone: "Asia/Jerusalem" };
@@ -26,7 +31,7 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
     category: marker("v-category"), item: marker("v-networth"), debt: marker("v-debt"), purchase: marker("v-purchase"),
     question: marker("v-question"), summary: marker("v-summary"), notification: marker("v-notification") };
   const markers = () => Object.values(m);
-  type Seeded = "account" | "transaction" | "loan" | "goal" | "category" | "engine" | "manifest" | "forecast" | "item" | "run" | "conversation" | "report" | "summary" | "notification";
+  type Seeded = "account" | "transaction" | "loan" | "goal" | "category" | "engine" | "manifest" | "forecast" | "item" | "run" | "conversation" | "report" | "summary" | "notification" | "debt" | "purchase";
   const v = {} as Record<Seeded, string>;
 
   beforeAll(async () => {
@@ -51,11 +56,16 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
     v.forecast = ok(await call("forecasts", "POST", { body: { horizonDays: 30, idempotencyKey: randomUUID() } }), 201).forecast.id;
     v.item = ok(await call("net-worth/items", "POST", { body: { idempotencyKey: randomUUID(), fields: { amount: ils("300.00"), category: "other_asset",
       effectiveAt: "2026-09-01T00:00:00.000Z", label: m.item, provenanceNote: null, relationship: { kind: "standalone" }, side: "asset", valuationType: "user_estimate" } } }), 201).item.id;
-    ok(await call("debt-strategies", "POST", { body: { customPriority: [v.loan], debtTerms: [debtTerm(v.loan)], extraPayment: ils("10.00"), extraPaymentStartDate: "2026-11-01",
-      idempotencyKey: randomUUID(), name: m.debt } }), 201);
-    ok(await call("purchase-simulations", "POST", { body: { charges: [], idempotencyKey: randomUUID(), inputMode: "one_time", installmentCount: 1,
-      name: m.purchase, proposedDate: "2026-10-15", sourceSnapshotId: v.engine, totalPurchasePrice: ils("40.00") } }), 201);
+    v.debt = ok(await call("debt-strategies", "POST", { body: { customPriority: [v.loan], debtTerms: [debtTerm(v.loan)], extraPayment: ils("10.00"), extraPaymentStartDate: "2026-11-01",
+      idempotencyKey: randomUUID(), name: m.debt } }), 201).scenario.id;
+    v.purchase = ok(await call("purchase-simulations", "POST", { body: { charges: [], idempotencyKey: randomUUID(), inputMode: "one_time", installmentCount: 1,
+      name: m.purchase, proposedDate: "2026-10-15", sourceSnapshotId: v.engine, totalPurchasePrice: ils("40.00") } }), 201).simulation.id;
+    ok(await call("goals/definitions", "POST", { body: { configuration: { direction: "increase", kind: "custom", metricLabel: m.goal, targetAmount: ils("100.00") },
+      expectedDefinitionVersion: null, expectedGoalRecordVersion: 1, goalId: v.goal, idempotencyKey: randomUUID(), targetDate: "2027-06-30" } }), 201);
     v.run = ok(await call("transaction-intelligence/runs", "POST", { body: { idempotencyKey: randomUUID() } }), 201).run.id;
+    // The attacker's own engine snapshot, so attacker-side scenarios and forecasts never depend on test order.
+    actAs(attacker);
+    ok(await call("financial-engine/snapshots", "POST", { body: { idempotencyKey: randomUUID(), horizonDays: 90 } }), 201);
   }, 120_000);
   afterAll(async () => { actAs(null); await h?.dispose(); });
 
@@ -83,9 +93,10 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
 
   it("[iso-financial-data] manual records: lists, cursors, update, delete and nested account/refund references stay with their owner", async () => {
     actAs(attacker);
-    for (const section of ["accounts", "transactions", "loans", "goals"]) {
+    for (const [section, victimId] of [["accounts", v.account], ["transactions", v.transaction], ["loans", v.loan], ["goals", v.goal]] as const) {
       await expectIsolated(h.db, () => call("financial-data/[section]", "GET", { params: { section } }), victim.userId, markers());
-      await expectIsolated(h.db, () => call("financial-data/[section]", "GET", { params: { section }, query: { cursor: "f".repeat(24) } }), victim.userId, markers());
+      // A victim record id as the page cursor only bounds the actor's own page.
+      await expectIsolated(h.db, () => call("financial-data/[section]", "GET", { params: { section }, query: { cursor: victimId } }), victim.userId, markers());
     }
     await expectRefused(h.db, () => call("financial-data/[section]", "PUT", { params: { section: "accounts" },
       body: { id: v.account, expectedVersion: 1, fields: { balance: ils("1.00"), name: "taken", type: "bank" } } }), markers());
@@ -120,10 +131,11 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
 
   it("[iso-snapshots] source manifests and engine results: lists, cursors and new captures use only the actor's sources", async () => {
     actAs(attacker);
-    for (const route of ["financial-data/snapshots", "financial-engine/snapshots"]) {
+    for (const [route, victimId] of [["financial-data/snapshots", v.manifest], ["financial-engine/snapshots", v.engine]] as const) {
       const listed = await expectIsolated(h.db, () => call(route, "GET"), victim.userId, markers());
       expect(listed.text).not.toContain(v.engine); expect(listed.text).not.toContain(v.manifest);
-      await expectIsolated(h.db, () => call(route, "GET", { query: { cursor: "f".repeat(24) } }), victim.userId, markers());
+      const paged = await expectIsolated(h.db, () => call(route, "GET", { query: { cursor: victimId } }), victim.userId, markers());
+      expect(paged.text).not.toContain(v.engine); expect(paged.text).not.toContain(v.manifest);
     }
     const manifest = await expectIsolated(h.db, () => call("financial-data/snapshots", "POST", { body: { idempotencyKey: randomUUID() } }), victim.userId, markers());
     expect(manifest.text).not.toContain(v.account);
@@ -153,7 +165,7 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
     await expectRefused(h.db, () => call("debt-strategies/evaluate", "POST", { body }), markers(), [404]);
     await expectRefused(h.db, () => call("debt-strategies", "POST", { body: { ...body, idempotencyKey: randomUUID(), name: "taken" } }), markers(), [404]);
     await expectIsolated(h.db, () => call("debt-strategies", "GET"), victim.userId, markers());
-    await expectIsolated(h.db, () => call("debt-strategies", "GET", { query: { cursor: "f".repeat(24) } }), victim.userId, markers());
+    expect((await expectIsolated(h.db, () => call("debt-strategies", "GET", { query: { cursor: v.debt } }), victim.userId, markers())).text).not.toContain(v.debt);
   });
 
   it("[iso-forecasts] forecasts list only the actor's; a scenario cannot be built on another user's forecast", async () => {
@@ -189,7 +201,7 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
       { category: "other_asset", valuationType: "user_estimate" }) } }), markers());
     await expectRefused(h.db, () => call("net-worth/items", "DELETE", { body: { id: v.item, expectedVersion: 1 } }), markers());
     await expectIsolated(h.db, () => call("net-worth/snapshots", "GET"), victim.userId, markers());
-    await expectIsolated(h.db, () => call("net-worth/snapshots", "GET", { query: { cursor: "f".repeat(24) } }), victim.userId, markers());
+    await expectIsolated(h.db, () => call("net-worth/snapshots", "GET", { query: { cursor: v.item } }), victim.userId, markers());
     await expectIsolated(h.db, () => call("net-worth/snapshots", "POST", { body: {} }), victim.userId, markers());
   });
 
@@ -199,7 +211,7 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
     await expectRefused(h.db, () => call("purchase-simulations/evaluate", "POST", { body }), markers(), [404]);
     await expectRefused(h.db, () => call("purchase-simulations", "POST", { body: { ...body, idempotencyKey: randomUUID(), name: "taken" } }), markers(), [404]);
     await expectIsolated(h.db, () => call("purchase-simulations", "GET"), victim.userId, markers());
-    await expectIsolated(h.db, () => call("purchase-simulations", "GET", { query: { cursor: "f".repeat(24) } }), victim.userId, markers());
+    expect((await expectIsolated(h.db, () => call("purchase-simulations", "GET", { query: { cursor: v.purchase } }), victim.userId, markers())).text).not.toContain(v.purchase);
   });
 
   it("[iso-transaction-intelligence] runs are private and a review cannot target another user's run", async () => {
@@ -224,11 +236,11 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
       ["progress-journeys", "POST", { origin: "live" }], ["notifications/evaluate", "POST", {}],
     ] as const) await expectIsolated(h.db, () => call(route, method, body === undefined ? {} : { body }), victim.userId, markers());
     await expectRefused(h.db, () => call("notifications", "PATCH", { body: { expectedVersion: 1, id: v.notification, inAppState: "read" } }), markers(), [404]);
-    await expectRefused(h.db, () => call("onboarding/progress", "POST", { body: { expectedVersion: 99, step: "income" } }), markers());
+    const own = ok(await call("profile", "GET")).profile as { version: number; onboarding: { currentStep: string } };
+    await expectIsolated(h.db, () => call("onboarding/progress", "POST", { body: { expectedVersion: own.version, step: own.onboarding.currentStep } }), victim.userId, markers());
   });
 
   it("[iso-ai] AI conversations: list, continue and delete never reach another user's conversation", async () => {
-    vi.stubEnv("ANTHROPIC_API_KEY", "synthetic-not-a-key-0000000000000000"); // the ownership refusal happens before any provider call
     actAs(attacker);
     await expectIsolated(h.db, () => call("ai/conversations", "GET"), victim.userId, markers());
     await expectRefused(h.db, () => call("ai/conversations", "POST", { body: { conversationId: v.conversation, expectedVersion: 1, focus: "safe_to_spend",
@@ -251,7 +263,6 @@ const debtTerm = (loanId: string) => ({ allocationOrder: null, fees: [], feesKno
   });
 
   it("[iso-report-summaries] report summaries cannot be listed, generated or deleted through another user's report or summary", async () => {
-    vi.stubEnv("ANTHROPIC_API_KEY", "synthetic-not-a-key-0000000000000000");
     actAs(attacker);
     await expectRefused(h.db, () => call("report-summaries", "GET", { query: { reportId: v.report } }), markers(), [404]);
     await expectRefused(h.db, () => call("report-summaries", "POST", { body: { expectedSummaryVersion: 1, idempotencyKey: randomUUID(), reportId: v.report } }),

@@ -20,7 +20,7 @@ const ok = (response: Called, status = 200) => { expect(response.status, respons
   const owner = newActor(); const member = newActor(); const outsider = newActor();
   const m = { shared: marker("owner-shared"), unshared: marker("owner-unshared"), memberOwn: marker("member-own"), household: marker("household") };
   const markers = () => Object.values(m);
-  let householdId = ""; let ownerShared = ""; let ownerUnshared = ""; let memberAccount = ""; let membershipId = ""; let pendingInvitationId = ""; let pendingToken = "";
+  let householdId = ""; let ownerShared = ""; let ownerUnshared = ""; let ownerGoal = ""; let memberAccount = ""; let membershipId = ""; let pendingInvitationId = ""; let pendingToken = "";
 
   const account = async (name: string) => ok(await call("financial-data/[section]", "POST", { params: { section: "accounts" },
     body: { idempotencyKey: randomUUID(), fields: { balance: ils("100.00"), name, type: "bank" } } }), 201).record.id as string;
@@ -34,6 +34,10 @@ const ok = (response: Called, status = 200) => { expect(response.status, respons
     actAs(owner);
     householdId = ok(await call("households", "POST", { body: { idempotencyKey: randomUUID(), name: m.household } }), 201).household.id;
     ownerShared = await account(m.shared); ownerUnshared = await account(m.unshared);
+    ownerGoal = ok(await call("financial-data/[section]", "POST", { params: { section: "goals" }, body: { idempotencyKey: randomUUID(), fields: { currentValue: ils("1.00"),
+      priority: 1, startingValue: ils("0.00"), targetAmount: ils("50.00"), targetDate: "2027-06-30", title: m.unshared, type: "custom" } } }), 201).record.id;
+    ok(await call("goals/definitions", "POST", { body: { configuration: { direction: "increase", kind: "custom", metricLabel: "owner goal", targetAmount: ils("50.00") },
+      expectedDefinitionVersion: null, expectedGoalRecordVersion: 1, goalId: ownerGoal, idempotencyKey: randomUUID(), targetDate: "2027-06-30" } }), 201);
     ok(await call("households/[householdId]/shares", "POST", { params: { householdId }, body: { action: "share", expectedVersion: null, resourceId: ownerShared, resourceKind: "account" } }));
     const token = ok(await call("households/[householdId]/invitations", "POST", { params: { householdId }, body: { email: "member@example.invalid" } }), 201).token as string;
     const pending = ok(await call("households/[householdId]/invitations", "POST", { params: { householdId }, body: { email: "someone-else@example.invalid" } }), 201);
@@ -46,6 +50,8 @@ const ok = (response: Called, status = 200) => { expect(response.status, respons
 
   it("[iso-household-outsider] a signed-in outsider cannot read, change, invite into, share into, leave or report on the household", async () => {
     actAs(outsider);
+    // Creating one's own household is allowed and touches nothing of the owner's.
+    await expectIsolated(h.db, () => call("households", "POST", { body: { idempotencyKey: randomUUID(), name: "outsider home" } }), owner.userId, markers());
     const list = await expectIsolated(h.db, () => call("households", "GET"), owner.userId, markers());
     expect(list.text).not.toContain(householdId);
     const p = { householdId };
@@ -90,6 +96,9 @@ const ok = (response: Called, status = 200) => { expect(response.status, respons
       await expectRefused(h.db, () => call("households/[householdId]/shares", "POST", { params: p, body: { action: "unshare", expectedVersion: 1, resourceId,
         resourceKind: "account" } }), hidden, [404, 409]);
     }
+    // Goals follow the same rule: a member cannot share the owner's (unshared) goal.
+    await expectRefused(h.db, () => call("households/[householdId]/shares", "POST", { params: p, body: { action: "share", expectedVersion: null, resourceId: ownerGoal,
+      resourceKind: "goal" } }), hidden, [404]);
     // The owner, in turn, never sees the member's unshared account.
     actAs(owner);
     const ownerView = ok(await call("households/[householdId]", "GET", { params: p }));

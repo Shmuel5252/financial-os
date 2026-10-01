@@ -7,6 +7,7 @@ import { join, relative, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { actAs, call, expectIsolated, expectRefused, newActor, openHarness, type Harness } from "../security/route-harness";
+import { routeMatrix } from "../security/route-authorization-matrix";
 
 vi.mock("@/lib/auth/actor", async () => (await import("../security/route-harness")).mockedActorModule());
 const SUBJECT = "synthetic-provider-subject";
@@ -48,17 +49,19 @@ const PUBLIC = new Set(["GET health", "GET auth/[...nextauth]", "POST auth/[...n
   }, 60_000);
   afterAll(async () => { actAs(null); await h?.dispose(); });
 
-  it("[iso-unauthenticated] every non-public route method refuses an anonymous caller with 401 and changes nothing", async () => {
-    const all = routeMethods();
-    expect(all.length).toBeGreaterThan(80); // the exact inventory is enforced by tests/unit/route-authorization-inventory.test.ts
+  it("[iso-unauthenticated] every session route method in the matrix refuses an anonymous caller with 401 and changes nothing", async () => {
+    // Iterates the CI-enforced matrix (identical to the routes on disk), so no classified route can escape the sweep.
+    const sessionRoutes = routeMatrix.filter((e) => e.authentication === "session" || e.authentication === "session+operator-allowlist");
+    const publicRoutes = routeMatrix.filter((e) => e.authentication === "public" || e.authentication === "auth-protocol").map((e) => `${e.method} ${e.route.slice(4)}`);
+    expect([...publicRoutes].sort()).toEqual([...PUBLIC].sort());
+    expect(sessionRoutes.length + publicRoutes.length).toBe(routeMatrix.length);
     actAs(null);
-    const checked: string[] = [];
-    for (const { route, method } of all) {
-      if (PUBLIC.has(`${method} ${route}`)) continue;
-      await expectRefused(h.db, () => call(route, method, { params: paramsFor(route), ...(method === "GET" ? {} : { body: {} }) }), [], [401]);
-      checked.push(`${method} ${route}`);
+    for (const entry of sessionRoutes) {
+      const route = entry.route.slice("api/".length);
+      await expectRefused(h.db, () => call(route, entry.method, { params: paramsFor(route), ...(entry.method === "GET" ? {} : { body: {} }) }), [], [401]);
     }
-    expect(checked.length).toBe(all.length - [...PUBLIC].filter((key) => all.some((r) => `${r.method} ${r.route}` === key)).length);
+    // The independent file-system discovery must agree with the matrix (a second guard next to the inventory test).
+    expect(routeMethods().length).toBe(routeMatrix.length);
     expect((await call("health", "GET")).status).toBe(200);
   }, 120_000);
 
