@@ -3,7 +3,7 @@
 // Synthetic data only. Never point it at a deployed database.
 import { createHash, randomBytes } from "node:crypto";
 import { BSON, MongoClient, ObjectId, type Db } from "mongodb";
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
 import type { Actor } from "@/lib/auth/actor";
 
 export const ORIGIN = "http://localhost:3001";
@@ -76,22 +76,24 @@ export async function expectRefused(db: Db, attempt: () => Promise<Called>, vict
   const before = await fingerprint(db);
   const response = await attempt();
   const after = await fingerprint(db);
-  if (!statuses.includes(response.status)) throw new Error(`expected one of ${statuses.join("/")}, got ${response.status}: ${response.text.slice(0, 200)}`);
-  for (const marker of victimMarkers) if (response.text.includes(marker)) throw new Error(`response disclosed a victim marker (${marker.slice(0, 6)}…)`);
-  if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`state changed: ${JSON.stringify(Object.keys(after).filter((k) => after[k] !== before[k]).concat(Object.keys(before).filter((k) => !(k in after))))}`);
+  // Assertions go through expect (not bare throws) so the suite-wide `requireAssertions` sees them.
+  expect(statuses.includes(response.status), `expected one of ${statuses.join("/")}, got ${response.status}: ${response.text.slice(0, 200)}`).toBe(true);
+  for (const marker of victimMarkers) expect(response.text.includes(marker), `response disclosed a victim marker (${marker.slice(0, 6)}…)`).toBe(false);
+  expect(JSON.stringify(after) === JSON.stringify(before),
+    `state changed: ${JSON.stringify(Object.keys(after).filter((k) => after[k] !== before[k]).concat(Object.keys(before).filter((k) => !(k in after))))}`).toBe(true);
   return response;
 }
 
 /** An allowed (2xx) request by another user: nothing of the victim in the response, and the victim's own documents unchanged. */
 export async function expectIsolated(db: Db, attempt: () => Promise<Called>, victimUserId: string, victimMarkers: readonly string[]): Promise<Called> {
   const before = await fingerprint(db, victimUserId);
-  if (Object.keys(before).length === 0) throw new Error("the victim owns no documents - the isolation check would be vacuous");
+  expect(Object.keys(before).length, "the victim owns no documents - the isolation check would be vacuous").toBeGreaterThan(0);
   const response = await attempt();
   const after = await fingerprint(db, victimUserId);
-  if (response.status < 200 || response.status > 299) throw new Error(`expected success, got ${response.status}: ${response.text.slice(0, 200)}`);
-  for (const marker of victimMarkers) if (response.text.includes(marker)) throw new Error(`response disclosed a victim marker (${marker.slice(0, 6)}…)`);
-  if (response.text.includes(victimUserId)) throw new Error("response disclosed the victim's user id");
-  if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error("the victim's documents changed");
+  expect(response.status >= 200 && response.status <= 299, `expected success, got ${response.status}: ${response.text.slice(0, 200)}`).toBe(true);
+  for (const marker of victimMarkers) expect(response.text.includes(marker), `response disclosed a victim marker (${marker.slice(0, 6)}…)`).toBe(false);
+  expect(response.text.includes(victimUserId), "response disclosed the victim's user id").toBe(false);
+  expect(JSON.stringify(after) === JSON.stringify(before), "the victim's documents changed").toBe(true);
   return response;
 }
 

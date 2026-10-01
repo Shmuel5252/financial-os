@@ -12,14 +12,16 @@ import { files } from "./live-test-ids";
 // - `process.<member>` for every member outside the inert allowlist (stdout, stderr, emitWarning, ... all count), `process` for
 //   any other use of the identifier, including as a property name (`globalThis.process`, `window.process`)
 // - `string:<s>` for the string literals "console" | "process" | "stdout" | "stderr" anywhere (`Reflect.get(globalThis, "console")`,
-//   `x["stdout"]`), `global:<name>` for any reference to globalThis/global/self, `element:dynamic-global` for computed access on window
+//   `x["stdout"]`), `string:csp` for any Content-Security-Policy header name (headers set outside next.config.ts),
+//   `global:<name>` for any reference to globalThis/global/self, `element:dynamic-global` for computed access on window
 // - `import:<module>` / `import:<module>.<name>` for import, export-from, require() and import() (string or template) of
 //   console/process/child_process/network modules and of named sink APIs (`import:dynamic` for a computed specifier); `api:<name>` for
 //   sink APIs used anywhere (Console as a value, debuglog, fs write functions, sendBeacon, XMLHttpRequest, WebSocket, EventSource,
 //   eval, Function)
 // - `http:fetch` for every fetch-like call (fetch, fetchImpl, fetchImplementation, ...) whose URL is not a same-origin path literal
-//   (protocol-relative `//host` counts as external); `jsx:external-url` for a literal external URL in any JSX attribute (scripts,
-//   images, links, forms); `import:next/script` for Next's third-party script loader
+//   (protocol-relative `//host` counts as external); `url:external` for any string or template literal that starts with an external
+//   URL in src/ or workers/ (JSX attributes and expressions, constants, templates: third-party scripts, beacons, provider endpoints);
+//   `import:next/script` for Next's third-party script loader
 // - `aws:<Command>` / `sdk:<package>` for AWS SDK command names and @aws-sdk modules
 // - `emit` for any `.emit(` call, `config:<key>` for logger/debug/logging configuration keys
 // LIMIT: this is a syntactic regression guard against accidental logging and egress. Deliberately obfuscated code beyond the flagged
@@ -41,7 +43,15 @@ const SINK_APIS = new Set(["Console", "debuglog", "sendBeacon", "XMLHttpRequest"
 const isTypePosition = (node: ts.Node) => ts.isTypeReferenceNode(node.parent) || ts.isExpressionWithTypeArguments(node.parent) || ts.isTypeQueryNode(node.parent)
   || ts.isQualifiedName(node.parent) || ts.isImportSpecifier(node.parent) || ts.isExportSpecifier(node.parent) || ts.isImportClause(node.parent);
 const moduleText = (node: ts.Expression | undefined) => (node && ts.isStringLiteralLike(node) ? node.text : undefined);
-const calleeName = (callee: ts.Expression) => (ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : "");
+/** Callee names, seeing through parentheses and `a ?? b` / `a || b` / `cond ? a : b` (e.g. `(input.fetch ?? fetch)(...)`). */
+function calleeNames(callee: ts.Expression): string[] {
+  if (ts.isIdentifier(callee)) return [callee.text];
+  if (ts.isPropertyAccessExpression(callee)) return [callee.name.text];
+  if (ts.isParenthesizedExpression(callee) || ts.isNonNullExpression(callee) || ts.isAsExpression(callee)) return calleeNames(callee.expression);
+  if (ts.isBinaryExpression(callee)) return [...calleeNames(callee.left), ...calleeNames(callee.right)];
+  if (ts.isConditionalExpression(callee)) return [...calleeNames(callee.whenTrue), ...calleeNames(callee.whenFalse)];
+  return [];
+}
 
 export function emissionSites(): Map<string, number> {
   const sites = new Map<string, number>();
@@ -78,12 +88,14 @@ export function emissionSites(): Map<string, number> {
         add("element:dynamic-global");
       } else if (ts.isStringLiteralLike(node) && SINK_STRINGS.has(node.text)) {
         add(`string:${node.text}`);
-      } else if (ts.isCallExpression(node) && /^fetch/i.test(calleeName(node.expression))) {
+      } else if (ts.isStringLiteralLike(node) && /^content-security-policy(-report-only)?$/i.test(node.text)) {
+        add("string:csp");
+      } else if (ts.isCallExpression(node) && calleeNames(node.expression).some((name) => /^fetch/i.test(name))) {
         const url = node.arguments[0];
         const head = url && ts.isStringLiteralLike(url) ? url.text : url && ts.isTemplateExpression(url) ? url.head.text : undefined;
         if (!(head !== undefined && head.startsWith("/") && !head.startsWith("//"))) add("http:fetch");
-      } else if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer) && /^(https?:)?\/\//i.test(node.initializer.text)) {
-        add("jsx:external-url");
+      } else if ((ts.isStringLiteralLike(node) || ts.isTemplateHead(node)) && /^(https?:)?\/\/[^/]/i.test(node.text) && !file.startsWith("scripts/")) {
+        add("url:external");
       } else if (ts.isStringLiteralLike(node) && /^[A-Z][A-Za-z0-9]+Command$/.test(node.text)) {
         add(`aws:${node.text}`);
       } else if (ts.isStringLiteralLike(node) && node.text.startsWith("@aws-sdk/")) {

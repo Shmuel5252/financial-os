@@ -113,14 +113,24 @@ export const sinkMatrix: Readonly<Record<string, SinkEntry>> = {
   },
   "provider-egress": {
     logSink: false,
-    sites: { "src/lib/adapters/anthropic/anthropic-ai-provider.ts http:fetch": 1, "src/lib/adapters/resend/resend-notification-email-provider.ts http:fetch": 2,
-      "src/lib/adapters/financy/financy-open-banking-provider.ts http:fetch": 2 },
-    destination: "not a log: the three external processors, each behind its server-only adapter",
+    sites: { "src/lib/adapters/anthropic/anthropic-ai-provider.ts http:fetch": 1, "src/lib/adapters/anthropic/anthropic-ai-provider.ts url:external": 1,
+      "src/lib/adapters/resend/resend-notification-email-provider.ts http:fetch": 2, "src/lib/adapters/resend/resend-notification-email-provider.ts url:external": 1,
+      "src/lib/adapters/financy/financy-open-banking-provider.ts http:fetch": 2, "src/lib/adapters/financy/financy-open-banking-provider.ts url:external": 3,
+      "src/lib/operations/deletion-ledger-runtime.ts http:fetch": 1, "src/lib/operations/deletion-ledger-runtime.ts url:external": 1 },
+    destination: "not a log: the three external processors, each behind its server-only adapter (fixed endpoint constants), and AWS STS for the deletion-ledger role",
     payload: {
       anthropic: ["omitted", "only the minimized, redacted AI context (evidence facts, sanitized question) - Phase 8 minimization tests (phase-eight-ai.integration, ai-safety)"],
       resend: ["omitted", "the fixed generic template, the recipient address and an idempotency key - Phase 15 minimization tests (notification-provider)"],
       financy: ["omitted", "token request with the provider credentials, then read requests for the user's provider data; responses are aliased before storage (Phase 9)"],
+      sts: ["omitted", "AssumeRoleWithWebIdentity with the role ARN and the platform OIDC token; no user data; the response is parsed for credentials only and never logged"],
     },
+    sentinelTests: [],
+  },
+  "fixed-origins": {
+    logSink: false,
+    sites: { "src/lib/operations/environment-binding.ts url:external": 1, "src/lib/operations/load-rehearsal.ts url:external": 2 },
+    destination: "not egress: the staging origin the binding check compares against, and the localhost-only guard of the load rehearsal",
+    payload: { value: ["literal", "fixed origins, never requested with user data"] },
     sentinelTests: [],
   },
   "browser-same-origin-api": {
@@ -140,6 +150,13 @@ export const sinkMatrix: Readonly<Record<string, SinkEntry>> = {
       "scripts/security-check.mjs import:node:child_process": 1 },
     destination: "not a log: atlas-alerts writes alert JSON definitions to an operator directory; object-stores' directory store writes backup objects to a local directory (tests and the operator's drill copy); build-workers runs esbuild, security-check runs git ls-files",
     payload: { content: ["omitted", "alert definitions carry the operator-supplied notification address; directory objects are the same encrypted/signed objects as the bucket"] },
+    sentinelTests: [],
+  },
+  "security-headers": {
+    logSink: false,
+    sites: { "next.config.ts string:csp": 1 },
+    destination: "not a log: the one place the Content-Security-Policy header is defined; its run-time value is pinned exactly (securityHeaders)",
+    payload: { value: ["literal", "the pinned directive list"] },
     sentinelTests: [],
   },
   "process-wide-client-cache": {
@@ -231,7 +248,19 @@ export const reviewedDependencies: Readonly<Record<string, string>> = {
   vitest: "dev/test only",
 };
 
-/** The exact Content-Security-Policy directives (next.config.ts): 'self'-only fetch/script origins keep third-party beacons out. */
+/**
+ * The exact response headers next.config.ts serves, as returned by its `headers()` at run time (so template-literal or env-driven
+ * values, extra entries and route-specific overrides all change it). 'self'-only script/connect origins keep third-party beacons out.
+ */
+export const securityHeaders = (csp: string) => [{ source: "/:path*", headers: [
+  { key: "Content-Security-Policy", value: csp },
+  { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=()" },
+  { key: "Referrer-Policy", value: "no-referrer" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+] }];
+
+/** The exact Content-Security-Policy directives (next.config.ts). */
 export const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",

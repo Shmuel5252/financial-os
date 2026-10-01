@@ -121,9 +121,9 @@ export function typedCollectionFields(): { fields: Map<string, Set<string>>; tre
 const DELETE_METHODS = new Set(["deleteOne", "deleteMany", "findOneAndDelete", "drop", "dropDatabase", "dropCollection", "dropIndex", "dropIndexes",
   "bulkWrite", "remove", "replaceOne", "findOneAndReplace", "rename", "renameCollection"]);
 const COMMAND_KEYS = new Set(["drop", "dropDatabase", "collMod", "delete", "dropIndexes", "compact"]);
-const REMOVAL_KEYS = new Set(["expireAfterSeconds", "$unset", "$pull", "$pop", "$rename", "$replaceWith", "$replaceRoot", "$out", "$merge"]);
+const REMOVAL_KEYS = new Set(["expireAfterSeconds", "$unset", "$pull", "$pullAll", "$pop", "$slice", "$rename", "$replaceWith", "$replaceRoot", "$out", "$merge"]);
 const UPDATE_METHODS = new Set(["updateOne", "updateMany", "findOneAndUpdate"]);
-const DATABASE_METHODS = new Set([...UPDATE_METHODS, "createIndex", "createIndexes", "command", "insertOne", "insertMany", "replaceOne", "findOneAndReplace", "bulkWrite", "aggregate"]);
+const DATABASE_METHODS = new Set([...UPDATE_METHODS, "createIndex", "createIndexes", "command", "insertOne", "insertMany", "replaceOne", "findOneAndReplace", "bulkWrite", "aggregate", "createCollection"]);
 /** An object literal that is (part of) an argument to a MongoDB call; computed keys elsewhere (e.g. UI state) are not storage. */
 function insideDatabaseCall(node: ts.Node): boolean {
   for (let parent = node.parent; parent; parent = parent.parent) {
@@ -135,7 +135,8 @@ function insideDatabaseCall(node: ts.Node): boolean {
 
 /**
  * Data-removal and expiry mechanisms in repository code, as `<file> <kind>` -> count: hard-delete/replace calls (`deleteOne`, ...,
- * `replaceOne`, `rename`), field removal/rewrite keys (`$unset`, `$pull`, `$pop`, `$rename`, `$replaceWith`, `$replaceRoot`), collection-
+ * `replaceOne`, `rename`), field removal/rewrite keys (`$unset`, `$pull`, `$pullAll`, `$pop`, `$slice` (capped arrays), `$rename`,
+ * `$replaceWith`, `$replaceRoot`), capped collections (`capped`), collection-
  * writing aggregation stages (`$out`, `$merge`), aggregation-pipeline updates (`pipeline-update`), updates whose update document is not
  * a literal (`dynamic-update`: its operators cannot be read here), database commands that drop or change collections (`command:<key>`, `command:dynamic` when the
  * command is not an object literal) and TTL index options (`expireAfterSeconds`). Computed keys are resolved through same-file
@@ -177,7 +178,7 @@ export function retentionSites(): Map<string, number> {
         if ((ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) && ts.isObjectLiteralExpression(node.parent)) {
           const key = keyOf(node.name);
           if (key !== undefined && REMOVAL_KEYS.has(key)) add(key);
-          if (key === "computed-key" && insideDatabaseCall(node)) add(key);
+          if ((key === "computed-key" || key === "capped") && insideDatabaseCall(node)) add(key);
         }
         ts.forEachChild(node, visit);
       };
@@ -189,6 +190,21 @@ export function retentionSites(): Map<string, number> {
 
 const WRITE_METHODS = new Set(["insertOne", "insertMany", "updateOne", "updateMany", "findOneAndUpdate", "replaceOne", "findOneAndReplace"]);
 const FIELD_OPERATORS = new Set(["$set", "$setOnInsert", "$inc", "$push", "$addToSet", "$max", "$min", "$mul", "$currentDate", "$unset", "$pull", "$pop"]);
+
+/** Tree node of a MongoDB dotted path (`email.acceptedAt`, `messages.$.text`, `items.0.x`), or undefined. Arrays are implicit. */
+function nodeAt(tree: DocumentTree, dotted: string): string | undefined {
+  let node = "";
+  for (const raw of dotted.split(".")) {
+    const segment = /^(\$(\[\w*\])?|\d+)$/.test(raw) ? "[]" : raw;
+    let children = tree.get(node) ?? new Set<string>();
+    if (children.size === 0 && node !== "") return node; // a leaf/opaque value accepts anything below
+    if (segment !== "[]" && children.has("[]") && !children.has(segment)) { node = join(node, "[]"); children = tree.get(node) ?? new Set(); }
+    if (children.has(segment)) node = join(node, segment);
+    else if (segment !== "[]" && children.has("*")) node = join(node, "*");
+    else return undefined;
+  }
+  return node;
+}
 
 /** Does a MongoDB dotted path (`email.acceptedAt`, `messages.$.text`, `items.0.x`) exist in the document tree? Arrays are implicit. */
 function pathExists(tree: DocumentTree, dotted: string): boolean {
@@ -229,6 +245,7 @@ export function undeclaredWrites(): string[] {
   const treeOf = (type: ts.Type) => { const tree: DocumentTree = new Map(); addTree(checker, type, "", tree, 0); return tree; };
   for (const source of program.getSourceFiles()) {
     if (source.isDeclarationFile || !/\/(src|workers)\//.test(posix(source.fileName))) continue;
+    const viaParameter: { functionName: string; index: number; tree: DocumentTree; prefix: string }[] = [];
     const visit = (node: ts.Node): void => {
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && WRITE_METHODS.has(node.expression.name.text)) {
         const receiver = checker.getTypeAtLocation(node.expression.expression);
@@ -249,12 +266,52 @@ export function undeclaredWrites(): string[] {
           if (method === "replaceOne" || method === "findOneAndReplace") whole(node.arguments[1]);
           if (["updateOne", "updateMany", "findOneAndUpdate"].includes(method) && node.arguments[1]) {
             const update = checker.getTypeAtLocation(node.arguments[1]);
+            const open = (type: ts.Type) => (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0 || checker.getIndexTypeOfType(type, ts.IndexKind.String) !== undefined;
+            // TypeScript drops index signatures when a Record is spread into a literal (`$set: { ...set, x }`): inspect spreads directly.
+            if (ts.isObjectLiteralExpression(node.arguments[1])) {
+              for (const property of node.arguments[1].properties) {
+                const name = property.name && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) ? property.name.text : "";
+                if (FIELD_OPERATORS.has(name) && ts.isPropertyAssignment(property) && ts.isObjectLiteralExpression(property.initializer)) {
+                  for (const element of property.initializer.properties) {
+                    if (!(ts.isSpreadAssignment(element) && open(checker.getTypeAtLocation(element.expression)))) continue;
+                    found.add(`${where} dynamic:${name}`);
+                    // When the spread value is a parameter of the enclosing function, every same-file call's literal argument is checked.
+                    const symbol = ts.isIdentifier(element.expression) ? checker.getSymbolAtLocation(element.expression) : undefined;
+                    const parameter = symbol?.valueDeclaration && ts.isParameter(symbol.valueDeclaration) ? symbol.valueDeclaration : undefined;
+                    const owner = parameter?.parent;
+                    if (parameter && owner && (ts.isMethodDeclaration(owner) || ts.isFunctionDeclaration(owner)) && owner.name && ts.isIdentifier(owner.name)) {
+                      viaParameter.push({ functionName: owner.name.text, index: owner.parameters.indexOf(parameter), tree, prefix: name === "$set" || name === "$setOnInsert" ? "" : "op" });
+                    }
+                  }
+                }
+              }
+            }
             if (!(update.flags & ts.TypeFlags.Any) && !checker.isArrayType(update)) {
               for (const operator of checker.getPropertiesOfType(update)) {
-                if (!FIELD_OPERATORS.has(operator.getName())) continue;
-                for (const field of checker.getPropertiesOfType(checker.getTypeOfSymbol(operator))) {
+                const name = operator.getName();
+                if (!FIELD_OPERATORS.has(name)) continue;
+                const value = checker.getTypeOfSymbol(operator);
+                // A Record/unknown/any operator value can carry any field: it must be explained (dynamicUpdateSites).
+                if (open(value)) { found.add(`${where} dynamic:${name}`); continue; }
+                for (const field of checker.getPropertiesOfType(value)) {
                   const path = field.getName();
-                  if (!path.startsWith("$") && !pathExists(tree, path)) found.add(`${where} ${path}`);
+                  if (path.startsWith("$")) continue;
+                  const node = nodeAt(tree, path);
+                  if (node === undefined) { found.add(`${where} ${path}`); continue; }
+                  // The written value's own shape must fit below that node ($push/$addToSet write one array element; $each a list).
+                  let written = checker.getTypeOfSymbol(field);
+                  let target = node;
+                  if (name === "$push" || name === "$addToSet") {
+                    const each = checker.getPropertyOfType(written, "$each");
+                    written = each ? (checker.getIndexTypeOfType(checker.getTypeOfSymbol(each), ts.IndexKind.Number) ?? written) : written;
+                    target = (tree.get(node) ?? new Set()).has("[]") ? join(node, "[]") : node;
+                  }
+                  if (written.flags & ts.TypeFlags.Any) continue;
+                  for (const sub of treeOf(written).keys()) {
+                    if (sub === "" || sub.split(/[.[]/).some((part) => part.startsWith("$"))) continue;
+                    const full = sub.startsWith("[]") ? `${target}${sub}` : `${target}.${sub}`;
+                    if (!fits(tree, full)) found.add(`${where} ${path}:${sub}`);
+                  }
                 }
               }
             }
@@ -264,6 +321,24 @@ export function undeclaredWrites(): string[] {
       ts.forEachChild(node, visit);
     };
     visit(source);
+    // Calls of a function whose parameter feeds an open update value: each literal argument's keys must exist in the document type.
+    const callers = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) {
+        const callee = ts.isPropertyAccessExpression(node.expression) ? node.expression.name.text : ts.isIdentifier(node.expression) ? node.expression.text : "";
+        for (const target of viaParameter.filter((entry) => entry.functionName === callee)) {
+          const argument = node.arguments[target.index];
+          const where = `${posix(source.fileName).replace(/^.*?\/(src|workers)\//, "$1/")}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+          if (!argument || !ts.isObjectLiteralExpression(argument)) { found.add(`${where} via:${callee} non-literal`); continue; }
+          for (const property of argument.properties) {
+            const key = property.name && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) ? property.name.text : undefined;
+            if (key === undefined) found.add(`${where} via:${callee} computed-or-spread`);
+            else if (!pathExists(target.tree, key)) found.add(`${where} via:${callee} ${key}`);
+          }
+        }
+      }
+      ts.forEachChild(node, callers);
+    };
+    if (viaParameter.length > 0) callers(source);
   }
   return [...found].sort();
 }

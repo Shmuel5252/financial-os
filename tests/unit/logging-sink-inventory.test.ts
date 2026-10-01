@@ -3,7 +3,8 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { emissionSites, operatorFileDigests } from "../security/emission-sites";
 import { files, liveTestIds } from "../security/live-test-ids";
-import { contentSecurityPolicy, operatorFiles, operatorPowerShell, reviewedDependencies, sinkMatrix } from "../security/logging-sink-matrix";
+import nextConfig from "../../next.config";
+import { contentSecurityPolicy, operatorFiles, operatorPowerShell, reviewedDependencies, securityHeaders, sinkMatrix } from "../security/logging-sink-matrix";
 
 // Phase 18 rows 18-07/18-20: every emission point (console.*, process stdout/stderr/emitWarning, telemetry .emit(), logger/debug/
 // logging configuration keys) in src/, workers/, scripts/ and next.config is classified exactly once, with a live sentinel test.
@@ -44,14 +45,10 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
     }
   });
 
-  it("keeps the exact Content-Security-Policy (no third-party script/connect origin can be added silently)", () => {
-    const directives: string[] = [];
-    walk(parse("next.config.ts"), (node) => {
-      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === "contentSecurityPolicy" && node.initializer) {
-        walk(node.initializer, (inner) => { if (ts.isStringLiteral(inner) && inner.parent && ts.isArrayLiteralExpression(inner.parent)) directives.push(inner.text); });
-      }
-    });
-    expect(directives).toEqual([...contentSecurityPolicy]);
+  it("serves exactly the pinned security headers and CSP (evaluated at run time: no extra route, directive or origin can slip in)", async () => {
+    expect(await nextConfig.headers?.()).toEqual(securityHeaders(contentSecurityPolicy.join("; ")));
+    // Request entry points that could set headers outside next.config.ts are inventoried in route-authorization-inventory.test.ts
+    // (middleware/proxy/instrumentation must not exist unclassified); a CSP string anywhere else is an emission site (`string:csp`).
   });
 
   it("[log-auth-config] configures Auth.js with debug: false and the redacting logger", () => {

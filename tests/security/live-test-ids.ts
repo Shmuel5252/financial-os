@@ -51,6 +51,10 @@ function exitsBeforeAsserting(body: ts.ArrowFunction | ts.FunctionExpression, he
   }
   return false;
 }
+/** A `try { …assertions… } catch { … }` whose handler does not rethrow turns a failing assertion into a pass. */
+const swallows = (node: ts.Node, helpers: ReadonlyMap<string, ts.Node>): boolean => (ts.isTryStatement(node) && node.catchClause !== undefined
+  && asserts(node.tryBlock, helpers) && !exits(node.catchClause.block))
+  || (!ts.isFunctionLike(node) && ts.forEachChild(node, (child) => swallows(child, helpers) || undefined) === true);
 /** A call whose callee is (or is called from) `describe.skipIf(...)`, `it.runIf(...)`, `.skip`, `.todo`, an alias of one, or `.each([])`. */
 function skippingCallee(callee: ts.Expression, aliases: ReadonlySet<string>): boolean {
   for (let node: ts.Expression = callee; ;) {
@@ -94,9 +98,11 @@ function localFunctions(source: ts.SourceFile): Map<string, ts.Node> {
 
 /**
  * Ids that start a REAL test title: `it("[id] ...")` / `test("[id] ...")` (not it.skip/todo/skipIf), whose body CALLS an assertion
- * (expect*), never skips itself (`ctx.skip()`, a destructured `skip`), cannot `return`/`throw` before its first assertion, is not
+ * (expect*), never skips itself (`ctx.skip()`, a destructured `skip`), cannot `return`/`throw` before its first assertion, does not
+ * swallow its assertions in a non-rethrowing `catch`, is not
  * placed conditionally (if/switch/loop/&&/ternary) and is not inside describe.skip/todo, a chained describe.skipIf(...)/runIf(...),
- * an alias of one, or an empty `.each([])`. The env-gated `(uri ? describe : describe.skip)` form used by the
+ * an alias of one, or an empty `.each([])`. This is the static half; required-tests-reporter.ts checks at run time that every
+ * required id actually ran and passed, and `expect.requireAssertions` that it executed an assertion. The env-gated `(uri ? describe : describe.skip)` form used by the
  * integration suites stays live: CI fails if their database URIs are missing (route-authorization-inventory.test.ts).
  */
 export function liveTestIds(): Set<string> {
@@ -109,7 +115,7 @@ export function liveTestIds(): Set<string> {
         const [title, body] = node.arguments;
         const match = title && ts.isStringLiteralLike(title) ? /^\[([a-z0-9-]+)\]/.exec(title.text) : null;
         let dead = body === undefined || !(ts.isArrowFunction(body) || ts.isFunctionExpression(body)) || !asserts(body, helpers) || skipsItself(body)
-          || receivesSkip(body) || exitsBeforeAsserting(body, helpers);
+          || receivesSkip(body) || exitsBeforeAsserting(body, helpers) || swallows(body.body, helpers);
         for (let child: ts.Node = node, parent: ts.Node | undefined = node.parent; parent && !dead; child = parent, parent = parent.parent) {
           // Conditional placement: if/else, `cond && it(...)`, ternaries, switch/loops around the declaration.
           if (ts.isIfStatement(parent) || ts.isConditionalExpression(parent) || ts.isBinaryExpression(parent) || ts.isSwitchStatement(parent)

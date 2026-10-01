@@ -5,7 +5,7 @@ import { sectionCollections } from "@/lib/onboarding/manual-record-repository";
 import { manualSectionDomainSchemas } from "@/lib/onboarding/manual-record";
 import { uncoveredPaths } from "../security/classification-coverage";
 import { discoverCollections, retentionSites, typedCollectionFields, undeclaredWrites } from "../security/collection-discovery";
-import { authAdapterVersions, dataClassification, rawSecretsAtRest, retentionMechanisms, subtreeShapes, templateRetention, unresolvedCollectionSites } from "../security/data-classification";
+import { authAdapterVersions, dataClassification, dynamicUpdateSites, rawSecretsAtRest, retentionMechanisms, subtreeShapes, templateRetention, unresolvedCollectionSites } from "../security/data-classification";
 import { subtreeShapeDigests } from "../security/subtree-shapes";
 
 // Phase 18 rows 18-07/18-20 (repository portion): the classification in tests/security/data-classification.ts must describe exactly
@@ -62,7 +62,14 @@ describe("data classification inventory (18-07/18-20)", () => {
   }, 60_000);
 
   it("writes no field that the collection's document type does not declare (insert/update/replace on Collection<T>, incl. spreads and variables)", () => {
-    expect(undeclaredWrites()).toEqual([]);
+    const writes = undeclaredWrites();
+    const dynamic: Record<string, number> = {};
+    for (const site of writes.filter((entry) => / dynamic:\$/.test(entry))) {
+      const [location, kind] = site.split(" "); const key = `${location!.split(":")[0]} ${kind}`; dynamic[key] = (dynamic[key] ?? 0) + 1;
+    }
+    expect(writes.filter((entry) => !/ dynamic:\$/.test(entry)), "fields written but not declared in the document type").toEqual([]);
+    expect(dynamic, "open (Record/unknown/any) update values must be explained in dynamicUpdateSites")
+      .toEqual(Object.fromEntries(Object.entries(dynamicUpdateSites).map(([site, entry]) => [site, entry.count])));
   }, 120_000);
 
   it("pins the shape of every subtree that one row classifies as a whole (a new nested field below it fails until re-reviewed)", () => {

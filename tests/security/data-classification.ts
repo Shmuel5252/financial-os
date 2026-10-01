@@ -1897,3 +1897,11 @@ export const subtreeShapes: Readonly<Record<string, string>> = {
   "transactionIntelligenceRuns signals[].evidence[]": "3ad5685f312de27b",
   "transactions auditTrail[].changedFields": "40fc35964dffa26e",
 };
+
+/**
+ * Update calls whose operator value is open (`Record`/`unknown`/`any`, incl. a Record spread into the literal): the type check cannot
+ * see which fields they write, so each is explained here (`<file> dynamic:<operator>` -> count). A new one fails CI.
+ */
+export const dynamicUpdateSites: Readonly<Record<string, Readonly<{ count: number; writes: string }>>> = {
+  "src/lib/notifications/notification-repository.ts dynamic:$set": { count: 1, writes: "updateEmail(..., set): every caller in the same file passes literal, declared `email.*` delivery-state fields (state, claimExpiresAt, acceptedAt, deliveredAt, errorCategory, providerMessageId, notBeforeAt)" },
+};

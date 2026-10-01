@@ -17,5 +17,9 @@ export default defineConfig({
     include: ["tests/**/*.test.{ts,tsx}"],
     passWithNoTests: false,
     restoreMocks: true,
+    // Phase 18 (18-07/18-14/18-20): every test must execute at least one assertion, and CI (REQUIRE_SECURITY_TESTS=1) fails unless
+    // every required security test id ran and passed (tests/security/required-tests-reporter.ts).
+    expect: { requireAssertions: true },
+    reporters: ["default", "./tests/security/required-tests-reporter.ts"],
   },
 });

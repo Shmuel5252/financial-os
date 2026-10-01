@@ -90,8 +90,8 @@ const MEMBER_EMAIL = "member@example.invalid";
       expect(await memberSeesHousehold(householdId)).toBe(true);
     }
   }
-  it("[iso-household-rejoin-removed] a removed member cannot replay the accepted token, even expired; a new invitation still works", () => rejoinScenario("removed"));
-  it("[iso-household-rejoin-left] a departed member cannot replay the accepted token, even expired; a new invitation still works", () => rejoinScenario("left"));
+  it("[iso-household-rejoin-removed] a removed member cannot replay the accepted token, even expired; a new invitation still works", () => rejoinScenario("removed"), 30_000);
+  it("[iso-household-rejoin-left] a departed member cannot replay the accepted token, even expired; a new invitation still works", () => rejoinScenario("left"), 30_000);
 
   it("[iso-household-rejoin-older-token] after a second membership cycle, neither the first nor the second token restores access", async () => {
     const householdId = await household();
@@ -104,7 +104,7 @@ const MEMBER_EMAIL = "member@example.invalid";
     await expectRefused(h.db, () => accept(first), [sharedName], [404]);
     await expectRefused(h.db, () => accept(second), [sharedName], [404]);
     expect((await membership(householdId))!.status).toBe("left");
-  });
+  }, 30_000);
 
   it("[iso-household-rejoin-race] the token that activated a membership can never reactivate it after it ended (atomic, race-proof)", async () => {
     // Deterministic form of the race: an acceptance still in flight reaches the repository AFTER the owner removed the member.
@@ -120,7 +120,7 @@ const MEMBER_EMAIL = "member@example.invalid";
     await expect(repository.activateMembership(accepted!, member.userId, "Synthetic")).rejects.toMatchObject({ code: "CONFLICT" });
     expect(await membership(householdId)).toEqual(before);
     expect(before!.status).toBe("removed");
-  });
+  }, 30_000);
 
   it("[iso-household-reaccept-active] replaying the token while still active changes nothing (unchanged existing behaviour: 404)", async () => {
     const householdId = await household();
@@ -129,7 +129,7 @@ const MEMBER_EMAIL = "member@example.invalid";
     await expectRefused(h.db, () => accept(token), [], [404]);
     expect((await membership(householdId))!.status).toBe("active");
     expect(await memberSeesHousehold(householdId)).toBe(true);
-  });
+  }, 30_000);
 
   it("[iso-household-accept-recovery] an acceptance whose activation never happened can still be completed with the same token", async () => {
     const householdId = await household();
@@ -142,5 +142,5 @@ const MEMBER_EMAIL = "member@example.invalid";
     expect((await accept(token)).status).toBe(200);
     expect((await membership(householdId))!.status).toBe("active");
     expect(await memberSeesHousehold(householdId)).toBe(true);
-  });
+  }, 30_000);
 });

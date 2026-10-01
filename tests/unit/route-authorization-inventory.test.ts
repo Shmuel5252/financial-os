@@ -76,10 +76,9 @@ describe("authorization inventory (18-14)", () => {
   });
 
   it("does not let the authorization integration suites skip silently in CI", () => {
-    if (process.env.CI) {
-      expect(process.env.MONGODB_TEST_URI, "CI must provide MONGODB_TEST_URI for the authorization suites").toBeTruthy();
-      expect(process.env.MONGODB_TEST_REPLICA_URI, "CI must provide MONGODB_TEST_REPLICA_URI").toBeTruthy();
-    }
+    const ci = Boolean(process.env.CI);
+    expect(!ci || Boolean(process.env.MONGODB_TEST_URI), "CI must provide MONGODB_TEST_URI for the authorization suites").toBe(true);
+    expect(!ci || Boolean(process.env.MONGODB_TEST_REPLICA_URI), "CI must provide MONGODB_TEST_REPLICA_URI").toBe(true);
   });
 
   it("classifies exactly every server-action module", () => {

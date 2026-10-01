@@ -349,6 +349,7 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
       expect(Object.keys(drill).sort()).toEqual(["barriers", "counts", "fence", "ledgerHead", "package", "recoveryPoint", "releaseAllowed", "timings"]);
       expect(Object.values(drill.counts).every(value => typeof value === "number")).toBe(true);
       for (const group of Object.values(drill.barriers)) expect(Object.values(group).every(value => typeof value === "number")).toBe(true);
+      expect(JSON.stringify(drill)).not.toContain(replica!); // the target URI never reaches the printed result
       expect(Object.keys(drill.fence).sort()).toEqual(["releaseAllowed", "technicalChecksPassed", "watermark"]);
       expect(Object.keys(drill.recoveryPoint).sort()).toEqual(["atClusterTime", "capturedAt", "ledgerHead"]);
       expect(Object.keys(drill.timings).sort()).toEqual(["fenceMs", "recoveryPointAgeMs", "restoreMs", "totalMs"]);

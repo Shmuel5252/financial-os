@@ -86,6 +86,9 @@ jobs:
           echo "MONGODB_TEST_AUTH_REPLICA_URI=mongodb://ci-admin:$ADMIN_PASSWORD@127.0.0.1:27019/?authSource=admin&directConnection=true" >> "$GITHUB_ENV"
 
       - name: Run unit and available integration tests
+        # Fails unless every required security test id (18-07/18-14/18-20) ran and passed: tests/security/required-tests-reporter.ts
+        env:
+          REQUIRE_SECURITY_TESTS: "1"
         run: npm test
 
       - name: Run strict type-check

@@ -1,6 +1,6 @@
 # Phase 18 rows 18-07 and 18-20: data classification, retention inventory and logging/telemetry sinks (repository portion)
 
-Status: **repository portion built 2026-10-01, reviewed, re-reviewed twice and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
+Status: **repository portion built 2026-10-01/02, reviewed, re-reviewed three times and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
 today. It adopts no retention period, access role or deletion mechanism; the recommendations live separately in
 `PHASE_18_RETENTION_DRAFT.md` (**DRAFT / NOT ADOPTED**). No runtime code, TTL index, deletion job, logging behaviour, application data
 or infrastructure was changed in this item.
@@ -10,8 +10,9 @@ or infrastructure was changed in this item.
 | Artifact | What it holds | CI test |
 | --- | --- | --- |
 | `tests/security/data-classification.ts` | 55 collections, 1,189 field rows (class, personal-data level, transform, note), current retention with `file:line`, raw secrets at rest, retention-mechanism inventory, template retention, data stores outside MongoDB, the explained non-literal collection calls, pinned Auth.js adapter versions, 50 pinned subtree shapes, out-of-scope list | `tests/unit/data-classification.test.ts` (12 tests) |
-| `tests/security/logging-sink-matrix.ts` | 13 entries (8 log/telemetry sinks + 5 classified non-log egress/I/O entries) covering all 56 emission-site keys (83 occurrences), per-field treatment, 16 pinned operator-run files, the reviewed-dependency allowlist (18 packages), the exact CSP, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (7 tests) |
+| `tests/security/logging-sink-matrix.ts` | 15 entries (8 log/telemetry sinks + 7 classified non-log egress/I/O/header entries) covering all 64 emission-site keys (94 occurrences), per-field treatment, 16 pinned operator-run files, the reviewed-dependency allowlist (18 packages), the exact run-time security headers and CSP, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (7 tests) |
 | `tests/unit/logging-sentinels.test.ts` (11), `tests/integration/logging-sentinels.integration.test.ts` (1), `[log-…]` tests in the recovery suites (2) | sentinel tests per sink, plus a self-test of the capture and matcher | run in `npm test` |
+| `tests/security/required-tests-reporter.ts` + `vitest.config.mts` (`expect.requireAssertions`) | the 50 required security test ids (16 `log-*`/inventory ids + every 18-14 negative-test id) | CI (`REQUIRE_SECURITY_TESTS=1`): the run fails unless each one ran and passed; every test must execute an assertion |
 
 CI fails when:
 - **Collections.** A collection appears or disappears. Discovery is AST-based (literals and the manual-section/auth/ledger maps) over `src/` and `workers/`. Additionally:
@@ -21,7 +22,10 @@ CI fails when:
 - **Fields, nested.** Two rules:
   - once a row goes below a field, every child of that field in the type must be classified, recursively;
   - every subtree that one row classifies as a whole has its exact shape pinned (50 pins), so any new nested field anywhere fails until it is re-reviewed.
-- **Fields written but not declared.** A field reaches storage through `insert*`/`replace*` on a typed `Collection<T>` but does not exist in `T`. The written value's TYPE is compared with `T`: literals, spreads of domain objects, variables and mapped arrays alike. Update-operator keys (`$set`, `$setOnInsert`, `$push`, …) are checked the same way. MongoDB's typings would accept all of these.
+- **Fields written but not declared.** A field reaches storage on a typed `Collection<T>` but does not exist in `T`. MongoDB's typings would accept all of these.
+  - `insert*`/`replace*`: the written value's TYPE is compared with `T` (literals, spreads of domain objects, variables and mapped arrays alike).
+  - Update operators (`$set`, `$push`/`$addToSet` incl. `$each`, …): each value's type is compared with `T` below its dotted key.
+  - An open operator value (`Record`/`unknown`/`any`, including a `Record` spread into the literal) must be explained (`dynamicUpdateSites`; one today, `updateEmail` in notifications). When it comes from a function parameter, every same-file call's literal keys are checked against `T`.
 - **Manual-section fields.** A manual section's `fields.*` keys differ from its zod domain schema.
 - **Auth.js versions.** The installed `@auth/mongodb-adapter`/`@auth/core` versions change: their adapter defines the auth collections.
 - **Pseudonymized identifiers.** Any of these fails:
@@ -32,7 +36,7 @@ CI fails when:
 - **Retention mechanisms.** Any of these appears without classification:
   - a TTL index option;
   - a hard-delete or replace call;
-  - a field-removal or rewrite key (`$unset`, `$pull`, `$pop`, `$rename`, `$replaceWith`, `$replaceRoot`);
+  - a field-removal or rewrite key (`$unset`, `$pull`, `$pullAll`, `$pop`, `$slice`, `$rename`, `$replaceWith`, `$replaceRoot`) or a capped collection;
   - an aggregation-pipeline update, or an update whose update document is not a literal (`dynamic-update`);
   - a collection-writing stage (`$out`, `$merge`) or a `rename`/`renameCollection`;
   - a `db.command` that drops or alters collections, or any non-literal `db.command`.
@@ -46,25 +50,29 @@ CI fails when:
   - `globalThis`/`global`/`self`, and computed `window[…]`;
   - import / export-from / require / `import()` (string or template) of `console`, `process`, `child_process`, network or worker modules, and of `util.debuglog` and the fs write/open/copy/rename functions; any computed import;
   - sink APIs (`Console`, `debuglog`, fs write functions, `sendBeacon`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `eval`, `Function`);
-  - every fetch-like call whose URL is not a same-origin path literal (a protocol-relative `//host` is external);
-  - a literal external URL in any JSX attribute (third-party scripts, images, links, forms), and `next/script`;
+  - every fetch-like call (including `(x ?? fetch)(…)`) whose URL is not a same-origin path literal (a protocol-relative `//host` is external);
+  - any string or template literal in `src/`/`workers/` that starts with an external URL (JSX attributes and expressions, constants, templates), and `next/script`;
+  - a Content-Security-Policy header name anywhere outside next.config.ts;
   - AWS SDK command names and `@aws-sdk/*` modules;
   - telemetry `.emit()`;
   - `logger`/`debug`/`logging` config keys in `src/`, `workers/`, `scripts/` and `next.config`.
 - **Operator-run files.** Any file in `scripts/` (including PowerShell) or any `workers/*/cli.ts` changes: their SHA-256 is pinned, so a changed value behind an unchanged console call also fails. Separately, an operator script prints env values, URIs, secrets or raw error messages.
-- **Sentinel tests.** A sink's sentinel test is not live. "Live" means all of:
-  - a real `it`/`test` that calls an assertion (`expect…`), directly or through a same-file helper;
-  - it never skips itself (`ctx.skip()` or a destructured `skip`);
-  - it cannot `return`/`throw` before its first assertion (e.g. an env guard);
-  - it is not placed conditionally (`if`, `switch`, loop, `&&`, ternary);
-  - it is not inside `describe.skip`/`todo`, a chained `describe.skipIf(…)(…)`/`runIf(…)(…)`, an alias of one, or an empty `.each([])`.
+- **Sentinel and security tests.** Checked at run time, which no source pattern can defeat:
+  - in CI the run fails unless all 50 required ids were registered, ran and passed — not skipped by `it.skip`/`describe.skipIf`/a `beforeEach` or `ctx` skip, not unregistered by an empty `each`, an uncalled registrar or a removed file;
+  - every test must execute at least one assertion (`expect.requireAssertions`), so a conditional or early-returning test fails.
+
+  A static check also requires each id to be a real, assertion-calling `it`/`test`: not self-skipping, not conditionally placed, not under a skipping describe or alias, not swallowing its assertions in a non-rethrowing `catch`. It gives the same signal in partial local runs.
 - **Dependencies.** Any package outside the reviewed allowlist is added: every direct dependency is classified for logging, telemetry and egress (e.g. Vercel Analytics, Speed Insights or `@next/third-parties` would fail). MongoDB driver command logging enabled in code also fails.
-- **CSP.** The Content-Security-Policy directives differ from the pinned list, e.g. a widened `script-src` or `connect-src` for a third-party beacon.
+- **Security headers / CSP.** The headers that next.config.ts's `headers()` returns AT RUN TIME differ from the pinned list. This catches a widened directive, a template/env-driven origin, or an extra route-specific header entry. Headers cannot be set unnoticed elsewhere: a CSP header name outside next.config.ts is an emission site, and middleware/proxy/instrumentation files must not exist unclassified (route-authorization inventory).
 - **Auth.js logging.** Auth.js `debug` or the redacting logger changes.
 
 **Limits (stated, not hidden):**
 - **Syntactic enforcement.** These checks are syntactic and type-based regression guards against *accidental* logging, egress or unclassified storage. Code that deliberately evades them beyond the flagged primitives (eval, `Function`, computed imports, global objects, sink strings) remains a code-review and CodeQL concern.
-- **Writes the checks cannot see.** Writes to untyped (`Document`) collections, values typed `any`, and update documents built at run time are not compared with a type. Run-time update documents are flagged as `dynamic-update` retention sites; none exist today.
+- **Writes the checks cannot see.**
+  - Writes to untyped (`Document`) collections, and values typed `any`, are not compared with a type.
+  - Whole update documents built at run time are flagged as `dynamic-update` retention sites (none today).
+  - Open operator values are explained in `dynamicUpdateSites` (one today, with its callers checked).
+  - Blanking a field through `$set: null` is an ordinary update, not a removal site.
 - **Platform and provider side.** Logging and retention there is outside the repository (§2, out of scope).
 
 ## 2. Collection and field coverage
@@ -200,9 +208,12 @@ OAuth tokens are **not** in backups: the backup keeps only `provider` and `provi
 
 ## 3. Logging and telemetry sink coverage
 
-There are 56 emission-site keys and 83 occurrences, in 13 matrix entries: 8 log/telemetry sinks and 5 classified non-log egress or I/O entries. The non-log entries are:
+There are 64 emission-site keys and 94 occurrences, in 15 matrix entries: 8 log/telemetry sinks and 7 classified non-log entries. The non-log entries are:
 - the backup worker's SSM/S3 calls;
-- the Anthropic/Resend/Financy adapters' HTTP calls (their minimization is tested in Phases 8, 15 and 9);
+- the Anthropic/Resend/Financy adapters' HTTP calls and endpoint constants (their minimization is tested in Phases 8, 15 and 9);
+- the AWS STS call for the deletion-ledger role (found by the URL inventory: `(input.fetch ?? fetch)(…)`);
+- fixed origins (the staging binding origin and the localhost load-rehearsal guard);
+- the security-headers definition;
 - browser calls to the app's own `/api` routes;
 - operator file writes and subprocesses;
 - the process-wide MongoDB client cache. Treatments in the table:
@@ -222,8 +233,8 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 | Backup metrics | `workers/backup/index.ts` (`PutMetricDataCommand`, `@aws-sdk/client-cloudwatch`) | CloudWatch metrics `FinancialOS/Backup` | Emitted:<br>- literal metric names<br>- counts and byte sizes<br>- the `Environment` dimension (enum)<br><br>Nothing else |
 | Auth.js logger | `safe-logger.ts` (error/warn/debug), `config.ts` (`debug: false`, `logger`) | Vercel function logs | Emitted:<br>- category (enum by `instanceof`)<br>- random correlationId<br>- literal version<br><br>The error message, cause, stack and debug data are never read |
 | Route error | `route-response.ts` | Vercel function logs | Emitted:<br>- literal message<br>- random correlationId<br>- literal errorName<br><br>The error is never read. The response body carries only a fixed message, or validation field paths and zod messages (no input values) |
-| Restore-drill CLI | `workers/restore-drill/cli.ts` ×2 | Operator terminal | Package name, counts, heads, numeric barriers, timings; fixed error categories |
-| Ledger-rebuild CLI | `workers/ledger-rebuild/cli.ts` ×3 | Operator terminal | Pinned 7-field summary (head, row count, digest, mirror names/heads, journal revisions); fixed error categories |
+| Restore-drill CLI | `workers/restore-drill/cli.ts` ×2 | Operator terminal | Package name, counts, heads, numeric barriers, timings (exact nested shape tested; never the target URI). Errors: app fail-closed categories. A raw driver message, e.g. E11000 on a non-fresh target, would print verbatim to the operator (F-18-20-08) |
+| Ledger-rebuild CLI | `workers/ledger-rebuild/cli.ts` ×3 | Operator terminal | Pinned 7-field summary (head, row count, digest, mirror names/heads, journal revisions). Errors: as above, raw driver messages possible (F-18-20-08) |
 | Operator scripts | 10 `scripts/*.mjs` keys (24 calls) + 5 PowerShell scripts | Operator terminal; `security-check` and `index-manifest` also in Actions logs | Fixed status lines, counts, names, codeName only |
 
 **Implicit sinks** (`implicitSinks`) are logged by the framework, runtime or platform rather than by repository code:
@@ -277,11 +288,12 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 
 All pass.
 
-**Mutation probes:** 82 temporary probes over four rounds:
+**Mutation probes:** 97 temporary probes over five rounds:
 - L01–L20 with L09b, and D01–D08 (the original build);
 - R01–R17 (from the first review);
 - N01–N21 (from the first re-review);
-- S01–S15 (from the second re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
+- S01–S15 (from the second re-review);
+- T01–T15 (from the third re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
 
 ## 5. Findings (no actual application logging leak found)
 
@@ -399,9 +411,29 @@ Fixed in tests and documents only:
 | 6 | Minor | §3 table missing `backup-metrics`; §2 `source.*` wording; §8 overall claim | Corrected |
 | 7 | Minor | Timeout margin of the retention test | Explicit 60 s timeouts on every classification test |
 
+**Round 4: third re-review (2026-10-02) of commit `ce77c7a`**, read-only, with 29 probes in a scratch copy.
+
+Its main results:
+- **Round-3 fixes:** fixed for the exact forms.
+- **Leaks:** no actual leak in current code.
+- **Verdict:** not ready, because three §1 guarantees could still be defeated by plausible, non-obfuscated changes with CI green.
+
+Fixed in tests, the test config and CI only, with no runtime change:
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | Important | CSP pin bypassable: a template-literal directive, an extra `headers()` entry, or a `proxy.ts` header (confirmed in `next dev`) | The headers `headers()` returns at run time are pinned exactly; a CSP header name elsewhere is a site; entry points stay inventoried (T01–T03) |
+| 2 | Important | Sentinels silenced: `beforeEach` skip, conditional assertion, helper early return, `each` over an empty variable, uncalled registrar, swallowing `try/catch` | Run-time enforcement: a reporter fails CI unless all 50 required ids ran and passed. `expect.requireAssertions` for every test. Static `try/catch` rule (T06–T10). The route-harness helpers now assert through `expect` |
+| 3 | Important | Update-operator values not type-checked, and the existing `updateEmail` Record path unclassified | Operator values are type-checked against `T`. Open values are explained (`dynamicUpdateSites`) with their callers' keys checked (T11–T13) |
+| 4 | Minor | `$pullAll`, `$push` + `$slice`, capped collections | Added. Blanking via `$set: null` stated as a limit (T14, T15) |
+| 5 | Minor | External URLs outside plain JSX string attributes | Any external-URL string or template literal in `src/`/`workers/` is a site. This also surfaced the AWS STS call behind `(input.fetch ?? fetch)(…)`, now classified (T04, T05) |
+| 6 | Low | The CLIs' "fixed error categories" wording; no target-URI assertion | §3 reworded (raw driver messages possible, F-18-20-08); `not.toContain(targetUri)` added |
+| 7 | Minor | §1, §3 and §8 overstatements | Rewritten as above |
+| — | Stability | `iso-household-*` multi-step tests could exceed 5 s under full-suite load (seen during a probe run) | 30 s timeouts. With CI enforcement, a flake would otherwise fail the run |
+
 ## 8. Mutation evidence
 
-Four rounds of temporary probes were run on 2026-10-01: 82 probes in total. Each probe edited a single file, ran the named tests, then restored the exact bytes; every restore was SHA-256-verified, nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests.
+Five rounds of temporary probes were run on 2026-10-01/02: 97 probes in total. Each probe edited a single file (or created one), ran the named tests, then restored the exact bytes; every restore was SHA-256-verified (a created file verified as removed), nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests. The run-time probes (T06–T10) ran the full suite with `REQUIRE_SECURITY_TESTS=1`.
 
 | Probe | Mutation | Result |
 | --- | --- | --- |
@@ -487,5 +519,20 @@ Four rounds of temporary probes were run on 2026-10-01: 82 probes in total. Each
 | S13 | `updateMany({}, update)` with a variable pipeline | Detected by the retention-mechanism inventory |
 | S14 | `(await open("probe.log", "w")).write(value)` from `node:fs/promises` | Detected by the emission inventory |
 | S15 | `fetch("//collector.example/…")` | Detected by the emission inventory |
+| T01 | Template-literal `connect-src` with an env origin in the CSP array | Detected by the run-time headers pin and the emission inventory |
+| T02 | Extra `headers()` entry overriding CSP for `/reports/:path*` | Detected by the run-time headers pin and the emission inventory |
+| T03 | New `src/proxy.ts` that sets a CSP header | Detected by the request-entry-point inventory and the emission inventory |
+| T04 | `<img src={"https://collector…"}>` in the root layout | Detected by the emission inventory (`url:external`) |
+| T05 | Script `src={`${CONST}/tag.js`}` through a constant | Detected by the emission inventory (`url:external`) |
+| T06 | Sentinel assertions wrapped in a swallowing `try/catch` | Detected by the static live-test check |
+| T07 | Sentinel assertion inside `if (process.env.X)` | Detected at run time (`requireAssertions`: the test executed no assertion; confirmed in isolation) |
+| T08 | `beforeEach(({ skip }) => …skip())` in the sentinel suite | Detected at run time (required ids skipped) |
+| T09 | `describe.each(noCases)` with an empty variable table | Detected at run time (required ids not registered) |
+| T10 | Sentinel test inside an uncalled registrar function | Detected at run time (required id not registered) |
+| T11 | A new `updateEmail` caller writing `email.recipientEmail` | Detected by the caller-key check of the dynamic update |
+| T12 | `$set: extra` with `extra: Record<string, unknown>` | Detected as an unexplained dynamic update |
+| T13 | `$push: { auditTrail: entry }` with an extra field in `entry` | Detected by the update-value type check |
+| T14 | `$pullAll` | Detected by the retention-mechanism inventory |
+| T15 | `$push` with `$each`/`$slice` (capped history) | Detected by the retention-mechanism inventory |
 
-81 of 82 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every exact mutation and bypass reported by the three reviews is detected. Close variants are covered by the general rules in §1, within its stated limits.
+96 of 97 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every exact mutation and bypass reported by the four reviews is detected. The guarantees that the reviews showed static checks could not hold (test liveness, security headers) are now checked at run time. The remaining limits are stated in §1.
