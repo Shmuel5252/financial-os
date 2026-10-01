@@ -315,7 +315,7 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
     await claimConfiguredOpenBankingSubject(newcomer, { provider, repository });
     expect(await claimDb.database.collection("bankProviderBindings").countDocuments({ subjectAlias })).toBe(1);
   }, 60_000);
-  it("runs the backup worker into a create-only store and restores its newest package through the drill with the fence passing", async () => {
+  it("[log-restore-drill-output] runs the backup worker into a create-only store and restores its newest package through the drill with the fence passing", async () => {
     const w = await world(disposables); const root = await mkdtemp(join(tmpdir(), "fos-drill-"));
     try {
       const store = directoryObjectStore(root); const recordSuccess = vi.fn(async () => undefined); const opened: MongoClient[] = [];
@@ -345,6 +345,10 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
       expect(drill.counts).not.toHaveProperty("profiles"); // both owners are suppressed by the ledger at restore time (empty collections are omitted)
       expect(drill.timings.totalMs).toBeGreaterThanOrEqual(drill.timings.restoreMs);
       expect(JSON.stringify(drill)).not.toMatch(new RegExp(`${w.actors[0]!.userId}|${w.actors[1]!.userId}|Synthetic`));
+      // What the restore-drill CLI prints (18-07/18-20): a fixed shape of names, counts, heads, barriers and timings only.
+      expect(Object.keys(drill).sort()).toEqual(["barriers", "counts", "fence", "ledgerHead", "package", "recoveryPoint", "releaseAllowed", "timings"]);
+      expect(Object.values(drill.counts).every(value => typeof value === "number")).toBe(true);
+      for (const group of Object.values(drill.barriers)) expect(Object.values(group).every(value => typeof value === "number")).toBe(true);
       await expect(runRestoreDrill({ ...w.ledgerInput(), mirror: store, store: directoryObjectStore(join(root, "empty")), targetUri: replica!, packageKey,
         indexManifestDigest: digest })).rejects.toThrow("no package available");
       await expect(runRestoreDrill({ ...w.ledgerInput(), mirror: store, store, targetUri: "mongodb://db.example.invalid:27017", packageKey, indexManifestDigest: digest }))

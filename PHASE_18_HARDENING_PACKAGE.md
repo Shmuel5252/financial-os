@@ -50,7 +50,7 @@ R = repository tests/source verified; L = real isolated local MongoDB evidence; 
 | 18-04 | partially satisfied | R/O prior config; E actual TLS/HSTS/limits/principal and Gate B |
 | 18-05 | partially satisfied | R/L limiter and new exports; E ingress/auth flood and measured thresholds |
 | 18-06 | partially satisfied | R headers/CSP incremental tests; E browser/nonce/HSTS |
-| 18-07 | partially satisfied | R fixed log projections; E platform/crash/log access/retention |
+| 18-07 | partially satisfied | R fixed log projections; R (2026-10-01) CI-enforced inventory of every emission point (7 sinks, per-field treatment) and sentinel tests for direct/nested/Error/URL/header leakage, no application leak found (`PHASE_18_DATA_AND_LOGGING_CLASSIFICATION.md`); E platform/crash/log access/retention, findings F-18-20-01/08 |
 | 18-08 | partially satisfied | R/L readiness, explicit operator; Gate B E, alerts/monitor credentials E |
 | 18-09 | partially satisfied | R SLI contract/load aggregates; E actual SLO coverage/measurements |
 | 18-10 | pending external configuration and policy | R planner; E backup storage/consistent capture/history, P exclusions/retention |
@@ -63,7 +63,7 @@ R = repository tests/source verified; L = real isolated local MongoDB evidence; 
 | 18-17 | pending external verification | R non-network harness; E synthetic target/HTTP adapter/approved measured load |
 | 18-18 | partially satisfied | R source/SSR/focus/motion; E full mobile/keyboard/screen-reader/browser |
 | 18-19 | partially satisfied | R optional flags; E authorized audited deployment changes and rollback drill |
-| 18-20 | partially satisfied | R minimized telemetry; P retention and E platform access/drains |
+| 18-20 | partially satisfied | R minimized telemetry; R (2026-10-01) CI-enforced field-level classification of all 55 collections + backup stores, current retention/TTL/hard-delete inventory; DRAFT / NOT ADOPTED retention proposal (`PHASE_18_RETENTION_DRAFT.md`); P retention adoption + gated implementation, E platform access/drains, findings F-18-20-02..07 |
 | 18-21 | pending complete security clearance | R proven issues fixed locally; Gate A E, no comprehensive high/critical clearance claim |
 | 18-22 | blocked on remaining acceptance | No signed final acceptance; SLO/privacy/backup/restore/rollback and Gates A/B unresolved |
 

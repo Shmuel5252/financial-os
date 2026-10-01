@@ -79,6 +79,18 @@ const digestRows = (rows: readonly DeletionLedgerRow[]) => rows.map(row => [row.
     await expect(rebuildLedger({ ...h.input(), target: fresh.database })).rejects.toThrow("Ledger rebuild refused: target not empty");
   }, 60_000);
 
+  it("[log-ledger-rebuild-output] the CLI's printed plan summary carries no receipt, subject, marker, user id or key", async () => {
+    const h = await history(); const plan = await planLedgerRebuild(h.input());
+    // Exactly the projection workers/ledger-rebuild/cli.ts prints (its keys are pinned by tests/unit/logging-sink-inventory.test.ts).
+    const printed = JSON.stringify({ head: plan.head, rows: plan.rows.length, digest: plan.digest, baseMirror: plan.baseMirror, baseHead: plan.baseHead,
+      mirrors: plan.mirrors, journalApplied: plan.journalApplied }, null, 2);
+    const rows = (await h.ledger.export()).rows;
+    expect(rows.length).toBeGreaterThan(0);
+    const forbidden = [h.marked.userId, alias("provider-subject"), ...[ledgerKey, mirrorKey].flatMap(key => [Buffer.from(key.material).toString("hex"), Buffer.from(key.material).toString("base64")]),
+      ...rows.flatMap(row => [row._id, ...[row.current, row.accepted].flatMap(receipt => [receipt.subject, receipt.signature, receipt.operationId, ...receipt.providerSubjects])])];
+    for (const value of forbidden) expect(printed).not.toContain(value);
+  }, 60_000);
+
   it("fails closed whenever completeness, ordering or continuity cannot be proven", async () => {
     const h = await history();
     const [firstMirror, newestMirror] = names(h.store, "ledger-mirror/");

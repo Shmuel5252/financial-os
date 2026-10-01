@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { relative, sep } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { files, liveTestIds } from "../security/live-test-ids";
 import { pageMatrix, routeMatrix, serverActionMatrix } from "../security/route-authorization-matrix";
 
 // Phase 18 row 18-14: every API route method, page/layout and server-action module must be classified in the matrix, and every
@@ -13,12 +14,6 @@ const ROUTE_CONFIG = new Set(["dynamic", "dynamicParams", "revalidate", "fetchCa
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|mts)$/;
 const AUTH_ONLY = new Set(["iso-unauthenticated", "iso-mutation-origin"]);
 
-function files(directory: string, match: (path: string) => boolean): string[] {
-  return readdirSync(directory).flatMap((name) => {
-    const path = join(directory, name);
-    return statSync(path).isDirectory() ? files(path, match) : match(path) ? [path] : [];
-  });
-}
 const posix = (path: string) => path.split(sep).join("/");
 
 /** Names exported by a module; throws for export forms the inventory cannot account for (export *, computed/destructured patterns it cannot name). */
@@ -48,16 +43,6 @@ function exportedNames(path: string): string[] {
     else throw new Error(`${path}: unrecognised export form`);
   }
   return names;
-}
-
-/** Ids that appear as `[id]` at the start of a real it()/test() title (not it.skip/it.todo, not comments). */
-function liveTestIds(): Set<string> {
-  const ids = new Set<string>();
-  for (const path of files("tests", (p) => /\.test\.(ts|tsx)$/.test(p))) {
-    const text = readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
-    for (const match of text.matchAll(/(?<![.\w])(?:it|test)\(\s*(["'`])\[([a-z0-9-]+)\]/g)) ids.add(match[2]!);
-  }
-  return ids;
 }
 
 describe("authorization inventory (18-14)", () => {
