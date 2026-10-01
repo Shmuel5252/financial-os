@@ -86,10 +86,17 @@ jobs:
           echo "MONGODB_TEST_AUTH_REPLICA_URI=mongodb://ci-admin:$ADMIN_PASSWORD@127.0.0.1:27019/?authSource=admin&directConnection=true" >> "$GITHUB_ENV"
 
       - name: Run unit and available integration tests
-        # Fails unless every required security test id (18-07/18-14/18-20) ran and passed: tests/security/required-tests-reporter.ts
+        # Fails unless every required security test (18-07/18-14/18-20) ran and passed: tests/security/required-tests-reporter.ts
         env:
           REQUIRE_SECURITY_TESTS: "1"
+          SECURITY_TESTS_MARKER: ${{ runner.temp }}/security-tests.json
         run: npm test
+
+      - name: Verify the security-test reporter ran and passed
+        # A run where the reporter did not execute (e.g. replaced by a --reporter flag) leaves no marker and fails here.
+        env:
+          SECURITY_TESTS_MARKER: ${{ runner.temp }}/security-tests.json
+        run: node -e "const m = JSON.parse(require('fs').readFileSync(process.env.SECURITY_TESTS_MARKER, 'utf8')); if (!m.ok || m.required < 40) { console.error(m); process.exit(1); } console.log('required security tests:', m.required, 'ok')"
 
       - name: Run strict type-check
         run: npm run typecheck

@@ -1899,9 +1899,11 @@ export const subtreeShapes: Readonly<Record<string, string>> = {
 };
 
 /**
- * Update calls whose operator value is open (`Record`/`unknown`/`any`, incl. a Record spread into the literal): the type check cannot
- * see which fields they write, so each is explained here (`<file> dynamic:<operator>` -> count). A new one fails CI.
+ * Open values in writing code: an operator value typed `Record`/`unknown`/`any` (`dynamic:<operator>`), or ANY spread of such a value
+ * inside a function that writes to a typed collection, directly or through an intermediate variable (`dynamic:spread`). The type check
+ * cannot see which fields they write, so each is explained here (`<file> <kind>` -> count); when the spread value is a parameter, every
+ * same-file call's literal keys are still checked against the document type. A new one fails CI; a vanished one must be re-verified.
  */
 export const dynamicUpdateSites: Readonly<Record<string, Readonly<{ count: number; writes: string }>>> = {
-  "src/lib/notifications/notification-repository.ts dynamic:$set": { count: 1, writes: "updateEmail(..., set): every caller in the same file passes literal, declared `email.*` delivery-state fields (state, claimExpiresAt, acceptedAt, deliveredAt, errorCategory, providerMessageId, notBeforeAt)" },
+  "src/lib/notifications/notification-repository.ts dynamic:spread": { count: 1, writes: "updateEmail(..., set): every caller in the same file passes literal, declared `email.*` delivery-state fields (state, claimExpiresAt, acceptedAt, deliveredAt, errorCategory, providerMessageId, notBeforeAt)" },
 };

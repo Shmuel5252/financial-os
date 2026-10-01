@@ -195,6 +195,7 @@ export const implicitSinks = [
   { sink: "Next.js server error logging", what: "an error thrown out of a page, layout or server action (route handlers catch into errorResponse) is printed by the framework with message and stack", exposure: "app-thrown messages are fixed or name a field/category; a third-party error (e.g. a MongoServerError E11000 message includes the duplicate key VALUE) would be printed verbatim. Pages only read; the two server actions are sign-in/sign-out" },
   { sink: "AWS Lambda runtime (backup worker)", what: "an uncaught error from the scheduled worker is written to the CloudWatch log group (30-day retention in the template)", exposure: "the worker's own failures are `Backup worker failed closed: <reason>` / `Backup capture failed closed: <reason>` with fixed reasons, collection names and driver error codes (codeOf); but errors from connect (backup-worker.ts:54-55), dbStats (:63), the CloudWatch metric call (:64) and S3 writes (workers/backup/index.ts rethrows) reach the runtime with the raw driver/SDK message (host names possible; no keys or documents observed) - F-18-20-08" },
   { sink: "Platform request logs (Vercel)", what: "method, path and QUERY STRING of every request", exposure: "GET /api/search carries the user's search text (financial text, up to 100 chars) in `query`; other query strings carry record/household ids, report periods and pagination cursors (finding F-18-20-01)" },
+  { sink: "Dependency egress (not a log)", what: "Auth.js calls Google's OAuth/OIDC endpoints; the MongoDB driver calls AWS STS/IMDS in the MONGODB-AWS aws-runtime mode", exposure: "authorization code and client credentials to Google, which returns the profile stored in authUsers/authAccounts; AWS credential requests carry no user data. Both happen inside reviewed dependencies (reviewedDependencies), so they are not repository emission sites" },
   { sink: "MongoDB driver logging", what: "enabled only by MONGODB_LOG_* environment variables in the deployment", exposure: "would print commands including document values; no repository code enables it (checked in CI); the platform environment is outside the repository" },
 ] as const;
 
@@ -229,9 +230,9 @@ export const operatorFiles: Readonly<Record<string, string>> = {
  */
 export const reviewedDependencies: Readonly<Record<string, string>> = {
   "@auth/mongodb-adapter": "auth persistence; logs only through Auth.js's logger (safeAuthLogger)",
-  mongodb: "database driver; command logging only via MONGODB_LOG_* (not set in code, checked above)",
+  mongodb: "database driver; command logging only via MONGODB_LOG_* (not set in code, checked above). EGRESS: the database itself; in the MONGODB-AWS `aws-runtime` mode the driver also calls AWS STS/IMDS for credentials (no user data)",
   next: "framework; its own server error logging is the implicit sink F-18-20-08",
-  "next-auth": "authentication; logger overridden (safeAuthLogger), debug false",
+  "next-auth": "authentication; logger overridden (safeAuthLogger), debug false. EGRESS: the Google OAuth/OIDC exchange (authorization code + client credentials to Google's token endpoint, ID-token verification); it returns the user's Google profile (classified in authUsers/authAccounts)",
   react: "UI runtime; no telemetry",
   "react-dom": "UI runtime; no telemetry",
   "server-only": "build-time guard; no runtime code",

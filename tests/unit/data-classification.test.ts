@@ -64,11 +64,12 @@ describe("data classification inventory (18-07/18-20)", () => {
   it("writes no field that the collection's document type does not declare (insert/update/replace on Collection<T>, incl. spreads and variables)", () => {
     const writes = undeclaredWrites();
     const dynamic: Record<string, number> = {};
-    for (const site of writes.filter((entry) => / dynamic:\$/.test(entry))) {
+    for (const site of writes.filter((entry) => / dynamic:/.test(entry))) {
       const [location, kind] = site.split(" "); const key = `${location!.split(":")[0]} ${kind}`; dynamic[key] = (dynamic[key] ?? 0) + 1;
     }
-    expect(writes.filter((entry) => !/ dynamic:\$/.test(entry)), "fields written but not declared in the document type").toEqual([]);
-    expect(dynamic, "open (Record/unknown/any) update values must be explained in dynamicUpdateSites")
+    expect(writes.filter((entry) => !/ dynamic:/.test(entry)), "fields written but not declared in the document type").toEqual([]);
+    expect(dynamic, "open (Record/unknown/any) values in writing code must be explained in dynamicUpdateSites. If an entry VANISHED, re-verify "
+      + "the code still cannot write undeclared fields (e.g. a refactor that hid the spread) - do not just delete it")
       .toEqual(Object.fromEntries(Object.entries(dynamicUpdateSites).map(([site, entry]) => [site, entry.count])));
   }, 120_000);
 

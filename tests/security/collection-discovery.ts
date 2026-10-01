@@ -245,7 +245,9 @@ export function undeclaredWrites(): string[] {
   const treeOf = (type: ts.Type) => { const tree: DocumentTree = new Map(); addTree(checker, type, "", tree, 0); return tree; };
   for (const source of program.getSourceFiles()) {
     if (source.isDeclarationFile || !/\/(src|workers)\//.test(posix(source.fileName))) continue;
-    const viaParameter: { functionName: string; index: number; tree: DocumentTree; prefix: string }[] = [];
+    const viaParameter: { functionName: string; index: number; tree: DocumentTree }[] = [];
+    const scannedScopes = new Set<ts.Node>();
+    const locate = (inner: ts.Node) => `${posix(source.fileName).replace(/^.*?\/(src|workers)\//, "$1/")}:${source.getLineAndCharacterOfPosition(inner.getStart()).line + 1}`;
     const visit = (node: ts.Node): void => {
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && WRITE_METHODS.has(node.expression.name.text)) {
         const receiver = checker.getTypeAtLocation(node.expression.expression);
@@ -253,6 +255,31 @@ export function undeclaredWrites(): string[] {
         if (document && !checker.getIndexTypeOfType(document, ts.IndexKind.String)) {
           const tree = treeOf(document);
           const method = node.expression.name.text;
+          const open = (type: ts.Type) => (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0 || checker.getIndexTypeOfType(type, ts.IndexKind.String) !== undefined;
+          // TypeScript drops index signatures when a Record is spread into an object literal (`{ ...set, x }`), in place or through an
+          // intermediate variable. Any spread of an open (Record/unknown/any) value inside the writing function is a dynamic site.
+          let scope: ts.Node | undefined = node.parent;
+          while (scope && !ts.isFunctionLike(scope) && !ts.isSourceFile(scope)) scope = scope.parent;
+          if (scope && !scannedScopes.has(scope)) {
+            scannedScopes.add(scope);
+            const spreads = (inner: ts.Node): void => {
+              if (ts.isSpreadAssignment(inner) && open(checker.getTypeAtLocation(inner.expression))) {
+                found.add(`${locate(inner)} dynamic:spread`);
+                const symbol = ts.isIdentifier(inner.expression) ? checker.getSymbolAtLocation(inner.expression) : undefined;
+                const parameter = symbol?.valueDeclaration && ts.isParameter(symbol.valueDeclaration) ? symbol.valueDeclaration : undefined;
+                const owner = parameter?.parent;
+                const ownerName = owner && (ts.isMethodDeclaration(owner) || ts.isFunctionDeclaration(owner)) && owner.name && ts.isIdentifier(owner.name) ? owner.name.text
+                  : owner && (ts.isArrowFunction(owner) || ts.isFunctionExpression(owner)) && owner.parent
+                    && (ts.isVariableDeclaration(owner.parent) || ts.isPropertyDeclaration(owner.parent) || ts.isPropertyAssignment(owner.parent))
+                    && ts.isIdentifier(owner.parent.name) ? owner.parent.name.text : undefined;
+                if (parameter && owner && ts.isFunctionLike(owner) && ownerName) viaParameter.push({ functionName: ownerName, index: owner.parameters.indexOf(parameter), tree });
+                else if (parameter) found.add(`${locate(inner)} dynamic:unnamed-owner`);
+              }
+              // Nested closures of the writing function are included (e.g. `$set: (() => ({ ...set }))()`).
+              ts.forEachChild(inner, spreads);
+            };
+            spreads(scope);
+          }
           const where = `${posix(source.fileName).replace(/^.*?\/(src|workers)\//, "$1/")}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
           const whole = (argument: ts.Expression | undefined, element = false) => {
             if (!argument) return;
@@ -266,26 +293,6 @@ export function undeclaredWrites(): string[] {
           if (method === "replaceOne" || method === "findOneAndReplace") whole(node.arguments[1]);
           if (["updateOne", "updateMany", "findOneAndUpdate"].includes(method) && node.arguments[1]) {
             const update = checker.getTypeAtLocation(node.arguments[1]);
-            const open = (type: ts.Type) => (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0 || checker.getIndexTypeOfType(type, ts.IndexKind.String) !== undefined;
-            // TypeScript drops index signatures when a Record is spread into a literal (`$set: { ...set, x }`): inspect spreads directly.
-            if (ts.isObjectLiteralExpression(node.arguments[1])) {
-              for (const property of node.arguments[1].properties) {
-                const name = property.name && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) ? property.name.text : "";
-                if (FIELD_OPERATORS.has(name) && ts.isPropertyAssignment(property) && ts.isObjectLiteralExpression(property.initializer)) {
-                  for (const element of property.initializer.properties) {
-                    if (!(ts.isSpreadAssignment(element) && open(checker.getTypeAtLocation(element.expression)))) continue;
-                    found.add(`${where} dynamic:${name}`);
-                    // When the spread value is a parameter of the enclosing function, every same-file call's literal argument is checked.
-                    const symbol = ts.isIdentifier(element.expression) ? checker.getSymbolAtLocation(element.expression) : undefined;
-                    const parameter = symbol?.valueDeclaration && ts.isParameter(symbol.valueDeclaration) ? symbol.valueDeclaration : undefined;
-                    const owner = parameter?.parent;
-                    if (parameter && owner && (ts.isMethodDeclaration(owner) || ts.isFunctionDeclaration(owner)) && owner.name && ts.isIdentifier(owner.name)) {
-                      viaParameter.push({ functionName: owner.name.text, index: owner.parameters.indexOf(parameter), tree, prefix: name === "$set" || name === "$setOnInsert" ? "" : "op" });
-                    }
-                  }
-                }
-              }
-            }
             if (!(update.flags & ts.TypeFlags.Any) && !checker.isArrayType(update)) {
               for (const operator of checker.getPropertiesOfType(update)) {
                 const name = operator.getName();

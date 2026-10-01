@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { emissionSites, operatorFileDigests } from "../security/emission-sites";
@@ -49,6 +49,26 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
     expect(await nextConfig.headers?.()).toEqual(securityHeaders(contentSecurityPolicy.join("; ")));
     // Request entry points that could set headers outside next.config.ts are inventoried in route-authorization-inventory.test.ts
     // (middleware/proxy/instrumentation must not exist unclassified); a CSP string anywhere else is an emission site (`string:csp`).
+  });
+
+  it("keeps the run-time security-test enforcement wired (config, CI step, marker check) and active in CI", () => {
+    const config = readFileSync("vitest.config.mts", "utf8");
+    expect(config).toMatch(/requireAssertions:\s*true/);
+    expect(config).toMatch(/reporters:\s*\[\s*"default",\s*"\.\/tests\/security\/required-tests-reporter\.ts"\s*\]/);
+    const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+    const testStep = /- name: Run unit and available integration tests[\s\S]*?run: npm test\s*$/m.exec(ci)?.[0] ?? "";
+    expect(testStep, "the CI test step sets the enforcement env").toMatch(/REQUIRE_SECURITY_TESTS: "1"/);
+    expect(testStep, "the CI test step sets the marker path").toMatch(/SECURITY_TESTS_MARKER:/);
+    expect(testStep, "no --reporter flag may replace the configured reporters").not.toMatch(/--reporter/);
+    expect(ci, "a CI step verifies the reporter's marker").toMatch(/Verify the security-test reporter ran and passed[\s\S]*SECURITY_TESTS_MARKER[\s\S]*m\.ok/);
+    expect(JSON.parse(readFileSync("package.json", "utf8")).scripts.test, "npm test runs the configured reporters").toBe("vitest run");
+    expect(!process.env.CI || process.env.REQUIRE_SECURITY_TESTS === "1", "CI runs the suite with REQUIRE_SECURITY_TESTS=1").toBe(true);
+  });
+
+  it("has no platform configuration that could set headers, rewrites or redirects outside next.config.ts", () => {
+    for (const file of ["vercel.json", "now.json", "netlify.toml", "_headers", "_redirects", "public/_headers", "public/_redirects"]) {
+      expect(existsSync(file), `${file}: classify platform-level headers/rewrites (egress, CSP) before adding it`).toBe(false);
+    }
   });
 
   it("[log-auth-config] configures Auth.js with debug: false and the redacting logger", () => {

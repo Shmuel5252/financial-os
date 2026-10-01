@@ -1,6 +1,6 @@
 # Phase 18 rows 18-07 and 18-20: data classification, retention inventory and logging/telemetry sinks (repository portion)
 
-Status: **repository portion built 2026-10-01/02, reviewed, re-reviewed three times and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
+Status: **repository portion built 2026-10-01/02, reviewed, re-reviewed four times and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
 today. It adopts no retention period, access role or deletion mechanism; the recommendations live separately in
 `PHASE_18_RETENTION_DRAFT.md` (**DRAFT / NOT ADOPTED**). No runtime code, TTL index, deletion job, logging behaviour, application data
 or infrastructure was changed in this item.
@@ -12,7 +12,7 @@ or infrastructure was changed in this item.
 | `tests/security/data-classification.ts` | 55 collections, 1,189 field rows (class, personal-data level, transform, note), current retention with `file:line`, raw secrets at rest, retention-mechanism inventory, template retention, data stores outside MongoDB, the explained non-literal collection calls, pinned Auth.js adapter versions, 50 pinned subtree shapes, out-of-scope list | `tests/unit/data-classification.test.ts` (12 tests) |
 | `tests/security/logging-sink-matrix.ts` | 15 entries (8 log/telemetry sinks + 7 classified non-log egress/I/O/header entries) covering all 64 emission-site keys (94 occurrences), per-field treatment, 16 pinned operator-run files, the reviewed-dependency allowlist (18 packages), the exact run-time security headers and CSP, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (7 tests) |
 | `tests/unit/logging-sentinels.test.ts` (11), `tests/integration/logging-sentinels.integration.test.ts` (1), `[log-…]` tests in the recovery suites (2) | sentinel tests per sink, plus a self-test of the capture and matcher | run in `npm test` |
-| `tests/security/required-tests-reporter.ts` + `vitest.config.mts` (`expect.requireAssertions`) | the 50 required security test ids (16 `log-*`/inventory ids + every 18-14 negative-test id) | CI (`REQUIRE_SECURITY_TESTS=1`): the run fails unless each one ran and passed; every test must execute an assertion |
+| `tests/security/required-tests-reporter.ts` + `vitest.config.mts` (`expect.requireAssertions`) + the CI marker step | 51 required security test ids (every `[iso-…]`/`[log-…]` id in any test title + every matrix-cited id) and every test of the 5 inventory modules (exact counts) | CI (`REQUIRE_SECURITY_TESTS=1`): the run fails unless each one was registered, ran and passed; every test must execute an assertion; a separate step fails if the reporter did not run |
 
 CI fails when:
 - **Collections.** A collection appears or disappears. Discovery is AST-based (literals and the manual-section/auth/ledger maps) over `src/` and `workers/`. Additionally:
@@ -25,7 +25,9 @@ CI fails when:
 - **Fields written but not declared.** A field reaches storage on a typed `Collection<T>` but does not exist in `T`. MongoDB's typings would accept all of these.
   - `insert*`/`replace*`: the written value's TYPE is compared with `T` (literals, spreads of domain objects, variables and mapped arrays alike).
   - Update operators (`$set`, `$push`/`$addToSet` incl. `$each`, …): each value's type is compared with `T` below its dotted key.
-  - An open operator value (`Record`/`unknown`/`any`, including a `Record` spread into the literal) must be explained (`dynamicUpdateSites`; one today, `updateEmail` in notifications). When it comes from a function parameter, every same-file call's literal keys are checked against `T`.
+  - An open value must be explained (`dynamicUpdateSites`; one today, `updateEmail` in notifications). That covers an operator value typed `Record`/`unknown`/`any`, and any spread of such a value anywhere in a writing function — in place, through an intermediate variable, or in a nested closure.
+  - When the open value is a parameter (method, function or arrow-function owner), every same-file call's literal keys are checked against `T`.
+  - A vanished entry fails with a re-verify instruction.
 - **Manual-section fields.** A manual section's `fields.*` keys differ from its zod domain schema.
 - **Auth.js versions.** The installed `@auth/mongodb-adapter`/`@auth/core` versions change: their adapter defines the auth collections.
 - **Pseudonymized identifiers.** Any of these fails:
@@ -57,13 +59,18 @@ CI fails when:
   - telemetry `.emit()`;
   - `logger`/`debug`/`logging` config keys in `src/`, `workers/`, `scripts/` and `next.config`.
 - **Operator-run files.** Any file in `scripts/` (including PowerShell) or any `workers/*/cli.ts` changes: their SHA-256 is pinned, so a changed value behind an unchanged console call also fails. Separately, an operator script prints env values, URIs, secrets or raw error messages.
-- **Sentinel and security tests.** Checked at run time, which no source pattern can defeat:
-  - in CI the run fails unless all 50 required ids were registered, ran and passed — not skipped by `it.skip`/`describe.skipIf`/a `beforeEach` or `ctx` skip, not unregistered by an empty `each`, an uncalled registrar or a removed file;
-  - every test must execute at least one assertion (`expect.requireAssertions`), so a conditional or early-returning test fails.
+- **Sentinel, security and inventory tests.** Checked at run time:
+  - in CI the run fails unless all 51 required ids, and every test of the 5 inventory modules (exact counts), were registered, ran and passed — not skipped by `it.skip`/`describe.skipIf`/a `beforeEach` or `ctx` skip, not unregistered by an empty `each`, an uncalled registrar or a removed file;
+  - every test must execute at least one assertion (`expect.requireAssertions`), so a conditional or early-returning test fails;
+  - the reporter writes a marker that a separate CI step requires, so a run where it did not execute (e.g. a `--reporter` flag) fails;
+  - an inventory test pins the wiring itself: the vitest reporter and `requireAssertions`, the CI env and marker step, no `--reporter` override, and `REQUIRE_SECURITY_TESTS=1` whenever `CI` is set.
 
   A static check also requires each id to be a real, assertion-calling `it`/`test`: not self-skipping, not conditionally placed, not under a skipping describe or alias, not swallowing its assertions in a non-rethrowing `catch`. It gives the same signal in partial local runs.
-- **Dependencies.** Any package outside the reviewed allowlist is added: every direct dependency is classified for logging, telemetry and egress (e.g. Vercel Analytics, Speed Insights or `@next/third-parties` would fail). MongoDB driver command logging enabled in code also fails.
-- **Security headers / CSP.** The headers that next.config.ts's `headers()` returns AT RUN TIME differ from the pinned list. This catches a widened directive, a template/env-driven origin, or an extra route-specific header entry. Headers cannot be set unnoticed elsewhere: a CSP header name outside next.config.ts is an emission site, and middleware/proxy/instrumentation files must not exist unclassified (route-authorization inventory).
+- **Dependencies.** Any package outside the reviewed allowlist is added: every direct dependency is classified for logging, telemetry and egress (e.g. Vercel Analytics, Speed Insights or `@next/third-parties` would fail). The egress inside dependencies is recorded: Auth.js's Google OAuth/OIDC exchange, and the driver's AWS STS/IMDS calls in the MONGODB-AWS mode. MongoDB driver command logging enabled in code also fails.
+- **Security headers / CSP.** The headers that next.config.ts's `headers()` returns AT RUN TIME differ from the pinned list. This catches a widened directive, a template/env-driven origin, or an extra route-specific header entry. A CSP cannot be set unnoticed elsewhere:
+  - a CSP header name outside next.config.ts is an emission site;
+  - middleware/proxy/instrumentation files must not exist unclassified (route-authorization inventory);
+  - platform configs (`vercel.json`, `netlify.toml`, `_headers`, `_redirects`) must not exist unclassified.
 - **Auth.js logging.** Auth.js `debug` or the redacting logger changes.
 
 **Limits (stated, not hidden):**
@@ -73,6 +80,7 @@ CI fails when:
   - Whole update documents built at run time are flagged as `dynamic-update` retention sites (none today).
   - Open operator values are explained in `dynamicUpdateSites` (one today, with its callers checked).
   - Blanking a field through `$set: null` is an ordinary update, not a removal site.
+- **Non-CSP response headers.** Headers set by individual route handlers (e.g. `Cache-Control`, `Vary`) are not pinned. The CSP is.
 - **Platform and provider side.** Logging and retention there is outside the repository (§2, out of scope).
 
 ## 2. Collection and field coverage
@@ -244,6 +252,7 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 | Next.js server error logging | Pages and server actions only (route handlers catch errors) | See F-18-20-08 |
 | Lambda runtime | The backup worker's fail-closed messages, plus **raw driver/SDK messages** from connect, dbStats, the metric call and S3 writes, sent to CloudWatch (30 days) | See F-18-20-08 |
 | Vercel request logs | URL query strings | See F-18-20-01 |
+| Dependency egress | Auth.js ↔ Google OAuth/OIDC (code, client credentials; returns the profile); MongoDB driver ↔ AWS STS/IMDS in the MONGODB-AWS mode (no user data) | Recorded in `reviewedDependencies` |
 | MongoDB driver logging | Only if `MONGODB_LOG_*` is set on the platform | No code enables it; CI-checked |
 
 ## 4. Sentinel and mutation results
@@ -288,12 +297,13 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 
 All pass.
 
-**Mutation probes:** 97 temporary probes over five rounds:
+**Mutation probes:** 107 temporary probes over six rounds:
 - L01–L20 with L09b, and D01–D08 (the original build);
 - R01–R17 (from the first review);
 - N01–N21 (from the first re-review);
 - S01–S15 (from the second re-review);
-- T01–T15 (from the third re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
+- T01–T15 (from the third re-review);
+- V01–V09 with V06b (from the fourth re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
 
 ## 5. Findings (no actual application logging leak found)
 
@@ -431,9 +441,27 @@ Fixed in tests, the test config and CI only, with no runtime change:
 | 7 | Minor | §1, §3 and §8 overstatements | Rewritten as above |
 | — | Stability | `iso-household-*` multi-step tests could exceed 5 s under full-suite load (seen during a probe run) | 30 s timeouts. With CI enforcement, a flake would otherwise fail the run |
 
+**Round 5: fourth re-review (2026-10-02) of commit `47dc232`**, read-only.
+
+Its main results:
+- **CI and confirmations:** CI was green with all 50 ids enforced. It confirmed that the reporter fails the exit code, that all counts matched, and that no runtime code changed.
+- **Leaks:** no actual leak in current code.
+- **Verdict:** not ready, because three bypasses had CI green.
+
+Fixed in tests, the test config and CI only:
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | Important | The inventory tests themselves (no ids) could be skipped with CI green | The reporter requires every test of the 5 inventory modules (exact counts) and every `[iso-…]`/`[log-…]` id in any test title (V01, V02) |
+| 2 | Important | A CLI `--reporter` flag, or an edit to the env/config, disabled the run-time enforcement | Marker file plus a separate CI verify step; an inventory test pins the vitest and CI wiring and requires `REQUIRE_SECURITY_TESTS=1` under `CI` (V03–V05, V09) |
+| 3 | Important | Hiding the `Record` spread behind an intermediate variable lost the dynamic-update caller check | Any open spread in a writing function (variables, nested closures) is a dynamic site; caller keys are checked for method, function and arrow owners; a vanished entry fails with a re-verify message (V06, V06b, V07) |
+| 4 | Minor | Header claim broader than enforced (`vercel.json`, route-handler headers) | Platform configs must not exist unclassified (V08); §1 narrowed to CSP; non-CSP route headers stated as a limit |
+| 5 | Minor | Google OAuth and driver STS/IMDS egress not recorded | Recorded in `reviewedDependencies` and the implicit table |
+| 6 | Low | Hardening-package counts, the S02 kind name, `[iso-session-invalid]` not required | Corrected; now required through the title scan |
+
 ## 8. Mutation evidence
 
-Five rounds of temporary probes were run on 2026-10-01/02: 97 probes in total. Each probe edited a single file (or created one), ran the named tests, then restored the exact bytes; every restore was SHA-256-verified (a created file verified as removed), nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests. The run-time probes (T06–T10) ran the full suite with `REQUIRE_SECURITY_TESTS=1`.
+Six rounds of temporary probes were run on 2026-10-01/02: 107 probes in total. Each probe edited a single file (or created one), ran the named tests, then restored the exact bytes; every restore was SHA-256-verified (a created file verified as removed), nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests. The run-time probes (T06–T10) ran the full suite with `REQUIRE_SECURITY_TESTS=1`.
 
 | Probe | Mutation | Result |
 | --- | --- | --- |
@@ -505,7 +533,7 @@ Five rounds of temporary probes were run on 2026-10-01/02: 97 probes in total. E
 | N20 | Pipeline update with `$replaceWith` | Detected by the retention-mechanism inventory |
 | N21 | `Date.now() > 0 && it("[log-backup-metrics]…")` | Detected by the live-test check |
 | S01 | `@vercel/analytics` dependency added | Detected by the dependency allowlist |
-| S02 | Third-party `<script src="https://www.googletagmanager.com/…">` in the root layout | Detected by the emission inventory (`jsx:external-url`) |
+| S02 | Third-party `<script src="https://www.googletagmanager.com/…">` in the root layout | Detected by the emission inventory (`url:external`, formerly `jsx:external-url`) |
 | S03 | `script-src` widened to a third-party origin | Detected by the CSP pin |
 | S04 | `if (!process.env.X) return;` at the top of `[log-backup-metrics]` | Detected by the live-test check |
 | S05 | `({ skip }) => { skip(); … }` | Detected by the live-test check |
@@ -534,5 +562,15 @@ Five rounds of temporary probes were run on 2026-10-01/02: 97 probes in total. E
 | T13 | `$push: { auditTrail: entry }` with an extra field in `entry` | Detected by the update-value type check |
 | T14 | `$pullAll` | Detected by the retention-mechanism inventory |
 | T15 | `$push` with `$each`/`$slice` (capped history) | Detected by the retention-mechanism inventory |
+| V01 | `it.skip` on the run-time headers pin | Detected at run time (inventory module count) |
+| V02 | `it.skip` on the undeclared-write check | Detected at run time (inventory module count) |
+| V03 | `npm test -- --reporter=junit` in the CI test step | Detected by the enforcement-wiring test |
+| V04 | `REQUIRE_SECURITY_TESTS` removed from the CI step | Detected by the enforcement-wiring test |
+| V05 | Reporter removed from vitest.config.mts | Detected by the enforcement-wiring test |
+| V06 | `updateEmail` refactored through `const fields = { ...set, … }` plus a caller writing `email.recipientRawBody` | Detected by the undeclared-write check (open spread + caller keys) |
+| V06b | The same through an IIFE closure | Detected by the undeclared-write check |
+| V07 | An arrow-function helper with a `Record` parameter, and a caller with an undeclared key | Detected by the undeclared-write check (arrow owner) |
+| V08 | `vercel.json` setting a CSP header | Detected by the platform-config check |
+| V09 | `--reporter=default` with enforcement on: vitest exits 0, but no marker is written | Detected by the CI marker step (exit 1, run by hand) |
 
-96 of 97 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every exact mutation and bypass reported by the four reviews is detected. The guarantees that the reviews showed static checks could not hold (test liveness, security headers) are now checked at run time. The remaining limits are stated in §1.
+106 of 107 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every exact mutation and bypass reported by the five reviews is detected. The guarantees that the reviews showed static checks could not hold (test liveness, security headers) are now checked at run time. The remaining limits are stated in §1.
