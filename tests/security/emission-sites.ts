@@ -18,6 +18,8 @@ import { files } from "./live-test-ids";
 //   sink APIs used anywhere (Console as a value, debuglog, fs write functions, sendBeacon, XMLHttpRequest, WebSocket, EventSource,
 //   eval, Function)
 // - `http:fetch` for every fetch-like call (fetch, fetchImpl, fetchImplementation, ...) whose URL is not a same-origin path literal
+//   (protocol-relative `//host` counts as external); `jsx:external-url` for a literal external URL in any JSX attribute (scripts,
+//   images, links, forms); `import:next/script` for Next's third-party script loader
 // - `aws:<Command>` / `sdk:<package>` for AWS SDK command names and @aws-sdk modules
 // - `emit` for any `.emit(` call, `config:<key>` for logger/debug/logging configuration keys
 // LIMIT: this is a syntactic regression guard against accidental logging and egress. Deliberately obfuscated code beyond the flagged
@@ -29,11 +31,11 @@ const CONFIG_KEYS = new Set(["logger", "debug", "logging"]);
 const INERT_PROCESS = new Set(["env", "argv", "cwd", "execPath", "exit", "exitCode"]);
 const SINK_STRINGS = new Set(["console", "process", "stdout", "stderr"]);
 const GLOBALS = new Set(["globalThis", "global", "self"]);
-const SINK_MODULES = new Set(["console", "process", "child_process", "http", "https", "http2", "net", "tls", "dgram", "worker_threads"]
-  .flatMap((name) => [name, `node:${name}`]));
+const SINK_MODULES = new Set([...["console", "process", "child_process", "http", "https", "http2", "net", "tls", "dgram", "worker_threads"]
+  .flatMap((name) => [name, `node:${name}`]), "next/script"]);
 const FS_WRITES = ["writeFile", "writeFileSync", "appendFile", "appendFileSync", "createWriteStream", "writeSync", "writev", "writevSync", "write"];
 const SINK_NAMED = new Map<string, readonly string[]>([...["util", "node:util"].map((m) => [m, ["debuglog", "debug"]] as const),
-  ...["fs", "node:fs", "fs/promises", "node:fs/promises"].map((m) => [m, FS_WRITES] as const)]);
+  ...["fs", "node:fs", "fs/promises", "node:fs/promises"].map((m) => [m, [...FS_WRITES, "open", "openSync", "copyFile", "cp", "rename"]] as const)]);
 const SINK_APIS = new Set(["Console", "debuglog", "sendBeacon", "XMLHttpRequest", "WebSocket", "EventSource", "eval", "Function",
   ...FS_WRITES.filter((name) => name !== "write")]);
 const isTypePosition = (node: ts.Node) => ts.isTypeReferenceNode(node.parent) || ts.isExpressionWithTypeArguments(node.parent) || ts.isTypeQueryNode(node.parent)
@@ -79,7 +81,9 @@ export function emissionSites(): Map<string, number> {
       } else if (ts.isCallExpression(node) && /^fetch/i.test(calleeName(node.expression))) {
         const url = node.arguments[0];
         const head = url && ts.isStringLiteralLike(url) ? url.text : url && ts.isTemplateExpression(url) ? url.head.text : undefined;
-        if (!(head !== undefined && head.startsWith("/"))) add("http:fetch");
+        if (!(head !== undefined && head.startsWith("/") && !head.startsWith("//"))) add("http:fetch");
+      } else if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer) && /^(https?:)?\/\//i.test(node.initializer.text)) {
+        add("jsx:external-url");
       } else if (ts.isStringLiteralLike(node) && /^[A-Z][A-Za-z0-9]+Command$/.test(node.text)) {
         add(`aws:${node.text}`);
       } else if (ts.isStringLiteralLike(node) && node.text.startsWith("@aws-sdk/")) {

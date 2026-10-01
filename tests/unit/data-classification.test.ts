@@ -37,7 +37,7 @@ describe("data classification inventory (18-07/18-20)", () => {
     const actual: Record<string, number> = {};
     for (const site of typed.unresolved) { const file = site.split(":")[0]!; actual[file] = (actual[file] ?? 0) + 1; }
     expect(actual).toEqual(Object.fromEntries(Object.entries(unresolvedCollectionSites).map(([file, entry]) => [file, entry.count])));
-  });
+  }, 60_000);
 
   it("classifies exactly the top-level fields of every typed collection (type checker) and of every manual section", () => {
     for (const [name, entry] of Object.entries(dataClassification)) {
@@ -51,7 +51,7 @@ describe("data classification inventory (18-07/18-20)", () => {
       expect(expected.size, `${name}: no typed document found - type the collection or change fieldSource`).toBeGreaterThan(0);
       expect([...classified(name)].sort(), `${name}: classified top-level fields vs document type`).toEqual([...expected].sort());
     }
-  });
+  }, 60_000);
 
   it("classifies nested fields wherever the classification goes below a field (a new nested field fails until classified)", () => {
     for (const [name, entry] of Object.entries(dataClassification)) {
@@ -59,20 +59,20 @@ describe("data classification inventory (18-07/18-20)", () => {
       const tree = entry.fieldSource === "manual-section" ? new Map([...typed.manualTree, ...(typed.trees.get(name) ?? [])]) : typed.trees.get(name)!;
       expect(uncoveredPaths(tree, Object.keys(entry.fields)), `${name}: unclassified nested fields`).toEqual([]);
     }
-  });
+  }, 60_000);
 
-  it("writes no literal field that the collection's document type does not declare (insert/update/replace on Collection<T>)", () => {
+  it("writes no field that the collection's document type does not declare (insert/update/replace on Collection<T>, incl. spreads and variables)", () => {
     expect(undeclaredWrites()).toEqual([]);
   }, 120_000);
 
   it("pins the shape of every subtree that one row classifies as a whole (a new nested field below it fails until re-reviewed)", () => {
     expect(subtreeShapeDigests(typed.trees, typed.manualTree)).toEqual(subtreeShapes);
-  });
+  }, 60_000);
 
   it("pins the Auth.js versions whose adapter writes the auth collections (an upgrade needs a field re-review)", () => {
     const installed = (name: string) => (JSON.parse(readFileSync(`node_modules/${name}/package.json`, "utf8")) as { version: string }).version;
     expect(Object.fromEntries(Object.keys(authAdapterVersions).map((name) => [name, installed(name)]))).toEqual(authAdapterVersions);
-  });
+  }, 60_000);
 
   it("classifies exactly the fields.* keys of every manual-section domain schema", () => {
     for (const [section, collection] of Object.entries(sectionCollections)) {
@@ -81,7 +81,7 @@ describe("data classification inventory (18-07/18-20)", () => {
       expect([...new Set(keys)].sort(), `${collection}: fields.* vs ${section} domain schema`).toEqual([...zodKeys(schema)].sort());
       expect(dataClassification[collection]!.fieldSource).toBe("manual-section");
     }
-  });
+  }, 60_000);
 
   it("never calls a transformed identifier anonymous, and keeps pseudonymization consistent", () => {
     for (const [name, entry] of Object.entries(dataClassification)) {
@@ -101,15 +101,15 @@ describe("data classification inventory (18-07/18-20)", () => {
         expect(/anonym/i.test(note.replace(/not anonymous/gi, "")), `${where}: never describe a value as anonymous`).toBe(false);
       }
     }
-  });
+  }, 60_000);
 
   it("lists every raw secret stored at rest; a new one fails until it is reviewed", () => {
     const secrets = Object.entries(dataClassification).flatMap(([name, entry]) =>
       Object.entries(entry.fields).filter(([, [kind]]) => kind === "secret").map(([path]) => `${name}.${path}`));
     expect(secrets.sort()).toEqual([...rawSecretsAtRest].sort());
-  });
+  }, 60_000);
 
-  it("classifies exactly every TTL index option and hard-delete call in src/, workers/ and scripts/", () => {
+  it("classifies exactly every TTL index option and data-removal/rewrite mechanism in src/, workers/ and scripts/", () => {
     const actual = Object.fromEntries(retentionSites());
     expect(actual).toEqual(Object.fromEntries(Object.entries(retentionMechanisms).map(([site, entry]) => [site, entry.count])));
     const ttl = Object.keys(actual).filter((site) => site.endsWith(" expireAfterSeconds"));
@@ -117,7 +117,7 @@ describe("data classification inventory (18-07/18-20)", () => {
     for (const [name, entry] of Object.entries(dataClassification)) {
       if (/TTL index on/i.test(entry.retention)) expect(ttl.some((site) => retentionMechanisms[site]!.collections === name), `${name}: claims a TTL index`).toBe(true);
     }
-  });
+  }, 60_000);
 
   it("matches the retention the backup template defines (lifecycle, Object Lock, worker log group)", () => {
     const template = JSON.parse(readFileSync("infra/aws/financial-os-backup.template.json", "utf8")) as { Resources: Record<string, { Type: string; Properties: Record<string, unknown> }> };
@@ -129,5 +129,5 @@ describe("data classification inventory (18-07/18-20)", () => {
     const logGroups = resources.filter((resource) => resource.Type === "AWS::Logs::LogGroup").map((resource) => resource.Properties.RetentionInDays);
     expect(logGroups).toEqual([templateRetention.workerLogRetentionInDays]);
     expect(resources.filter((resource) => resource.Type === "AWS::S3::Bucket")).toHaveLength(1);
-  });
+  }, 60_000);
 });

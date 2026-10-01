@@ -119,9 +119,9 @@ export function typedCollectionFields(): { fields: Map<string, Set<string>>; tre
 }
 
 const DELETE_METHODS = new Set(["deleteOne", "deleteMany", "findOneAndDelete", "drop", "dropDatabase", "dropCollection", "dropIndex", "dropIndexes",
-  "bulkWrite", "remove", "replaceOne", "findOneAndReplace"]);
+  "bulkWrite", "remove", "replaceOne", "findOneAndReplace", "rename", "renameCollection"]);
 const COMMAND_KEYS = new Set(["drop", "dropDatabase", "collMod", "delete", "dropIndexes", "compact"]);
-const REMOVAL_KEYS = new Set(["expireAfterSeconds", "$unset", "$pull", "$pop", "$rename", "$replaceWith", "$replaceRoot"]);
+const REMOVAL_KEYS = new Set(["expireAfterSeconds", "$unset", "$pull", "$pop", "$rename", "$replaceWith", "$replaceRoot", "$out", "$merge"]);
 const UPDATE_METHODS = new Set(["updateOne", "updateMany", "findOneAndUpdate"]);
 const DATABASE_METHODS = new Set([...UPDATE_METHODS, "createIndex", "createIndexes", "command", "insertOne", "insertMany", "replaceOne", "findOneAndReplace", "bulkWrite", "aggregate"]);
 /** An object literal that is (part of) an argument to a MongoDB call; computed keys elsewhere (e.g. UI state) are not storage. */
@@ -135,8 +135,9 @@ function insideDatabaseCall(node: ts.Node): boolean {
 
 /**
  * Data-removal and expiry mechanisms in repository code, as `<file> <kind>` -> count: hard-delete/replace calls (`deleteOne`, ...,
- * `replaceOne`), field removal/rewrite keys (`$unset`, `$pull`, `$pop`, `$rename`, `$replaceWith`, `$replaceRoot`), aggregation-pipeline
- * updates (`pipeline-update`), database commands that drop or change collections (`command:<key>`, `command:dynamic` when the
+ * `replaceOne`, `rename`), field removal/rewrite keys (`$unset`, `$pull`, `$pop`, `$rename`, `$replaceWith`, `$replaceRoot`), collection-
+ * writing aggregation stages (`$out`, `$merge`), aggregation-pipeline updates (`pipeline-update`), updates whose update document is not
+ * a literal (`dynamic-update`: its operators cannot be read here), database commands that drop or change collections (`command:<key>`, `command:dynamic` when the
  * command is not an object literal) and TTL index options (`expireAfterSeconds`). Computed keys are resolved through same-file
  * string constants; anything unresolvable is `computed-key`.
  */
@@ -164,6 +165,7 @@ export function retentionSites(): Map<string, number> {
           const method = node.expression.name.text;
           if (DELETE_METHODS.has(method)) add(method);
           if (UPDATE_METHODS.has(method) && node.arguments[1] && ts.isArrayLiteralExpression(node.arguments[1])) add("pipeline-update");
+          else if (UPDATE_METHODS.has(method) && node.arguments[1] && !ts.isObjectLiteralExpression(node.arguments[1])) add("dynamic-update");
           if (method === "command" && node.arguments[0]) {
             if (!ts.isObjectLiteralExpression(node.arguments[0])) add("command:dynamic");
             else for (const property of node.arguments[0].properties) {
@@ -202,13 +204,29 @@ function pathExists(tree: DocumentTree, dotted: string): boolean {
   return true;
 }
 
+/** Is the written path (tree-node form, e.g. `items[].name`) inside the document tree? A leaf/opaque/`*` node in the tree accepts anything below. */
+function fits(tree: DocumentTree, path: string): boolean {
+  let node = "";
+  for (const token of path.replace(/\[\]/g, ".[]").split(".").filter(Boolean)) {
+    const children = tree.get(node);
+    if (children === undefined || children.size === 0) return true;
+    if (children.has(token)) node = join(node, token);
+    else if (token !== "[]" && children.has("*")) node = join(node, "*");
+    else return false;
+  }
+  return true;
+}
+
 /**
- * Literal field paths written through insert/update/replace calls on a typed `Collection<T>` in src/ and workers/ that do NOT exist
- * in T (`file:line path`). MongoDB's typings accept extra `$set` keys (`Partial<T> & Record<string, any>`), so a field written but
- * never declared would otherwise escape the type-derived classification. Untyped (`Document`) collections are not checkable here.
+ * Fields written through insert/update/replace calls on a typed `Collection<T>` in src/ and workers/ that do NOT exist in T
+ * (`file:line path`). The WRITTEN value's type is read with the checker - literals, spreads (`{ ...item }`), variables and mapped
+ * arrays alike - so a field that reaches storage through a domain type but is missing from the document type is caught (MongoDB's
+ * typings accept such extras). Update operators ($set, $push, ...) are checked by their dotted keys. Untyped (`Document`)
+ * collections and values typed as `any` are not checkable here.
  */
 export function undeclaredWrites(): string[] {
-  const program = typeProgram(); const checker = program.getTypeChecker(); const found: string[] = [];
+  const program = typeProgram(); const checker = program.getTypeChecker(); const found = new Set<string>();
+  const treeOf = (type: ts.Type) => { const tree: DocumentTree = new Map(); addTree(checker, type, "", tree, 0); return tree; };
   for (const source of program.getSourceFiles()) {
     if (source.isDeclarationFile || !/\/(src|workers)\//.test(posix(source.fileName))) continue;
     const visit = (node: ts.Node): void => {
@@ -216,30 +234,36 @@ export function undeclaredWrites(): string[] {
         const receiver = checker.getTypeAtLocation(node.expression.expression);
         const document = receiver.getSymbol()?.getName() === "Collection" ? checker.getTypeArguments(receiver as ts.TypeReference)[0] : undefined;
         if (document && !checker.getIndexTypeOfType(document, ts.IndexKind.String)) {
-          const tree: DocumentTree = new Map(); addTree(checker, document, "", tree, 0);
+          const tree = treeOf(document);
           const method = node.expression.name.text;
           const where = `${posix(source.fileName).replace(/^.*?\/(src|workers)\//, "$1/")}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
-          const keys = (literal: ts.Expression | undefined, prefix = ""): string[] => (literal && ts.isObjectLiteralExpression(literal)
-            ? literal.properties.flatMap((property) => {
-              const name = property.name && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) ? property.name.text : undefined;
-              return name === undefined ? [] : [prefix + name];
-            }) : []);
-          const paths: string[] = [];
-          if (method === "insertOne") paths.push(...keys(node.arguments[0]));
-          if (method === "insertMany" && node.arguments[0] && ts.isArrayLiteralExpression(node.arguments[0])) for (const element of node.arguments[0].elements) paths.push(...keys(element));
-          if (method === "replaceOne" || method === "findOneAndReplace") paths.push(...keys(node.arguments[1]));
-          if (["updateOne", "updateMany", "findOneAndUpdate"].includes(method) && node.arguments[1] && ts.isObjectLiteralExpression(node.arguments[1])) {
-            for (const property of node.arguments[1].properties) {
-              const operator = property.name && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) ? property.name.text : "";
-              if (FIELD_OPERATORS.has(operator) && ts.isPropertyAssignment(property)) paths.push(...keys(property.initializer));
+          const whole = (argument: ts.Expression | undefined, element = false) => {
+            if (!argument) return;
+            let type = checker.getTypeAtLocation(argument);
+            if (element) type = checker.getIndexTypeOfType(type, ts.IndexKind.Number) ?? type;
+            if (type.flags & ts.TypeFlags.Any) return;
+            for (const path of treeOf(type).keys()) if (path !== "" && !path.split(/[.[]/).some((part) => part.startsWith("$")) && !fits(tree, path)) found.add(`${where} ${path}`);
+          };
+          if (method === "insertOne") whole(node.arguments[0]);
+          if (method === "insertMany") whole(node.arguments[0], true);
+          if (method === "replaceOne" || method === "findOneAndReplace") whole(node.arguments[1]);
+          if (["updateOne", "updateMany", "findOneAndUpdate"].includes(method) && node.arguments[1]) {
+            const update = checker.getTypeAtLocation(node.arguments[1]);
+            if (!(update.flags & ts.TypeFlags.Any) && !checker.isArrayType(update)) {
+              for (const operator of checker.getPropertiesOfType(update)) {
+                if (!FIELD_OPERATORS.has(operator.getName())) continue;
+                for (const field of checker.getPropertiesOfType(checker.getTypeOfSymbol(operator))) {
+                  const path = field.getName();
+                  if (!path.startsWith("$") && !pathExists(tree, path)) found.add(`${where} ${path}`);
+                }
+              }
             }
           }
-          for (const path of paths) if (!path.startsWith("$") && !pathExists(tree, path)) found.push(`${where} ${path}`);
         }
       }
       ts.forEachChild(node, visit);
     };
     visit(source);
   }
-  return found.sort();
+  return [...found].sort();
 }

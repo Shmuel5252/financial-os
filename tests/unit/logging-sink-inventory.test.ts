@@ -3,13 +3,13 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { emissionSites, operatorFileDigests } from "../security/emission-sites";
 import { files, liveTestIds } from "../security/live-test-ids";
-import { operatorFiles, operatorPowerShell, sinkMatrix } from "../security/logging-sink-matrix";
+import { contentSecurityPolicy, operatorFiles, operatorPowerShell, reviewedDependencies, sinkMatrix } from "../security/logging-sink-matrix";
 
 // Phase 18 rows 18-07/18-20: every emission point (console.*, process stdout/stderr/emitWarning, telemetry .emit(), logger/debug/
 // logging configuration keys) in src/, workers/, scripts/ and next.config is classified exactly once, with a live sentinel test.
 const parse = (path: string) => ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
 function walk(node: ts.Node, visit: (node: ts.Node) => void): void { visit(node); ts.forEachChild(node, (child) => walk(child, visit)); }
-const LOGGING_PACKAGES = /^(pino|winston|bunyan|log4js|loglevel|signale|consola|debug|morgan|@sentry\/.*|@opentelemetry\/.*|@vercel\/otel|dd-trace|@datadog\/.*|newrelic|posthog.*|mixpanel.*|@segment\/.*|amplitude.*|logrocket.*|@logtail\/.*|@axiomhq\/.*|@highlight-run\/.*)$/;
+const LOGGING_PACKAGES = /^(@vercel\/analytics|@vercel\/speed-insights|@next\/third-parties|pino|winston|bunyan|log4js|loglevel|signale|consola|debug|morgan|@sentry\/.*|@opentelemetry\/.*|@vercel\/otel|dd-trace|@datadog\/.*|newrelic|posthog.*|mixpanel.*|@segment\/.*|amplitude.*|logrocket.*|@logtail\/.*|@axiomhq\/.*|@highlight-run\/.*)$/;
 
 describe("logging and telemetry sink inventory (18-07/18-20)", () => {
   it("classifies exactly every emission point, each in one sink, with live sentinel tests", () => {
@@ -34,13 +34,24 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
     expect(files("scripts", (p) => p.endsWith(".ps1")).map((p) => p.replaceAll("\\", "/")).sort()).toEqual(Object.keys(operatorPowerShell).sort());
   });
 
-  it("adds no logging/telemetry SDK and enables no driver command logging in code", () => {
+  it("adds no unreviewed dependency (allowlist) and enables no driver command logging in code", () => {
     const manifest = JSON.parse(readFileSync("package.json", "utf8")) as Record<string, Record<string, string> | undefined>;
-    const packages = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies, ...manifest.optionalDependencies });
-    expect(packages.filter((name) => LOGGING_PACKAGES.test(name)), "classify a new logging/telemetry SDK as a sink first").toEqual([]);
+    const packages = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies, ...manifest.optionalDependencies, ...manifest.peerDependencies });
+    expect(packages.sort(), "review a new package for logging/telemetry/egress, then add it to reviewedDependencies").toEqual(Object.keys(reviewedDependencies).sort());
+    expect(packages.filter((name) => LOGGING_PACKAGES.test(name)), "a logging/telemetry SDK must be classified as a sink first").toEqual([]);
     for (const path of ["src", "workers", "scripts"].flatMap((root) => files(root, (p) => /\.(ts|tsx|mjs|js)$/.test(p)))) {
       expect(/monitorCommands|mongodbLog(Path|ComponentSeverities|MaxDocumentLength)|MONGODB_LOG_/.test(readFileSync(path, "utf8")), `${path}: MongoDB driver logging`).toBe(false);
     }
+  });
+
+  it("keeps the exact Content-Security-Policy (no third-party script/connect origin can be added silently)", () => {
+    const directives: string[] = [];
+    walk(parse("next.config.ts"), (node) => {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === "contentSecurityPolicy" && node.initializer) {
+        walk(node.initializer, (inner) => { if (ts.isStringLiteral(inner) && inner.parent && ts.isArrayLiteralExpression(inner.parent)) directives.push(inner.text); });
+      }
+    });
+    expect(directives).toEqual([...contentSecurityPolicy]);
   });
 
   it("[log-auth-config] configures Auth.js with debug: false and the redacting logger", () => {

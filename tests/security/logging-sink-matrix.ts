@@ -205,3 +205,42 @@ export const operatorFiles: Readonly<Record<string, string>> = {
   "workers/ledger-rebuild/cli.ts": "cc0baaaa88eb751e7f72a71efbd34e05b2ffb5b904f0dae3cc980279739d120d",
   "workers/restore-drill/cli.ts": "c7935fbbab9b4a2d92f6424dfd740d3bddec0eab1c224417438267757d2e2078",
 };
+
+/**
+ * Every direct dependency, reviewed for logging/telemetry/egress. An allowlist: ANY new package fails CI until it is added here
+ * with its classification (a new analytics/telemetry SDK must also become a sink entry above).
+ */
+export const reviewedDependencies: Readonly<Record<string, string>> = {
+  "@auth/mongodb-adapter": "auth persistence; logs only through Auth.js's logger (safeAuthLogger)",
+  mongodb: "database driver; command logging only via MONGODB_LOG_* (not set in code, checked above)",
+  next: "framework; its own server error logging is the implicit sink F-18-20-08",
+  "next-auth": "authentication; logger overridden (safeAuthLogger), debug false",
+  react: "UI runtime; no telemetry",
+  "react-dom": "UI runtime; no telemetry",
+  "server-only": "build-time guard; no runtime code",
+  zod: "validation; no I/O",
+  "@tailwindcss/postcss": "dev/build only",
+  "@types/node": "dev types only",
+  "@types/react": "dev types only",
+  "@types/react-dom": "dev types only",
+  eslint: "dev only",
+  "eslint-config-next": "dev only",
+  tailwindcss: "dev/build only",
+  typescript: "dev only",
+  vite: "dev/test only",
+  vitest: "dev/test only",
+};
+
+/** The exact Content-Security-Policy directives (next.config.ts): 'self'-only fetch/script origins keep third-party beacons out. */
+export const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "font-src 'self' data:",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "img-src 'self' data: blob:",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline'",
+  "script-src-attr 'none'",
+  "style-src 'self' 'unsafe-inline'",
+] as const;

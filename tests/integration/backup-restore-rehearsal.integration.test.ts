@@ -349,6 +349,11 @@ suite("A+B local rehearsal: snapshot capture, ledger-first erasure, quarantine r
       expect(Object.keys(drill).sort()).toEqual(["barriers", "counts", "fence", "ledgerHead", "package", "recoveryPoint", "releaseAllowed", "timings"]);
       expect(Object.values(drill.counts).every(value => typeof value === "number")).toBe(true);
       for (const group of Object.values(drill.barriers)) expect(Object.values(group).every(value => typeof value === "number")).toBe(true);
+      expect(Object.keys(drill.fence).sort()).toEqual(["releaseAllowed", "technicalChecksPassed", "watermark"]);
+      expect(Object.keys(drill.recoveryPoint).sort()).toEqual(["atClusterTime", "capturedAt", "ledgerHead"]);
+      expect(Object.keys(drill.timings).sort()).toEqual(["fenceMs", "recoveryPointAgeMs", "restoreMs", "totalMs"]);
+      expect(Object.keys(drill.barriers).sort()).toEqual(["bankControl", "bankRecords", "development"]);
+      expect(drill.package).toMatch(/^packages\/[0-9]+-[0-9a-f]+\.bson$/);
       await expect(runRestoreDrill({ ...w.ledgerInput(), mirror: store, store: directoryObjectStore(join(root, "empty")), targetUri: replica!, packageKey,
         indexManifestDigest: digest })).rejects.toThrow("no package available");
       await expect(runRestoreDrill({ ...w.ledgerInput(), mirror: store, store, targetUri: "mongodb://db.example.invalid:27017", packageKey, indexManifestDigest: digest }))
