@@ -560,6 +560,18 @@ export class HouseholdRepository {
     return document === null ? null : mapMembership(document);
   }
 
+  /** Any membership of the user in the household, active or ended (removed/left). */
+  async findMembershipForUser(
+    householdId: string,
+    userId: string,
+  ): Promise<HouseholdMembership | null> {
+    const document = await this.memberships.findOne({
+      householdId: parseObjectId(householdId, "householdId"),
+      userId: parseObjectId(userId, "userId"),
+    });
+    return document === null ? null : mapMembership(document);
+  }
+
   async findMembershipById(
     householdId: string,
     membershipId: string,
@@ -628,7 +640,9 @@ export class HouseholdRepository {
     }
     const nextVersion = existing.version + 1;
     const updated = await this.memberships.findOneAndUpdate(
-      { _id: existing._id, status: { $ne: "active" }, version: existing.version },
+      // Atomic: an invitation reactivates a given membership at most once, so an in-flight replay of the token that already
+      // activated it cannot undo a removal or departure that happened meanwhile (a NEW invitation has a different id).
+      { _id: existing._id, activatedByInvitationId: { $ne: invitationId }, status: { $ne: "active" }, version: existing.version },
       {
         $inc: { membershipEpoch: 1, version: 1 },
         $push: {

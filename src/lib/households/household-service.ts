@@ -442,9 +442,11 @@ export async function acceptHouseholdInvitation(
   ) {
     throw new NotFoundError();
   }
+  // An accepted invitation is spent: replaying it may only finish an activation that never happened (no membership yet).
+  // Once a membership exists - active, removed or left - the token can never restore access; rejoining needs a NEW invitation.
   if (
     alreadyAcceptedByActor &&
-    (await resolved.repository.findActiveMembershipForUser(
+    (await resolved.repository.findMembershipForUser(
       invitation.householdId,
       actor.userId,
     )) !== null
