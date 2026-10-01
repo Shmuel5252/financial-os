@@ -70,8 +70,8 @@ const MEMBER_EMAIL = "member@example.invalid";
   const expire = (householdId: string) =>
     h.db.collection("householdInvitations").updateMany({ householdId: new ObjectId(householdId) }, { $set: { expiresAt: new Date(Date.now() - 86_400_000) } });
 
-  for (const how of ["removed", "left"] as const) {
-    it(`[authz-household-rejoin-${how}] a ${how} member cannot replay the accepted token, even expired; a new invitation still works`, async () => {
+  for (const [how, testId] of [["removed", "[iso-household-rejoin-removed]"], ["left", "[iso-household-rejoin-left]"]] as const) {
+    it(`${testId} a ${how} member cannot replay the accepted token, even expired; a new invitation still works`, async () => {
       const householdId = await household();
       const token = await invite(householdId);
       expect((await accept(token)).status).toBe(200);                    // legitimate first acceptance
@@ -91,7 +91,7 @@ const MEMBER_EMAIL = "member@example.invalid";
     });
   }
 
-  it("[authz-household-rejoin-older-token] after a second membership cycle, neither the first nor the second token restores access", async () => {
+  it("[iso-household-rejoin-older-token] after a second membership cycle, neither the first nor the second token restores access", async () => {
     const householdId = await household();
     const first = await invite(householdId);
     expect((await accept(first)).status).toBe(200);
@@ -104,7 +104,7 @@ const MEMBER_EMAIL = "member@example.invalid";
     expect((await membership(householdId))!.status).toBe("left");
   });
 
-  it("[authz-household-rejoin-race] the token that activated a membership can never reactivate it after it ended (atomic, race-proof)", async () => {
+  it("[iso-household-rejoin-race] the token that activated a membership can never reactivate it after it ended (atomic, race-proof)", async () => {
     // Deterministic form of the race: an acceptance still in flight reaches the repository AFTER the owner removed the member.
     const householdId = await household();
     const token = await invite(householdId);
@@ -120,7 +120,7 @@ const MEMBER_EMAIL = "member@example.invalid";
     expect(before!.status).toBe("removed");
   });
 
-  it("[authz-household-reaccept-active] replaying the token while still active changes nothing (unchanged existing behaviour: 404)", async () => {
+  it("[iso-household-reaccept-active] replaying the token while still active changes nothing (unchanged existing behaviour: 404)", async () => {
     const householdId = await household();
     const token = await invite(householdId);
     expect((await accept(token)).status).toBe(200);
@@ -129,7 +129,7 @@ const MEMBER_EMAIL = "member@example.invalid";
     expect(await memberSeesHousehold(householdId)).toBe(true);
   });
 
-  it("[authz-household-accept-recovery] an acceptance whose activation never happened can still be completed with the same token", async () => {
+  it("[iso-household-accept-recovery] an acceptance whose activation never happened can still be completed with the same token", async () => {
     const householdId = await household();
     const token = await invite(householdId);
     // A crash between recording the acceptance (the real repository write) and activating the membership: no membership row.
