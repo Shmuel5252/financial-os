@@ -1,6 +1,6 @@
 # Phase 18 rows 18-07 and 18-20: data classification, retention inventory and logging/telemetry sinks (repository portion)
 
-Status: **repository portion built 2026-10-01/02, reviewed, re-reviewed four times and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
+Status: **repository portion built 2026-10-01/02, reviewed, re-reviewed five times and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
 today. It adopts no retention period, access role or deletion mechanism; the recommendations live separately in
 `PHASE_18_RETENTION_DRAFT.md` (**DRAFT / NOT ADOPTED**). No runtime code, TTL index, deletion job, logging behaviour, application data
 or infrastructure was changed in this item.
@@ -9,8 +9,8 @@ or infrastructure was changed in this item.
 
 | Artifact | What it holds | CI test |
 | --- | --- | --- |
-| `tests/security/data-classification.ts` | 55 collections, 1,189 field rows (class, personal-data level, transform, note), current retention with `file:line`, raw secrets at rest, retention-mechanism inventory, template retention, data stores outside MongoDB, the explained non-literal collection calls, pinned Auth.js adapter versions, 50 pinned subtree shapes, out-of-scope list | `tests/unit/data-classification.test.ts` (12 tests) |
-| `tests/security/logging-sink-matrix.ts` | 15 entries (8 log/telemetry sinks + 7 classified non-log egress/I/O/header entries) covering all 64 emission-site keys (94 occurrences), per-field treatment, 16 pinned operator-run files, the reviewed-dependency allowlist (18 packages), the exact run-time security headers and CSP, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (7 tests) |
+| `tests/security/data-classification.ts` | 55 collections, 1,189 field rows (class, personal-data level, transform, note), current retention with `file:line`, raw secrets at rest, retention-mechanism inventory, template retention, data stores outside MongoDB, the explained non-literal collection calls, pinned Auth.js adapter versions, 50 pinned subtree shapes, the explained open-value sites, out-of-scope list | `tests/unit/data-classification.test.ts` (13 tests) |
+| `tests/security/logging-sink-matrix.ts` | 15 entries (8 log/telemetry sinks + 7 classified non-log egress/I/O/header entries) covering all 64 emission-site keys (94 occurrences), per-field treatment, 16 pinned operator-run files, the reviewed-dependency allowlist (18 packages), the exact run-time security headers and CSP, implicit sinks, PowerShell operator scripts | `tests/unit/logging-sink-inventory.test.ts` (9 tests) |
 | `tests/unit/logging-sentinels.test.ts` (11), `tests/integration/logging-sentinels.integration.test.ts` (1), `[log-…]` tests in the recovery suites (2) | sentinel tests per sink, plus a self-test of the capture and matcher | run in `npm test` |
 | `tests/security/required-tests-reporter.ts` + `vitest.config.mts` (`expect.requireAssertions`) + the CI marker step | 51 required security test ids (every `[iso-…]`/`[log-…]` id in any test title + every matrix-cited id) and every test of the 5 inventory modules (exact counts) | CI (`REQUIRE_SECURITY_TESTS=1`): the run fails unless each one was registered, ran and passed; every test must execute an assertion; a separate step fails if the reporter did not run |
 
@@ -28,6 +28,7 @@ CI fails when:
   - An open value must be explained (`dynamicUpdateSites`; one today, `updateEmail` in notifications). That covers an operator value typed `Record`/`unknown`/`any`, and any spread of such a value anywhere in a writing function — in place, through an intermediate variable, or in a nested closure.
   - When the open value is a parameter (method, function or arrow-function owner), every same-file call's literal keys are checked against `T`.
   - A vanished entry fails with a re-verify instruction.
+  - Beyond writing functions: every object spread of an open value and every `Object.assign` from one, anywhere in `src/` and `workers/`, must be explained (`openValueSites`; 11 today). That covers a spread in another closure or in another file's helper.
 - **Manual-section fields.** A manual section's `fields.*` keys differ from its zod domain schema.
 - **Auth.js versions.** The installed `@auth/mongodb-adapter`/`@auth/core` versions change: their adapter defines the auth collections.
 - **Pseudonymized identifiers.** Any of these fails:
@@ -60,17 +61,25 @@ CI fails when:
   - `logger`/`debug`/`logging` config keys in `src/`, `workers/`, `scripts/` and `next.config`.
 - **Operator-run files.** Any file in `scripts/` (including PowerShell) or any `workers/*/cli.ts` changes: their SHA-256 is pinned, so a changed value behind an unchanged console call also fails. Separately, an operator script prints env values, URIs, secrets or raw error messages.
 - **Sentinel, security and inventory tests.** Checked at run time:
-  - in CI the run fails unless all 51 required ids, and every test of the 5 inventory modules (exact counts), were registered, ran and passed — not skipped by `it.skip`/`describe.skipIf`/a `beforeEach` or `ctx` skip, not unregistered by an empty `each`, an uncalled registrar or a removed file;
+  - in CI the run fails unless all 51 required ids, and every test of the 5 inventory modules (exact counts), were registered, ran and passed. That rules out:
+    - a skip: `it.skip`, `describe.skipIf`, a `beforeEach` or `ctx` skip;
+    - an inversion: `it.fails`, which vitest reports as passed;
+    - a missing registration: an empty `each`, an uncalled registrar or a removed file;
   - every test must execute at least one assertion (`expect.requireAssertions`), so a conditional or early-returning test fails;
   - the reporter writes a marker that a separate CI step requires, so a run where it did not execute (e.g. a `--reporter` flag) fails;
   - an inventory test pins the wiring itself: the vitest reporter and `requireAssertions`, the CI env and marker step, no `--reporter` override, and `REQUIRE_SECURITY_TESTS=1` whenever `CI` is set.
 
   A static check also requires each id to be a real, assertion-calling `it`/`test`: not self-skipping, not conditionally placed, not under a skipping describe or alias, not swallowing its assertions in a non-rethrowing `catch`. It gives the same signal in partial local runs.
 - **Dependencies.** Any package outside the reviewed allowlist is added: every direct dependency is classified for logging, telemetry and egress (e.g. Vercel Analytics, Speed Insights or `@next/third-parties` would fail). The egress inside dependencies is recorded: Auth.js's Google OAuth/OIDC exchange, and the driver's AWS STS/IMDS calls in the MONGODB-AWS mode. MongoDB driver command logging enabled in code also fails.
-- **Security headers / CSP.** The headers that next.config.ts's `headers()` returns AT RUN TIME differ from the pinned list. This catches a widened directive, a template/env-driven origin, or an extra route-specific header entry. A CSP cannot be set unnoticed elsewhere:
+- **Security headers / CSP / next.config.** The headers that next.config.ts's `headers()` returns AT RUN TIME differ from the pinned list; or the evaluated config has any key beyond `headers`/`poweredByHeader`/`reactStrictMode`. That catches:
+  - a widened directive, a template/env-driven origin, or an extra route-specific header entry;
+  - `rewrites()`/`redirects()`, which can proxy cookies or carry query strings off-site;
+  - `assetPrefix`, `images` and `experimental`.
+
+  A CSP cannot be set unnoticed elsewhere:
   - a CSP header name outside next.config.ts is an emission site;
   - middleware/proxy/instrumentation files must not exist unclassified (route-authorization inventory);
-  - platform configs (`vercel.json`, `netlify.toml`, `_headers`, `_redirects`) must not exist unclassified.
+  - platform configs (any `vercel.*`, `now.*`, `netlify.*`, `firebase.*`, `wrangler.*`, …, `_headers`, `_redirects`, in the root, `public/` or `src/`) must not exist unclassified.
 - **Auth.js logging.** Auth.js `debug` or the redacting logger changes.
 
 **Limits (stated, not hidden):**
@@ -297,13 +306,14 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 
 All pass.
 
-**Mutation probes:** 107 temporary probes over six rounds:
+**Mutation probes:** 114 temporary probes over seven rounds:
 - L01–L20 with L09b, and D01–D08 (the original build);
 - R01–R17 (from the first review);
 - N01–N21 (from the first re-review);
 - S01–S15 (from the second re-review);
 - T01–T15 (from the third re-review);
-- V01–V09 with V06b (from the fourth re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
+- V01–V09 with V06b (from the fourth re-review);
+- W01–W07 (from the fifth re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
 
 ## 5. Findings (no actual application logging leak found)
 
@@ -459,9 +469,26 @@ Fixed in tests, the test config and CI only:
 | 5 | Minor | Google OAuth and driver STS/IMDS egress not recorded | Recorded in `reviewedDependencies` and the implicit table |
 | 6 | Low | Hardening-package counts, the S02 kind name, `[iso-session-invalid]` not required | Corrected; now required through the title scan |
 
+**Round 6: fifth re-review (2026-10-02) of commit `6b29950`**, read-only.
+
+Its main results:
+- **Round-5 fixes:** they held under its own variants (inventory skip, module rename, uncounted test, class-field spread, reporter/env wiring).
+- **Leaks:** no actual leak in current code.
+- **Verdict:** not ready, because two bypasses had CI green.
+
+Fixed in tests only:
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | Important | `it.fails` passes the run-time check (an expected failure reports as passed), together with a real leak | Any test with `options.fails` is rejected (W01) |
+| 2 | Important | next.config `rewrites()`/`redirects()` unpinned. An env-origin rewrite forwarded the session cookie off-site (confirmed in `next dev` by the reviewer) | The evaluated config's keys are pinned exactly (W02, W03) |
+| 3 | Minor–Important | Open spread outside the writing closure, in another file's helper, or via `Object.assign` | Global open-value inventory (`openValueSites`) (W04–W06) |
+| 4 | Low | Platform config list was fixed names | Name pattern over root/`public`/`src` (W07) |
+| 5 | Minor | Stale "7 tests" count | Corrected |
+
 ## 8. Mutation evidence
 
-Six rounds of temporary probes were run on 2026-10-01/02: 107 probes in total. Each probe edited a single file (or created one), ran the named tests, then restored the exact bytes; every restore was SHA-256-verified (a created file verified as removed), nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests. The run-time probes (T06–T10) ran the full suite with `REQUIRE_SECURITY_TESTS=1`.
+Seven rounds of temporary probes were run on 2026-10-01/02: 114 probes in total. Each probe edited a single file (or created one), ran the named tests, then restored the exact bytes; every restore was SHA-256-verified (a created file verified as removed), nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests. The run-time probes (T06–T10) ran the full suite with `REQUIRE_SECURITY_TESTS=1`.
 
 | Probe | Mutation | Result |
 | --- | --- | --- |
@@ -572,5 +599,12 @@ Six rounds of temporary probes were run on 2026-10-01/02: 107 probes in total. E
 | V07 | An arrow-function helper with a `Record` parameter, and a caller with an undeclared key | Detected by the undeclared-write check (arrow owner) |
 | V08 | `vercel.json` setting a CSP header | Detected by the platform-config check |
 | V09 | `--reporter=default` with enforcement on: vitest exits 0, but no marker is written | Detected by the CI marker step (exit 1, run by hand) |
+| W01 | A real leak (`console.log(items)` in the search index rebuild) plus `it.fails` on the emission inventory | Detected at run time (`expected-to-fail` rejected; run by hand, both files restored and SHA-verified) |
+| W02 | next.config `rewrites()` to an env-defined origin (proxies the session cookie off-site) | Detected by the evaluated-config pin |
+| W03 | next.config `redirects()` | Detected by the evaluated-config pin |
+| W04 | An open spread in the method, with the write in a closure and a caller with an undeclared key | Detected by the open-value inventory |
+| W05 | A `withUpdatedAt(set)` helper spreading a `Record` in another file | Detected by the open-value inventory |
+| W06 | `Object.assign(fields, set)` into a typed object | Detected by the open-value inventory |
+| W07 | A `vercel.ts` setting a CSP header | Detected by the platform-config check |
 
-106 of 107 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every exact mutation and bypass reported by the five reviews is detected. The guarantees that the reviews showed static checks could not hold (test liveness, security headers) are now checked at run time. The remaining limits are stated in §1.
+113 of 114 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every exact mutation and bypass reported by the six reviews is detected. The guarantees that the reviews showed static checks could not hold (test liveness, security headers) are now checked at run time. The remaining limits are stated in §1.

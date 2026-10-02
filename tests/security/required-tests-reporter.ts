@@ -6,7 +6,7 @@ import { pageMatrix, routeMatrix, serverActionMatrix } from "./route-authorizati
 
 // Phase 18 rows 18-07/18-14/18-20: a RUN-TIME check, enforced when REQUIRE_SECURITY_TESTS=1 (CI's full `npm test` run):
 // 1. every required security test id was registered, ran and passed - not skipped (it.skip, describe.skipIf, a beforeEach/ctx
-//    skip), not missing (never registered, empty .each, removed file), not failed;
+//    skip), not missing (never registered, empty .each, removed file), not failed, not inverted with `it.fails`;
 // 2. every test titled with an `[id]` that did run passed (no skipped/failed security test hides behind a non-required id);
 // 3. every test in the security inventory modules (whose tests carry no id) was registered and passed - none skipped or removed;
 // 4. the verdict is written to SECURITY_TESTS_MARKER, which a separate CI step requires: a run in which this reporter did not run
@@ -22,7 +22,7 @@ export const REQUIRED_SECURITY_TEST_IDS: readonly string[] = [...new Set([
 
 /** Inventory modules (tests without ids) -> exact number of tests that must run and pass. Update deliberately when adding tests. */
 export const REQUIRED_SECURITY_MODULES: Readonly<Record<string, number>> = {
-  "tests/unit/data-classification.test.ts": 12,
+  "tests/unit/data-classification.test.ts": 13,
   "tests/unit/logging-sink-inventory.test.ts": 9,
   "tests/unit/logging-sentinels.test.ts": 11,
   "tests/unit/route-authorization-inventory.test.ts": 6,
@@ -37,7 +37,8 @@ export default class RequiredSecurityTestsReporter implements Reporter {
     for (const testModule of testModules) {
       const file = testModule.moduleId.replaceAll("\\", "/").replace(/^.*?(?=tests\/)/, "");
       for (const test of testModule.children.allTests()) {
-        const state = test.result().state;
+        // `it.fails` reports an EXPECTED failure as "passed": a security test may never be inverted.
+        const state = test.options.fails ? "expected-to-fail" : test.result().state;
         modules.set(file, [...(modules.get(file) ?? []), state]);
         const id = /^\[([a-z0-9-]+)\]/.exec(test.name)?.[1];
         if (id) states.set(id, [...(states.get(id) ?? []), state]);

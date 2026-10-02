@@ -349,3 +349,27 @@ export function undeclaredWrites(): string[] {
   }
   return [...found].sort();
 }
+
+/**
+ * Every object spread of an open value (`Record`/`unknown`/`any`) and every `Object.assign` from one, anywhere in src/ and workers/, as
+ * `<file> open:spread|open:assign` -> count. Such a value can carry fields no type describes; TypeScript also drops the index
+ * signature when it is spread, so a write further away (another closure, another file's helper) cannot be type-checked. Each site
+ * must be explained (data-classification.ts openValueSites); a new one fails CI until reviewed.
+ */
+export function openValueSites(): Map<string, number> {
+  const program = typeProgram(); const checker = program.getTypeChecker(); const sites = new Map<string, number>();
+  const open = (type: ts.Type) => (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0 || checker.getIndexTypeOfType(type, ts.IndexKind.String) !== undefined;
+  for (const source of program.getSourceFiles()) {
+    if (source.isDeclarationFile || !/\/(src|workers)\//.test(posix(source.fileName))) continue;
+    const file = posix(source.fileName).replace(/^.*?\/(src|workers)\//, "$1/");
+    const add = (kind: string) => sites.set(`${file} ${kind}`, (sites.get(`${file} ${kind}`) ?? 0) + 1);
+    const visit = (node: ts.Node): void => {
+      if (ts.isSpreadAssignment(node) && open(checker.getTypeAtLocation(node.expression))) add("open:spread");
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.getText() === "Object.assign"
+        && node.arguments.slice(1).some((argument) => open(checker.getTypeAtLocation(argument)))) add("open:assign");
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return sites;
+}

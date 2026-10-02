@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { emissionSites, operatorFileDigests } from "../security/emission-sites";
@@ -47,6 +47,10 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
 
   it("serves exactly the pinned security headers and CSP (evaluated at run time: no extra route, directive or origin can slip in)", async () => {
     expect(await nextConfig.headers?.()).toEqual(securityHeaders(contentSecurityPolicy.join("; ")));
+    // The whole evaluated config is pinned: rewrites/redirects (proxy egress that forwards cookies, query strings), assetPrefix,
+    // images, experimental and any other key must be classified before they exist.
+    expect(Object.keys(nextConfig).sort()).toEqual(["headers", "poweredByHeader", "reactStrictMode"]);
+    expect({ poweredByHeader: nextConfig.poweredByHeader, reactStrictMode: nextConfig.reactStrictMode }).toEqual({ poweredByHeader: false, reactStrictMode: true });
     // Request entry points that could set headers outside next.config.ts are inventoried in route-authorization-inventory.test.ts
     // (middleware/proxy/instrumentation must not exist unclassified); a CSP string anywhere else is an emission site (`string:csp`).
   });
@@ -66,8 +70,10 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
   });
 
   it("has no platform configuration that could set headers, rewrites or redirects outside next.config.ts", () => {
-    for (const file of ["vercel.json", "now.json", "netlify.toml", "_headers", "_redirects", "public/_headers", "public/_redirects"]) {
-      expect(existsSync(file), `${file}: classify platform-level headers/rewrites (egress, CSP) before adding it`).toBe(false);
+    const platform = /^(vercel|now|netlify|amplify|firebase|render|fly|railway|wrangler|app)\.[a-z]+$|^_(headers|redirects)$|^staticwebapp\.config\.json$/i;
+    for (const dir of [".", "public", "src"]) {
+      const found = existsSync(dir) ? readdirSync(dir).filter((name) => platform.test(name)) : [];
+      expect(found, `${dir}: classify platform-level headers/rewrites/redirects (egress, CSP) before adding them`).toEqual([]);
     }
   });
 

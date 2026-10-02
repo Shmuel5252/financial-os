@@ -1907,3 +1907,20 @@ export const subtreeShapes: Readonly<Record<string, string>> = {
 export const dynamicUpdateSites: Readonly<Record<string, Readonly<{ count: number; writes: string }>>> = {
   "src/lib/notifications/notification-repository.ts dynamic:spread": { count: 1, writes: "updateEmail(..., set): every caller in the same file passes literal, declared `email.*` delivery-state fields (state, claimExpiresAt, acceptedAt, deliveredAt, errorCategory, providerMessageId, notBeforeAt)" },
 };
+
+/**
+ * Every object spread of an open value (`Record`/`unknown`/`any`) and every `Object.assign` from one in src/ and workers/
+ * (`<file> open:spread|open:assign` -> count), with why it cannot carry undeclared fields into storage. A new one fails CI until it
+ * is reviewed here - including a helper in another file or a closure that writes later (see openValueSites in collection-discovery).
+ */
+export const openValueSites: Readonly<Record<string, Readonly<{ count: number; why: string }>>> = {
+  "src/lib/notifications/notification-repository.ts open:spread": { count: 1, why: "updateEmail's `$set: { ...set, updatedAt }` - see dynamicUpdateSites; every caller's literal keys are checked against the document type" },
+  "src/lib/data-access/ownership-filter.ts open:spread": { count: 2, why: "ownership filter/value helpers: spreads the caller's own typed values or a userId filter; the result is checked where it is written (insert/update type checks)" },
+  "src/lib/operations/invitation-recovery.ts open:spread": { count: 1, why: "restore projection of a schema-validated backup row into the isolated restore target (inert token/email fields overwritten)" },
+  "src/lib/operations/notification-recovery.ts open:spread": { count: 1, why: "restore projection of a schema-validated backup row; drops providerMessageId" },
+  "src/lib/operations/bank-development-recovery.ts open:spread": { count: 1, why: "restore projection that removes protectedRecords from a validated retired manifest" },
+  "src/lib/operations/recovery-schemas.ts open:spread": { count: 2, why: "composition of the recovery projection registry (functions), not data" },
+  "src/components/budgets/budget-planner.tsx open:spread": { count: 1, why: "client form state keyed by category id; submitted to the app's own API, validated server-side" },
+  "src/components/debt-strategies/debt-strategy-center.tsx open:spread": { count: 1, why: "client form state keyed by loan id; submitted to the app's own API, validated server-side" },
+  "src/components/purchase-simulations/purchase-simulator.tsx open:spread": { count: 1, why: "client re-submit of the last validated command to the app's own API (validated server-side)" },
+};

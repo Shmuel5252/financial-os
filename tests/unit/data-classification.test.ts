@@ -4,8 +4,8 @@ import type { ZodType } from "zod";
 import { sectionCollections } from "@/lib/onboarding/manual-record-repository";
 import { manualSectionDomainSchemas } from "@/lib/onboarding/manual-record";
 import { uncoveredPaths } from "../security/classification-coverage";
-import { discoverCollections, retentionSites, typedCollectionFields, undeclaredWrites } from "../security/collection-discovery";
-import { authAdapterVersions, dataClassification, dynamicUpdateSites, rawSecretsAtRest, retentionMechanisms, subtreeShapes, templateRetention, unresolvedCollectionSites } from "../security/data-classification";
+import { discoverCollections, openValueSites as scanOpenValues, retentionSites, typedCollectionFields, undeclaredWrites } from "../security/collection-discovery";
+import { authAdapterVersions, dataClassification, dynamicUpdateSites, openValueSites, rawSecretsAtRest, retentionMechanisms, subtreeShapes, templateRetention, unresolvedCollectionSites } from "../security/data-classification";
 import { subtreeShapeDigests } from "../security/subtree-shapes";
 
 // Phase 18 rows 18-07/18-20 (repository portion): the classification in tests/security/data-classification.ts must describe exactly
@@ -72,6 +72,11 @@ describe("data classification inventory (18-07/18-20)", () => {
       + "the code still cannot write undeclared fields (e.g. a refactor that hid the spread) - do not just delete it")
       .toEqual(Object.fromEntries(Object.entries(dynamicUpdateSites).map(([site, entry]) => [site, entry.count])));
   }, 120_000);
+
+  it("explains every object spread / Object.assign of an open (Record/unknown/any) value in src/ and workers/", () => {
+    expect(Object.fromEntries([...scanOpenValues()].sort()), "review the new open value: it can carry undeclared fields into a write elsewhere")
+      .toEqual(Object.fromEntries(Object.entries(openValueSites).map(([site, entry]) => [site, entry.count]).sort()));
+  }, 60_000);
 
   it("pins the shape of every subtree that one row classifies as a whole (a new nested field below it fails until re-reviewed)", () => {
     expect(subtreeShapeDigests(typed.trees, typed.manualTree)).toEqual(subtreeShapes);
