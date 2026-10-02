@@ -290,6 +290,12 @@ describeWithMongo("Phase 9 Open Banking persistence, reconciliation, and isolati
     expect(provider.refreshCalls).toBe(1);
   });
 
+  it("[rlx-refresh-no-cooldown] each NEW idempotency key buys another paid refresh at once: no cooldown below the route's 30/min budget (F-18-05-02)", async () => {
+    const before = provider.refreshCalls;
+    for (let i = 0; i < 5; i += 1) expect((await requestOpenBankingRefresh(firstActor, randomUUID(), deps())).costCredits).toBe(20);
+    expect(provider.refreshCalls - before).toBe(5);
+  });
+
   it("never replays an uncertain failed paid command and preserves its failure receipt", async () => {
     const key = randomUUID();
     const refresh = vi.spyOn(provider, "refreshConnections").mockRejectedValue(new DependencyUnavailableError("uncertain fixture response"));
