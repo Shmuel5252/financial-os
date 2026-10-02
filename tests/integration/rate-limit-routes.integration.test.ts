@@ -4,27 +4,44 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/lib/auth/actor";
 import { actAs, call, fingerprint, newActor, openHarness, type Harness } from "../security/route-harness";
 import { captureOutput, dump, expectNoSentinel, sentinels } from "../security/log-capture";
+import { rateLimitMatrix } from "../security/rate-limit-matrix";
 
 // Phase 18 row 18-05: limiter behaviour through the REAL route handlers on a loopback MongoDB (synthetic data only):
 // the 429 response, budget accounting order, anonymous callers, and a failing limiter store. Provider-cost reproductions use
 // counting stubs in place of Anthropic/Financy - nothing leaves the machine.
 const uri = process.env.MONGODB_TEST_URI;
-const limiterFault = vi.hoisted(() => ({ error: undefined as Error | undefined }));
+const limiterFault = vi.hoisted(() => ({ error: undefined as Error | undefined, refuse: false, calls: [] as { kind: string; scope: string; userId: string }[] }));
 vi.mock("@/lib/auth/actor", async () => (await import("../security/route-harness")).mockedActorModule());
-const providerCalls = vi.hoisted(() => ({ count: 0 }));
+const providerCalls = vi.hoisted(() => ({ count: 0, barrier: 0, waiting: [] as (() => void)[] }));
 vi.mock("@/lib/adapters/anthropic/anthropic-ai-provider", () => ({
   getAnthropicAiProvider: () => ({ generate: async (request: { context: { sourceReferences: readonly { alias: string }[] } }) => {
     providerCalls.count += 1;
+    if (providerCalls.barrier > 0) { // hold every request at the provider until all have arrived: a deterministic race
+      await new Promise<void>((resolve, reject) => {
+        providerCalls.waiting.push(resolve);
+        if (providerCalls.waiting.length === providerCalls.barrier) for (const release of providerCalls.waiting.splice(0)) release();
+        setTimeout(() => reject(new Error("provider barrier timeout")), 10_000);
+      });
+    }
     return { model: "synthetic-model", provider: "anthropic" as const, usage: { inputTokens: 1, outputTokens: 1 },
       response: { fact: [{ evidenceRefs: [request.context.sourceReferences[0]?.alias ?? "report.fact.1"], text: "synthetic" }], insight: [], recommendation: [] } };
   } }),
 }));
 vi.mock("@/lib/security/rate-limiter", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/security/rate-limiter")>();
-  return { ...actual, consumeMutationRateLimit: async (actor: Actor, scope: string) => {
-    if (limiterFault.error) { const error = limiterFault.error; limiterFault.error = undefined; throw error; }
-    return actual.consumeMutationRateLimit(actor, scope);
-  } };
+  const { RateLimitedError } = await import("@/lib/errors/application-error");
+  // refuse: record (kind, scope, userId) and refuse every call, so a route that really consumes its limiter answers 429 untouched.
+  const record = (kind: string, actor: Actor, scope: string) => { limiterFault.calls.push({ kind, scope, userId: actor.userId }); throw new RateLimitedError(); };
+  return { ...actual,
+    consumeMutationRateLimit: async (actor: Actor, scope: string) => {
+      if (limiterFault.refuse) record("mutation", actor, scope);
+      if (limiterFault.error) { const error = limiterFault.error; limiterFault.error = undefined; throw error; }
+      return actual.consumeMutationRateLimit(actor, scope);
+    },
+    consumeAiRequestRateLimit: async (actor: Actor) => {
+      if (limiterFault.refuse) record("ai", actor, "ai-copilot");
+      return actual.consumeAiRequestRateLimit(actor);
+    } };
 });
 
 /** The routes use the real clock and a fixed 60 s window: start a 31-request sequence early in a window so it cannot straddle a reset. */
@@ -120,9 +137,10 @@ const summarize = (reportId: string, expectedSummaryVersion: number | null, idem
     const actor = newActor(); actAs(actor);
     const reportId = await seedClosedReport();
     // Concurrency: 5 simultaneous first summaries (same expected version) all pass the version check and all call the provider.
-    providerCalls.count = 0;
+    providerCalls.count = 0; providerCalls.barrier = 5;
     const logged = captureOutput();
     const burst = await Promise.all(Array.from({ length: 5 }, () => call("report-summaries", "POST", { body: { expectedSummaryVersion: null, idempotencyKey: randomUUID(), reportId } })));
+    providerCalls.barrier = 0;
     expect(providerCalls.count, burst.map((r) => r.text.slice(0, 200)).join(" | ")).toBe(5);
     // The version race is settled only by the unique (userId, reportId, version) index AFTER the paid call: the losers are 500s.
     expect(burst.map((response) => response.status).sort()).toEqual([201, 500, 500, 500, 500]);
@@ -191,4 +209,26 @@ const summarize = (reportId: string, expectedSummaryVersion: number | null, idem
     const [mutation] = await counter("policy-probe"); const start = Number(mutation!._id.split(":")[2]);
     expect(start % 60_000).toBe(0); expect(mutation!.expiresAt.getTime() - start).toBe(120_000);
   }, 90_000);
+
+  it("[rlx-route-sweep] every limited route method is refused by its own limiter: 429, exact scope, the actor's own key, nothing written", async () => {
+    const id = () => new ObjectId().toHexString();
+    const actor = newActor(); actAs(actor);
+    const limited = Object.entries(rateLimitMatrix).filter(([key, entry]) => key.includes(" api/") && (entry.policy === "mutation" || entry.policy === "ai"));
+    expect(limited).toHaveLength(59);
+    const before = await fingerprint(h.db);
+    limiterFault.refuse = true;
+    try {
+      for (const [key, entry] of limited) {
+        const [method, path] = key.split(" ") as [string, string];
+        const route = path.slice("api/".length);
+        const params = Object.fromEntries([...route.matchAll(/\[([A-Za-z]+)\]/g)].map(([, name]) => [name!, name === "section" ? "accounts" : id()]));
+        limiterFault.calls = [];
+        const response = await call(route, method, { params, ...(method === "GET" ? {} : { body: {} }) });
+        const scope = entry.policy === "ai" ? "ai-copilot" : entry.scope!.replace(/^`|`$/g, "").replace("${section}", "accounts");
+        expect(response.status, `${key}: refused by its limiter`).toBe(429);
+        expect(limiterFault.calls, `${key}: exactly one limiter call, own scope, keyed on the actor`).toEqual([{ kind: entry.policy, scope, userId: actor.userId }]);
+      }
+    } finally { limiterFault.refuse = false; }
+    expect(await fingerprint(h.db), "a refused request writes nothing").toEqual(before);
+  }, 120_000);
 });

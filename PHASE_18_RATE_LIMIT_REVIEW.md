@@ -11,12 +11,12 @@ Anthropic/Financy/Resend.
 | Artifact | Role |
 |---|---|
 | `tests/security/rate-limit-matrix.ts` | The decision for every route method, page/layout file and server action: policy, scope, caller identity, worst-case cost, rationale, cited findings |
-| `tests/security/rate-limit-sites.ts` | TypeScript-AST scan of `src/`. For each route handler (following same-file helpers) it records which limiter is called and in what order relative to origin → actor → body. It also lists any limiter call outside a route handler |
-| `tests/unit/rate-limit-inventory.test.ts` (6 tests, a required module) | Fails CI on a new, stale, missing or wrongly classified entry. Checks: the limiter is called after authentication (and the origin check) and before body parsing, exactly once; `none` carries a concrete rationale; a heavy or provider-backed `none` cites a finding; identities agree with the 18-14 authentication classes |
+| `tests/security/rate-limit-sites.ts` | TypeScript-AST scan of `src/`. For each route handler it records which limiter is called and the order of origin → actor → limiter → body (arguments before the call; every helper call counted). It also reports limiter calls outside a handler body; structural weaknesses (a limiter call that is not awaited directly in the handler, is not keyed on the `await requireActor()` result, or comes after a return/throw path); every reference to the limiter module (aliases, namespace or dynamic imports, shadowing declarations); the module's export list; and every `"use server"` directive found with the AST |
+| `tests/unit/rate-limit-inventory.test.ts` (7 tests, a required module) | Fails CI on a new, stale, missing or wrongly classified entry, or on a structural bypass. Checks: exact limiter and scope per handler; the call is awaited once, directly, on the actor, after authentication (and the origin check) and before body parsing, with no earlier exit; the limiter is imported only as the two named wrappers and only in limited route files; the module exports are pinned; the server-action universe (AST) matches 18-14; `none` carries a concrete rationale; a heavy or provider-backed `none` cites a finding; identities agree with the 18-14 authentication classes. **Structural only: presence is not proof of effect** (see `[rlx-route-sweep]`) |
 | `tests/integration/rate-limiter.integration.test.ts` (`[rl-*]`, 9 tests × 2 servers) | The real `MongoRateLimiter` against the standalone server and the single-node replica set |
-| `tests/integration/rate-limit-routes.integration.test.ts` (`[rlx-*]`, 7 tests) | Real route handlers on loopback Mongo: the 429 response, accounting, anonymous callers, store failure, and the provider-cost and far-month reproductions |
+| `tests/integration/rate-limit-routes.integration.test.ts` (`[rlx-*]`, 9 tests) | Real route handlers on loopback Mongo: the 429 response, accounting, anonymous callers, store failure, policy values (`[rlx-policies]`), the provider-cost and far-month reproductions, and **`[rlx-route-sweep]`**. The sweep calls every limited matrix entry (59) with a recording limiter that refuses, and asserts: 429, exactly one call, the matrix scope, the actor's own user id, and no write |
 | `tests/integration/phase-nine-open-banking.integration.test.ts` `[rlx-refresh-no-cooldown]` | Paid-refresh reproduction with the fixture provider |
-| `tests/security/required-tests-reporter.ts` | `[rl-…]`/`[rlx-…]` ids are now required test ids (they must run and pass in CI, never be skipped). `rate-limit-inventory.test.ts` is a required module with exactly 6 tests |
+| `tests/security/required-tests-reporter.ts` | `[rl-…]`/`[rlx-…]` ids are now required test ids (they must run and pass in CI, never be skipped): 70 required ids in total, up from 51. `rate-limit-inventory.test.ts` is a required module with exactly 7 tests |
 
 ## 2. Coverage and policy counts
 
@@ -108,14 +108,14 @@ The real `MongoRateLimiter` was run against both MongoDB 8.3 servers locally; CI
 
 | Condition | Behaviour | Evidence |
 |---|---|---|
-| Server unreachable | `consume` rejects with `MongoServerSelectionError`, never a grant. In the app, `getDatabase()` fails first with `DependencyUnavailableError`. The request is refused before any work: **fail-closed** | `[rl-failure-modes]` |
-| Operation timeout or unexpected driver error | Propagates. The route returns 500 `INTERNAL_ERROR` with a generic body, logs only the literal `Unhandled route error`, and nothing is written | `[rl-failure-modes]`, `[rlx-store-failure]` |
+| Server unreachable | `consume` rejects with `MongoServerSelectionError`, never a grant. In the app: on a **cold** instance `getDatabase()` fails first and raises `DependencyUnavailableError` (503). On a **warm** instance (cached client) the limiter's `createIndex`/`findOneAndUpdate` wait for server selection (30 s in production) and then fail as an unexpected error, giving 500. Either way the request is refused before any work: **fail-closed** | `[rl-failure-modes]` (driver level); the cold/warm split is from code (`mongodb.ts`), not exercised end to end |
+| Operation timeout or unexpected driver error | Propagates. The route returns 500 `INTERNAL_ERROR` with a generic body, logs only the literal `Unhandled route error`, and nothing is written. **Limitation:** the "timeout" case is a stub that throws a timeout-named error. The real client sets no `timeoutMS`/`socketTimeoutMS` (`mongodb.ts:16-24`), so a connected but hung server blocks the request until the platform function timeout: still no grant, but an availability cost. `[rlx-store-failure]` replaces the wrapper, so the real `getDatabase` → `ensureIndexes` → `consume` path is not run under failure | `[rl-failure-modes]`, `[rlx-store-failure]` |
 | `findOneAndUpdate` returns `null` | Treated as limited (429), never as granted | `[rl-failure-modes]` |
 
 **Availability impact:**
 - A MongoDB outage makes every limited route fail. Those routes need MongoDB for their own work anyway, so this adds no new dependency.
 - Server selection waits up to 30 s in production (`mongodb.ts`) before failing.
-- No fail-open path exists. No behaviour was changed.
+- No fail-open path exists. No behaviour was changed. A hung (not refused) database makes limited requests wait for the platform timeout. That is an availability observation, recorded under F-18-05-07's per-request database dependency, not a separate finding.
 
 ## 6. Keys and isolation
 
@@ -191,7 +191,7 @@ Severity is the reviewer's estimate for a single-owner G1 deployment. None was e
 
 Each probe edited one file (or created one), ran the named tests against loopback MongoDB, then restored the exact bytes; a SHA-256 check confirmed each restore. Nothing was committed, and the working tree was identical before and after.
 
-**Result: 31/31 DETECTED.**
+**Result: 48/48 DETECTED.** RL01–RL31 were run before the independent review. RL32–RL48 are the reviewer's surviving bypasses. All 48 were re-run after the review fixes, and all 48 were detected.
 
 | Probe | Mutation | Detected by |
 |---|---|---|
@@ -226,8 +226,48 @@ Each probe edited one file (or created one), ran the named tests against loopbac
 | RL29 | 429 message changed | `[rlx-429-safe]` |
 | RL30 | `it.skip` on `[rl-distributed]`, full enforced run | Required-tests reporter |
 | RL31 | `it.skip` on an inventory test, full enforced run | Required-tests reporter (module count) |
+| RL32 | Limiter made conditional (`if (Date.now() < 0) await …`) on PUT profile | Inventory: structure |
+| RL33 | `void` limiter call (not awaited, error swallowed) | Inventory: structure |
+| RL34 | `await limiter(…).catch(() => undefined)` | Inventory: structure |
+| RL35 | Import replaced by a local no-op function with the same name (shadowing) | Inventory: limiter-module references |
+| RL36 | Limiter re-keyed with a random user id per request | Inventory: structure (not keyed on the actor) |
+| RL37 | Limiter wrapped in a never-called closure | Inventory: structure |
+| RL38 | Early `return` before the limiter | Inventory: structure (exit path before the limiter) |
+| RL39 | Same-file helper whose argument reads the body before the limiter | Inventory: unrouted, ordering |
+| RL40 | Aliased limiter import used in a page | Inventory: limiter-module references |
+| RL41 | Namespace import (`* as rl`) used in GET search | Inventory: limiter-module references |
+| RL42 | Dynamic import + `rateLimiterForDatabase(...).consume` in GET search | Inventory: limiter-module references |
+| RL43 | New library file with an aliased limiter call | Inventory: limiter-module references |
+| RL44 | Inline one-line `"use server"` action in a page | Inventory: server-action universe (AST) |
+| RL45 | As RL32, behavioural layer only | `[rlx-route-sweep]` |
+| RL46 | As RL33, behavioural layer only | `[rlx-route-sweep]` |
+| RL47 | As RL35, behavioural layer only | `[rlx-route-sweep]` |
+| RL48 | As RL36, behavioural layer only | `[rlx-route-sweep]` |
 
-**Full enforced suite:** `REQUIRE_SECURITY_TESTS=1`, with both local MongoDB servers. 161 files passed and 7 skipped; 854 tests passed and 15 skipped. The marker reported `ok: true` with 69 required ids, up from 51.
+**Full enforced suite:** `REQUIRE_SECURITY_TESTS=1`, with both local MongoDB servers. After the review fixes, 161 files passed and 7 skipped; 856 tests passed and 15 skipped. The marker reported `ok: true` with 70 required ids, up from 51. Before the fixes: 854 tests passed, with 69 required ids.
+
+## 12. Independent adversarial review
+
+### Round 1 (at `cc0ce27`)
+
+**Verdict:** no blocker. The reviewer confirmed:
+- the constraints: the diff touches only `tests/` and `*.md`, nothing was remediated, the draft is not adopted, and S10 was not touched;
+- every count;
+- the concurrency evidence;
+- the 429 safety assertions;
+- the reporter change;
+- findings F-01, F-02, F-10, F-11 and F-12 against the code.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| M1: CI checked that a limiter call was *present*, not that it took effect. Conditional, unawaited, swallowed, shadowed, re-keyed, deferred and early-return variants all passed | Medium | Fixed with two layers. **Structural:** the limiter must be awaited directly in the handler (or its top-level `try`), keyed on the `await requireActor()` identifier, with no return/throw path before it. **Behavioural:** `[rlx-route-sweep]` drives all 59 limited methods with a recording, refusing limiter and asserts 429, exact scope, the actor's key, and no write. RL32–RL38 and RL45–RL48 are detected |
+| M2: limiters called under an alias, through a namespace or dynamic import, or directly through `rateLimiterForDatabase(...).consume` were invisible | Medium | Fixed. Every reference to the limiter module in `src/` is pinned: only the two named wrappers, only in limited route files, plus the deploy-time `application-indexes.ts` use of `rateLimiterForDatabase`. Shadowing declarations fail, and the module's export list is pinned. RL40–RL43 are detected |
+| M3: an inline one-line `"use server"` action escaped the action inventory (18-14 uses a line-start regex) | Medium-Low | Fixed in 18-05. The `"use server"` prologue is detected with the AST (file or any function body) and must equal the 18-14 `serverActionMatrix`. RL44 is detected. The 18-14 regex itself is unchanged; the stricter check sits beside it |
+| L1: arguments were walked after the call, and a helper was counted once | Low | Fixed: arguments are walked before the call, and every helper call is counted, with a recursion guard. RL39 is detected |
+| L2: failure-mode wording went further than the evidence (stubbed timeout; warm vs cold outage; the wrapper is replaced in `[rlx-store-failure]`) | Low | §5 reworded with the limitations stated. The hung-server observation is recorded |
+| L3: `[rlx-summary-provider-budget]` asserted one race outcome | Low (flake) | Fixed: a barrier in the provider stub holds all 5 requests at the provider (10 s guard), so all 5 calls and 201 + 4×500 are deterministic |
+| L4: the 18-05 page universe diverged from 18-14's special-file list | Low | Fixed: the 18-05 page universe is the 18-14 `pageMatrix`, which 18-14 pins to every special file on disk |
+| Info: test counts in §1, the authjs keys, the weak provider-rationale check, and "done" wording in the acceptance package | Info | §1 counts corrected. The authjs keys are pinned to exactly the two Auth.js methods. A provider-backed generic-budget route needs a finding or a rationale of at least 40 characters. The acceptance package now says "pending Owner acceptance" |
 
 ## Appendix A. Cost evidence for unthrottled reads (file:line, read-only study)
 

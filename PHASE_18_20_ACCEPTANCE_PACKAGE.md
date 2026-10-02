@@ -86,7 +86,7 @@ Wording per `PHASE_18_ENTRY_REVIEW.md` / `PHASE_18_HARDENING_PACKAGE.md`. "R" re
 | 18-02 | satisfied historically; Gates A/B owner-accepted on 3c370a2 | current release re-check at release time |
 | 18-03 | pending E | verify local/preview/staging/production credential and data isolation |
 | 18-04 | partially (R/O) | TLS/HSTS/limits/principal review on the platform |
-| 18-05 | partially (R) | repository portion done (`PHASE_18_RATE_LIMIT_REVIEW.md`, local distributed/concurrency evidence; F-18-05-01..13 open); auth-edge/deployed limiter evidence; capacity policy (draft not adopted) |
+| 18-05 | partially (R) | repository portion complete, pending Owner acceptance (`PHASE_18_RATE_LIMIT_REVIEW.md`, local distributed/concurrency evidence; F-18-05-01..13 open); auth-edge/deployed limiter evidence; capacity policy (draft not adopted) |
 | 18-06 | partially (R) | nonce/strict CSP rollout + real-browser validation |
 | 18-07 | partially (R) — repository sink inventory + sentinels, Owner-accepted 2026-10-02 (`34af113`) | platform/crash/log-access review; owner decisions F-18-20-01, F-18-20-08, F-18-20-10 |
 | 18-08 | partially (R) | monitoring/alert delivery with real credentials |
