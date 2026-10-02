@@ -12,6 +12,7 @@ import { files } from "./live-test-ids";
 const HTTP = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const LIMITERS: Readonly<Record<string, "mutation" | "ai">> = { consumeMutationRateLimit: "mutation", consumeAiRequestRateLimit: "ai" };
 const LIMITER_MODULE = "src/lib/security/rate-limiter.ts";
+const MODULE_NAMES: ReadonlySet<string> = new Set([...Object.keys({ consumeMutationRateLimit: 1, consumeAiRequestRateLimit: 1 }), "rateLimiterForDatabase", "MongoRateLimiter"]);
 const posix = (path: string) => path.split(sep).join("/");
 const sources = () => files("src", (p) => /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(p)).map((path) => ({ path, file: posix(path),
   source: ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true) }));
@@ -35,20 +36,37 @@ type Scanned = { routes: Map<string, RouteLimiterUse>; unrouted: string[]; struc
 /** A function body does not run when its enclosing code runs: never count calls inside nested functions as the handler's own. */
 const isFunction = (node: ts.Node) => ts.isFunctionLike(node) && node.kind !== ts.SyntaxKind.CallSignature;
 
+/** Statements that may run before the limiter: nothing else (no work, no early exit, no re-keying) may precede it. */
+export const PRE_LIMITER_STATEMENTS: ReadonlySet<string> = new Set([
+  "assertTrustedMutationOrigin(request);",
+  "const actor = await requireActor();",
+  "const section = await resolveSection(context);", // zod-validates [section] before a templated scope is built
+]);
+const normalized = (node: ts.Node) => node.getText().replace(/\s+/g, " ").trim();
+
 /** The limiter call must be an awaited expression statement directly in the handler body (or its top-level try block), keyed on the
- * identifier bound by `const <x> = await requireActor()`, with no return/throw path before it. Anything else (conditional, not awaited,
- * swallowed, deferred, re-keyed, after an early return) is reported. */
+ * `const actor = await requireActor()` binding, preceded only by PRE_LIMITER_STATEMENTS, and a top-level try must hand every error to
+ * errorResponse (a catch cannot turn a 429 into success). Anything else (conditional, not awaited, swallowed, deferred, re-keyed,
+ * after other work or an early exit) is reported. */
 function checkStructure(source: ts.SourceFile, route: string, body: ts.Node, out: string[]): void {
   const statements = ts.isBlock(body) ? [...body.statements] : [];
-  const level = statements.length === 1 && ts.isTryStatement(statements[0]!) ? [...statements[0].tryBlock.statements] : statements;
+  const onlyTry = statements.length === 1 && ts.isTryStatement(statements[0]!) ? statements[0] : undefined;
+  const level = onlyTry ? [...onlyTry.tryBlock.statements] : statements;
+  if (onlyTry && (onlyTry.finallyBlock || !onlyTry.catchClause || normalized(onlyTry.catchClause.block) !== "{ return errorResponse(error); }")) {
+    out.push(`${route}: the handler's try must end in exactly \`catch (error) { return errorResponse(error); }\` (line ${line(source, onlyTry)})`);
+  }
   let actorName: string | undefined;
-  let exitBefore = false;
-  const exits = (node: ts.Node): boolean => !isFunction(node) && (ts.isReturnStatement(node) || ts.isThrowStatement(node) || ts.forEachChild(node, exits) === true);
+  let limited = false;
   const allowed = new Set<ts.Node>();
   for (const statement of level) {
+    if (!limited && !(ts.isExpressionStatement(statement) && ts.isAwaitExpression(statement.expression) && ts.isCallExpression(statement.expression.expression)
+      && ts.isIdentifier(statement.expression.expression.expression) && LIMITERS[statement.expression.expression.expression.text])
+      && !PRE_LIMITER_STATEMENTS.has(normalized(statement))) {
+      out.push(`${route}: \`${normalized(statement).slice(0, 80)}\` runs before the limiter (only ${[...PRE_LIMITER_STATEMENTS].join(" / ")} may; line ${line(source, statement)})`);
+    }
     if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) {
       const init = declaration.initializer;
-      if (ts.isIdentifier(declaration.name) && init && ts.isAwaitExpression(init) && ts.isCallExpression(init.expression)
+      if (ts.isIdentifier(declaration.name) && (statement.declarationList.flags & ts.NodeFlags.Const) !== 0 && init && ts.isAwaitExpression(init) && ts.isCallExpression(init.expression)
         && ts.isIdentifier(init.expression.expression) && init.expression.expression.text === "requireActor") actorName = declaration.name.text;
     }
     if (ts.isExpressionStatement(statement) && ts.isAwaitExpression(statement.expression) && ts.isCallExpression(statement.expression.expression)) {
@@ -56,14 +74,13 @@ function checkStructure(source: ts.SourceFile, route: string, body: ts.Node, out
       if (ts.isIdentifier(call.expression) && LIMITERS[call.expression.text]) {
         allowed.add(call);
         const actorArgument = call.arguments[0];
-        if (exitBefore) out.push(`${route}: a return/throw path precedes the limiter (line ${line(source, call)})`);
+        limited = true;
         if (actorName === undefined || !actorArgument || !ts.isIdentifier(actorArgument) || actorArgument.text !== actorName) {
           out.push(`${route}: the limiter is not keyed on the actor from \`await requireActor()\` (line ${line(source, call)})`);
         }
         continue;
       }
     }
-    if (exits(statement)) exitBefore = true;
   }
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && LIMITERS[node.expression.text] && !allowed.has(node)) {
@@ -128,7 +145,8 @@ export function routeLimiterUses(): Scanned {
 }
 
 /** Every reference to the limiter module in src/ (static/dynamic import, re-export, require): `<file> <named imports or kind>`.
- * Also any local declaration that shadows a limiter wrapper name. */
+ * Also: any local declaration that shadows a limiter wrapper name; any reference to an imported limiter-module name that is not the
+ * direct callee of a call (parenthesised, aliased, re-exported or passed as a value); any import()/require() of a non-literal path. */
 export function limiterModuleReferences(): string[] {
   const out: string[] = [];
   for (const { file, source } of sources()) {
@@ -148,6 +166,12 @@ export function limiterModuleReferences(): string[] {
       const declared = (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isClassDeclaration(node)) && node.name
         && ts.isIdentifier(node.name) && LIMITERS[node.name.text];
       if (declared) out.push(`${file} declares ${node.name!.getText()} (line ${line(source, node)})`);
+      if (ts.isIdentifier(node) && MODULE_NAMES.has(node.text) && !ts.isImportSpecifier(node.parent)
+        && !(ts.isCallExpression(node.parent) && node.parent.expression === node) && !((ts.isFunctionDeclaration(node.parent) || ts.isVariableDeclaration(node.parent) || ts.isParameter(node.parent)) && node.parent.name === node)) {
+        out.push(`${file} non-call reference to ${node.text} (line ${line(source, node)})`);
+      }
+      if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === "require"))
+        && !(node.arguments[0] && ts.isStringLiteralLike(node.arguments[0]))) out.push(`${file} non-literal module path (line ${line(source, node)})`);
       ts.forEachChild(node, visit);
     };
     visit(source);

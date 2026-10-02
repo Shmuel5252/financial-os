@@ -139,8 +139,9 @@ const summarize = (reportId: string, expectedSummaryVersion: number | null, idem
     // Concurrency: 5 simultaneous first summaries (same expected version) all pass the version check and all call the provider.
     providerCalls.count = 0; providerCalls.barrier = 5;
     const logged = captureOutput();
-    const burst = await Promise.all(Array.from({ length: 5 }, () => call("report-summaries", "POST", { body: { expectedSummaryVersion: null, idempotencyKey: randomUUID(), reportId } })));
-    providerCalls.barrier = 0;
+    let burst: Awaited<ReturnType<typeof call>>[];
+    try { burst = await Promise.all(Array.from({ length: 5 }, () => call("report-summaries", "POST", { body: { expectedSummaryVersion: null, idempotencyKey: randomUUID(), reportId } }))); }
+    finally { providerCalls.barrier = 0; providerCalls.waiting.splice(0); }
     expect(providerCalls.count, burst.map((r) => r.text.slice(0, 200)).join(" | ")).toBe(5);
     // The version race is settled only by the unique (userId, reportId, version) index AFTER the paid call: the losers are 500s.
     expect(burst.map((response) => response.status).sort()).toEqual([201, 500, 500, 500, 500]);
@@ -227,6 +228,12 @@ const summarize = (reportId: string, expectedSummaryVersion: number | null, idem
         const scope = entry.policy === "ai" ? "ai-copilot" : entry.scope!.replace(/^`|`$/g, "").replace("${section}", "accounts");
         expect(response.status, `${key}: refused by its limiter`).toBe(429);
         expect(limiterFault.calls, `${key}: exactly one limiter call, own scope, keyed on the actor`).toEqual([{ kind: entry.policy, scope, userId: actor.userId }]);
+        if (route.includes("[section]")) { // a templated scope is built only from a validated section: an invalid one never reaches the limiter
+          limiterFault.calls = [];
+          const invalid = await call(route, method, { params: { ...params, section: "not-a-section" }, ...(method === "GET" ? {} : { body: {} }) });
+          expect(invalid.status, `${key}: invalid section`).not.toBe(429);
+          expect(limiterFault.calls, `${key}: no budget for an invalid section`).toEqual([]);
+        }
       }
     } finally { limiterFault.refuse = false; }
     expect(await fingerprint(h.db), "a refused request writes nothing").toEqual(before);
