@@ -356,6 +356,26 @@ No `onRequestError` hook and no error-message projection exist. |
 | F-18-20-10 | Low (response echo, not a log) | Open — Owner decision | Strict zod schemas report unrecognized object **key names** in the 400 response (`Unrecognized keys: "…"`). This goes back to the requester only and is never logged; values are never echoed. It is pinned by `[log-validation-key-echo]`. Proposed: map `unrecognized_keys` to a fixed message (a runtime change, outside this item). |
 | F-18-20-09 | Info (by design) | Recorded | `ledger-mirror/` and `ledger-journal/` never expire and are not app-encrypted (bucket SSE only). Their content is pseudonymous deletion evidence. |
 
+## Owner acceptance (2026-10-02)
+
+The Owner accepted the completed repository-only work for rows 18-07 and 18-20 at commit `34af113`. The acceptance covers:
+- the 55-collection / 1,189-field classification;
+- the logging, telemetry and non-log egress inventory;
+- CI classification and enforcement;
+- sentinel coverage;
+- the required-security-test execution enforcement;
+- the 134-probe mutation campaign and its restoration evidence;
+- the independent review and nine re-reviews;
+- the documented limitations and residual findings.
+
+The ineffective L09 probe is accepted as a documented test limitation: it cannot produce the intended leak, and its effective replacement (L09b) is detected.
+
+This acceptance does **not** change any of the following:
+- Rows 18-07 and 18-20 remain **PARTIAL**.
+- `PHASE_18_RETENTION_DRAFT.md` remains **DRAFT / NOT ADOPTED**. None of its proposed retention periods, TTLs, purge mechanisms, token stripping or erasure behaviour are Owner-approved by this acceptance.
+- **F-18-20-01 through F-18-20-10 remain open findings.** This acceptance is not risk acceptance, and not authorization to remediate them.
+- S10 remains untouched through its observation window.
+
 ## 6. Residual work (rows stay PARTIAL)
 
 **18-07 (logging/crash):**
