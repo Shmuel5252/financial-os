@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { emissionSites, operatorFileDigests, queryParameterSites } from "../security/emission-sites";
 import { files, liveTestIds } from "../security/live-test-ids";
 import nextConfig from "../../next.config";
-import { contentSecurityPolicy, nextConfigDigest, operatorFiles, operatorPowerShell, queryParameters, reviewedDependencies, securityHeaders, sinkMatrix } from "../security/logging-sink-matrix";
+import { searchQuerySchema } from "@/lib/search/search";
+import { contentSecurityPolicy, nextConfigDigest, operatorFiles, operatorPowerShell, queryParameters, reviewedDependencies, searchQueryKeys, securityHeaders, sinkMatrix } from "../security/logging-sink-matrix";
 
 // Phase 18 rows 18-07/18-20: every emission point (console.*, process stdout/stderr/emitWarning, telemetry .emit(), logger/debug/
 // logging configuration keys) in src/, workers/, scripts/ and next.config is classified exactly once, with a live sentinel test.
@@ -86,6 +87,8 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
 
   it("classifies every query-string parameter the app reads (query strings reach platform request logs)", () => {
     expect(Object.fromEntries([...queryParameterSites()].sort())).toEqual(Object.fromEntries(Object.entries(queryParameters).sort()));
+    // /api/search reads every parameter through searchParams.entries() into this schema: its keys are the parameter names.
+    expect(Object.keys(searchQuerySchema.shape).sort()).toEqual([...searchQueryKeys].sort());
   }, 30_000);
 
   it("[log-auth-config] configures Auth.js with debug: false and the redacting logger", () => {

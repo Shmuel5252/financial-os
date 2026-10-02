@@ -278,7 +278,8 @@ export const contentSecurityPolicy = [
 /**
  * How request query strings are read (queryParameterSites). Query strings reach platform request logs (F-18-20-01): `query` on
  * /api/search (via searchParams.entries) carries the user's search text; the others carry pagination cursors/limits, record and
- * household ids, report periods and formats. A new GET parameter fails CI until it is classified here.
+ * household ids, report periods and formats. A new `searchParams.get` name, member use or URLSearchParams changes this pin; the
+ * names behind `entries()` are pinned by searchQueryKeys. Keys only a page component or a client URL builder uses are a stated limit.
  */
 export const queryParameters: Readonly<Record<string, number>> = {
   "src/app/api/ai/conversations/route.ts query:get:limit": 1,
@@ -310,7 +311,10 @@ export const queryParameters: Readonly<Record<string, number>> = {
   "src/app/budgets/page.tsx query:use": 3,
   "src/app/households/page.tsx query:use": 3,
   "src/app/reports/page.tsx query:use": 3,
+  "src/components/reports/report-center.tsx query:URLSearchParams": 2,
+  "src/lib/adapters/financy/financy-open-banking-provider.ts query:URLSearchParams": 2,
   "src/lib/operations/deletion-ledger-runtime.ts query:get:authMechanism": 1,
+  "src/lib/operations/deletion-ledger-runtime.ts query:URLSearchParams": 1,
   "src/lib/operations/deletion-ledger-runtime.ts query:use": 1,
 };
 
@@ -319,3 +323,6 @@ export const queryParameters: Readonly<Record<string, number>> = {
  * production-only rewrite proxying cookies to an external origin) only appears outside tests: any edit needs a reviewed pin update.
  */
 export const nextConfigDigest = "3af335bd334642ef1bb24f6796929d11722c39313a2502c3b2c4ba1d5adbcbe9";
+
+/** The parameters /api/search accepts (searchQuerySchema; read via searchParams.entries()). `query` is the user's search text (F-18-20-01). */
+export const searchQueryKeys = ["cursor", "householdId", "limit", "query", "scopeKind"] as const;

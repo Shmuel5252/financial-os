@@ -127,9 +127,10 @@ export function operatorFileDigests(): Record<string, string> {
 }
 
 /**
- * How request query strings are read in src/ (they reach platform request logs, F-18-20-01): `<file> query:get:<name>` for
+ * How request query strings are read or built in src/ (they reach platform request logs, F-18-20-01): `<file> query:get:<name>` for
  * `searchParams.get("name")`, `query:<member>` for any other member use (entries, getAll, ...), `query:use` for any other reference
- * (page `searchParams` props). Pinned in logging-sink-matrix.ts `queryParameters`, so a new GET parameter needs a classification.
+ * (page `searchParams` props), `query:URLSearchParams` for every URLSearchParams constructed. Pinned in logging-sink-matrix.ts
+ * `queryParameters`; names read through `entries()` are pinned through the parsing schema (searchQueryKeys).
  */
 export function queryParameterSites(): Map<string, number> {
   const sites = new Map<string, number>();
@@ -147,6 +148,8 @@ export function queryParameterSites(): Map<string, number> {
         } else if (member) add(`query:${member.name.text}`);
         else add("query:use");
       }
+      // Any URLSearchParams built in src/ (reading `url.search` server-side, or building client URLs) is a query-string site.
+      if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "URLSearchParams") add("query:URLSearchParams");
       ts.forEachChild(node, visit);
     };
     visit(source);

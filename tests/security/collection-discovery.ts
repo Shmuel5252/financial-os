@@ -43,10 +43,18 @@ export type DocumentTree = Map<string, Set<string>>;
 const LEAF_TYPES = new Set(["Date", "ObjectId", "Binary", "Long", "Decimal128", "Timestamp", "Uint8Array", "Buffer", "RegExp", "BSONRegExp", "Double", "Int32"]);
 const join = (path: string, token: string) => (path === "" ? token : token === "[]" ? `${path}[]` : `${path}.${token}`);
 
+/** Nodes whose type is only primitives/leaf values (string, number, Date, ObjectId, ...): nothing may be written below them. */
+const primitiveNodes = new WeakMap<DocumentTree, Set<string>>();
+const PRIMITIVE = ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike | ts.TypeFlags.BooleanLike | ts.TypeFlags.BigIntLike | ts.TypeFlags.ESSymbolLike | ts.TypeFlags.EnumLike;
+
 function addTree(checker: ts.TypeChecker, type: ts.Type, path: string, tree: DocumentTree, depth: number): void {
   const children = tree.get(path) ?? new Set<string>(); tree.set(path, children);
   if (depth > 10) return;
   const parts = type.isUnion() ? type.types : [type];
+  const solid = parts.filter((part) => !(part.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void | ts.TypeFlags.Never)));
+  if (solid.length > 0 && solid.every((part) => (part.flags & PRIMITIVE) !== 0 || LEAF_TYPES.has(part.getSymbol()?.getName() ?? "") || LEAF_TYPES.has(part.aliasSymbol?.getName() ?? ""))) {
+    const primitives = primitiveNodes.get(tree) ?? new Set<string>(); primitives.add(path); primitiveNodes.set(tree, primitives);
+  }
   for (const part of parts) {
     if (part.flags & (ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike | ts.TypeFlags.BooleanLike | ts.TypeFlags.BigIntLike | ts.TypeFlags.ESSymbolLike | ts.TypeFlags.EnumLike | ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never | ts.TypeFlags.Void)) continue;
     if (LEAF_TYPES.has(part.getSymbol()?.getName() ?? "") || LEAF_TYPES.has(part.aliasSymbol?.getName() ?? "")) continue;
@@ -64,6 +72,29 @@ function addTree(checker: ts.TypeChecker, type: ts.Type, path: string, tree: Doc
       addTree(checker, checker.getTypeOfSymbol(property), join(path, property.getName()), tree, depth + 1);
     }
   }
+}
+
+/**
+ * Follows an open value back through aliases (`x`, `const a = x`, `const { k, ...a } = x`) to a parameter of a named function
+ * (method, function, or arrow/function expression assigned to a variable or property). Undefined when it cannot be traced.
+ */
+function traceParameter(checker: ts.TypeChecker, expression: ts.Expression, depth = 0): { functionName: string; index: number } | undefined {
+  if (depth > 8 || !ts.isIdentifier(expression)) return undefined;
+  const declaration = checker.getSymbolAtLocation(expression)?.valueDeclaration;
+  if (!declaration) return undefined;
+  if (ts.isParameter(declaration)) {
+    const owner = declaration.parent;
+    const name = (ts.isMethodDeclaration(owner) || ts.isFunctionDeclaration(owner)) && owner.name && ts.isIdentifier(owner.name) ? owner.name.text
+      : (ts.isArrowFunction(owner) || ts.isFunctionExpression(owner)) && owner.parent
+        && (ts.isVariableDeclaration(owner.parent) || ts.isPropertyDeclaration(owner.parent) || ts.isPropertyAssignment(owner.parent))
+        && ts.isIdentifier(owner.parent.name) ? owner.parent.name.text : undefined;
+    return name === undefined || !ts.isFunctionLike(owner) ? undefined : { functionName: name, index: owner.parameters.indexOf(declaration) };
+  }
+  if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name) && declaration.initializer) return traceParameter(checker, declaration.initializer, depth + 1);
+  if (ts.isBindingElement(declaration) && declaration.dotDotDotToken && ts.isVariableDeclaration(declaration.parent.parent) && declaration.parent.parent.initializer) {
+    return traceParameter(checker, declaration.parent.parent.initializer, depth + 1);
+  }
+  return undefined;
 }
 
 let cachedProgram: ts.Program | undefined;
@@ -206,12 +237,15 @@ function nodeAt(tree: DocumentTree, dotted: string): string | undefined {
   return node;
 }
 
-/** Is the written path (tree-node form, e.g. `items[].name`) inside the document tree? A leaf/opaque/`*` node in the tree accepts anything below. */
+/**
+ * Is the written path (tree-node form, e.g. `items[].name`) inside the document tree? An opaque node (unknown/Record value) accepts
+ * anything below; a primitive/leaf node (string, number, Date, ...) accepts nothing below - an object written under it is undeclared.
+ */
 function fits(tree: DocumentTree, path: string): boolean {
   let node = "";
   for (const token of path.replace(/\[\]/g, ".[]").split(".").filter(Boolean)) {
     const children = tree.get(node);
-    if (children === undefined || children.size === 0) return true;
+    if (children === undefined || children.size === 0) return !(primitiveNodes.get(tree)?.has(node) ?? false);
     if (children.has(token)) node = join(node, token);
     else if (token !== "[]" && children.has("*")) node = join(node, "*");
     else return false;
@@ -250,16 +284,11 @@ export function undeclaredWrites(): string[] {
             scannedScopes.add(scope);
             const spreads = (inner: ts.Node): void => {
               if (ts.isSpreadAssignment(inner) && open(checker.getTypeAtLocation(inner.expression))) {
-                found.add(`${locate(inner)} dynamic:spread`);
-                const symbol = ts.isIdentifier(inner.expression) ? checker.getSymbolAtLocation(inner.expression) : undefined;
-                const parameter = symbol?.valueDeclaration && ts.isParameter(symbol.valueDeclaration) ? symbol.valueDeclaration : undefined;
-                const owner = parameter?.parent;
-                const ownerName = owner && (ts.isMethodDeclaration(owner) || ts.isFunctionDeclaration(owner)) && owner.name && ts.isIdentifier(owner.name) ? owner.name.text
-                  : owner && (ts.isArrowFunction(owner) || ts.isFunctionExpression(owner)) && owner.parent
-                    && (ts.isVariableDeclaration(owner.parent) || ts.isPropertyDeclaration(owner.parent) || ts.isPropertyAssignment(owner.parent))
-                    && ts.isIdentifier(owner.parent.name) ? owner.parent.name.text : undefined;
-                if (parameter && owner && ts.isFunctionLike(owner) && ownerName) viaParameter.push({ functionName: ownerName, index: owner.parameters.indexOf(parameter), tree });
-                else if (parameter) found.add(`${locate(inner)} dynamic:unnamed-owner`);
+                // Traced to a named function's parameter (through aliases): its callers are checked. Otherwise the site is a distinct,
+                // separately explained kind, so a refactor that breaks the trace changes the inventory instead of passing silently.
+                const traced = traceParameter(checker, inner.expression);
+                found.add(`${locate(inner)} ${traced ? "dynamic:spread" : "dynamic:untraced"}`);
+                if (traced) viaParameter.push({ ...traced, tree });
               }
               // Nested closures of the writing function are included (e.g. `$set: (() => ({ ...set }))()`).
               ts.forEachChild(inner, spreads);
@@ -290,14 +319,8 @@ export function undeclaredWrites(): string[] {
                   // `$set: param` with an open parameter: check the callers' literal arguments like the spread form.
                   const literal = ts.isObjectLiteralExpression(node.arguments[1]) ? node.arguments[1].properties.find((property): property is ts.PropertyAssignment =>
                     ts.isPropertyAssignment(property) && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) && property.name.text === name) : undefined;
-                  const symbol = literal && ts.isIdentifier(literal.initializer) ? checker.getSymbolAtLocation(literal.initializer) : undefined;
-                  const parameter = symbol?.valueDeclaration && ts.isParameter(symbol.valueDeclaration) ? symbol.valueDeclaration : undefined;
-                  const owner = parameter?.parent;
-                  const ownerName = owner && (ts.isMethodDeclaration(owner) || ts.isFunctionDeclaration(owner)) && owner.name && ts.isIdentifier(owner.name) ? owner.name.text
-                    : owner && (ts.isArrowFunction(owner) || ts.isFunctionExpression(owner)) && owner.parent
-                      && (ts.isVariableDeclaration(owner.parent) || ts.isPropertyDeclaration(owner.parent) || ts.isPropertyAssignment(owner.parent))
-                      && ts.isIdentifier(owner.parent.name) ? owner.parent.name.text : undefined;
-                  if (parameter && owner && ts.isFunctionLike(owner) && ownerName) viaParameter.push({ functionName: ownerName, index: owner.parameters.indexOf(parameter), tree });
+                  const traced = literal ? traceParameter(checker, literal.initializer) : undefined;
+                  if (traced) viaParameter.push({ ...traced, tree }); else found.add(`${where} dynamic:untraced`);
                   continue;
                 }
                 for (const field of checker.getPropertiesOfType(value)) {
