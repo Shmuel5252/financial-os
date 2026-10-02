@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { emissionSites, operatorFileDigests, queryParameterSites } from "../security/emission-sites";
 import { files, liveTestIds } from "../security/live-test-ids";
 import nextConfig from "../../next.config";
-import { searchQuerySchema } from "@/lib/search/search";
+import { parseSearchQuery } from "@/lib/search/search";
 import { contentSecurityPolicy, nextConfigDigest, operatorFiles, operatorPowerShell, queryParameters, reviewedDependencies, searchQueryKeys, securityHeaders, sinkMatrix } from "../security/logging-sink-matrix";
 
 // Phase 18 rows 18-07/18-20: every emission point (console.*, process stdout/stderr/emitWarning, telemetry .emit(), logger/debug/
@@ -27,7 +27,7 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
       expect(Object.keys(entry.payload).length, `${sink}: payload treatment`).toBeGreaterThan(0);
     }
     expect(Object.fromEntries([...emissionSites()].sort())).toEqual(Object.fromEntries([...classified].sort()));
-  }, 30_000);
+  }, 120_000);
 
   it("pins every operator-run file (scripts/, workers/*/cli.ts): any change to what an operator terminal can print needs re-review", () => {
     expect(operatorFileDigests()).toEqual(operatorFiles);
@@ -87,8 +87,12 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
 
   it("classifies every query-string parameter the app reads (query strings reach platform request logs)", () => {
     expect(Object.fromEntries([...queryParameterSites()].sort())).toEqual(Object.fromEntries(Object.entries(queryParameters).sort()));
-    // /api/search reads every parameter through searchParams.entries() into this schema: its keys are the parameter names.
-    expect(Object.keys(searchQuerySchema.shape).sort()).toEqual([...searchQueryKeys].sort());
+    // /api/search reads every parameter through searchParams.entries() into parseSearchQuery: record which keys the REAL parser reads
+    // (zod reads exactly its shape's keys), so a parser built from another schema or extended inline still changes this pin.
+    const read = new Set<string>();
+    const recorder = new Proxy({}, { get: (_target, key) => { if (typeof key === "string") read.add(key); return undefined; } });
+    try { parseSearchQuery(recorder); } catch { /* the empty input is invalid; only the keys read matter */ }
+    expect([...read].filter((key) => !["then", "constructor", "toJSON"].includes(key)).sort()).toEqual([...searchQueryKeys].sort());
   }, 30_000);
 
   it("[log-auth-config] configures Auth.js with debug: false and the redacting logger", () => {

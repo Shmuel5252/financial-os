@@ -148,7 +148,8 @@ export function queryParameterSites(): Map<string, number> {
         } else if (member) add(`query:${member.name.text}`);
         else add("query:use");
       }
-      // Any URLSearchParams built in src/ (reading `url.search` server-side, or building client URLs) is a query-string site.
+      // Every URLSearchParams constructed in src/ is pinned: client URLs (query strings that reach request logs) and, over-inclusively,
+      // outbound provider/STS request bodies and queries.
       if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "URLSearchParams") add("query:URLSearchParams");
       ts.forEachChild(node, visit);
     };

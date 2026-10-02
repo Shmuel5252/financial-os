@@ -20,6 +20,8 @@ export default defineConfig({
     // Phase 18 (18-07/18-14/18-20): every test must execute at least one assertion, and CI (REQUIRE_SECURITY_TESTS=1) fails unless
     // every required security test id ran and passed (tests/security/required-tests-reporter.ts).
     expect: { requireAssertions: true },
+    // Integration and AST/type-checker suites can exceed 5 s under parallel load; with CI enforcement a timeout would fail the run.
+    testTimeout: 30_000,
     reporters: ["default", "./tests/security/required-tests-reporter.ts"],
   },
 });

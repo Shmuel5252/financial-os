@@ -1,6 +1,6 @@
 # Phase 18 rows 18-07 and 18-20: data classification, retention inventory and logging/telemetry sinks (repository portion)
 
-Status: **repository portion built 2026-10-01/02, reviewed, re-reviewed seven times and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
+Status: **repository portion built 2026-10-01/02, reviewed, re-reviewed eight times and fixed (see §7); rows 18-07 and 18-20 stay PARTIAL.** This document describes what the code does
 today. It adopts no retention period, access role or deletion mechanism; the recommendations live separately in
 `PHASE_18_RETENTION_DRAFT.md` (**DRAFT / NOT ADOPTED**). No runtime code, TTL index, deletion job, logging behaviour, application data
 or infrastructure was changed in this item.
@@ -26,8 +26,8 @@ CI fails when:
   - `insert*`/`replace*`: the written value's TYPE is compared with `T` (literals, spreads of domain objects, variables and mapped arrays alike).
   - Update operators (`$set`, `$push`/`$addToSet` incl. `$each`, …): each value's type is compared with `T` below its dotted key.
   - An open value must be explained (`dynamicUpdateSites`; one today, `updateEmail` in notifications). That covers an operator value typed `Record`/`unknown`/`any`, and any spread of such a value anywhere in a writing function — in place, through an intermediate variable, or in a nested closure.
-  - When the open value traces back to a parameter, every same-file call's literal argument is checked against `T`: its keys, and the shape of each value written under them. The trace works for a spread or a direct `$set: param`, follows aliases (`const a = x`, `const { k, ...a } = x`), and covers method, function or arrow-function owners.
-  - A primitive or leaf field (string, number, Date, …) accepts no object below it.
+  - When the open value traces back to a parameter, every same-file call's literal argument is checked against `T`: its keys, and the shape of each value written under them. The trace works for a spread or a direct `$set: param`, follows `const` aliases only (`const a = x`, `const { k, ...a } = x`; a reassignable `let` is untraced), and covers method, function or arrow-function owners.
+  - A primitive or leaf field (string, number, Date, …) accepts nothing below it, whether written as an object value or as a dotted key (`"email.errorCategory.rawBody"`).
   - An open value that cannot be traced to a named parameter is its own explained kind (`dynamic:untraced`), so a refactor that breaks the trace changes the inventory.
   - A vanished entry fails with a re-verify instruction.
   - Beyond writing functions: every object spread of an open value and every `Object.assign` from one, anywhere in `src/` and `workers/`, must be explained (`openValueSites`; 11 today). That covers a spread in another closure or in another file's helper.
@@ -103,7 +103,7 @@ CI fails when:
   - every other `searchParams` use;
   - every `URLSearchParams` constructed (server or client).
 
-  The `/api/search` names behind `entries()` are pinned through its schema (`searchQueryKeys`). Which properties a page reads from its `searchParams` prop, and which keys client components put into URLs, are not pinned; F-18-20-01 records the exposure class.
+  The `/api/search` names behind `entries()` are pinned behaviourally: the test records which keys the real `parseSearchQuery` reads (`searchQueryKeys`). Which properties a page reads from its `searchParams` prop, and which keys client components put into URLs, are not pinned; F-18-20-01 records the exposure class.
 - **Platform and provider side.** Logging and retention there is outside the repository (§2, out of scope).
 
 ## 2. Collection and field coverage
@@ -320,7 +320,7 @@ No sink emits a pseudonymized identifier, because a hash of an identifier would 
 
 All pass.
 
-**Mutation probes:** 126 temporary probes over nine rounds:
+**Mutation probes:** 130 temporary probes over ten rounds:
 - L01–L20 with L09b, and D01–D08 (the original build);
 - R01–R17 (from the first review);
 - N01–N21 (from the first re-review);
@@ -329,7 +329,8 @@ All pass.
 - V01–V09 with V06b (from the fourth re-review);
 - W01–W07 (from the fifth re-review);
 - X01–X05 (from the sixth re-review);
-- Y01–Y07 (from the seventh re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
+- Y01–Y07 (from the seventh re-review);
+- Z01–Z04 (from the eighth re-review). None was committed; each file was restored and verified by SHA-256. Results are in §8.
 
 ## 5. Findings (no actual application logging leak found)
 
@@ -534,9 +535,26 @@ Fixed in tests only:
 | 2 | Minor | Any object was accepted under a primitive-typed field | Primitive/leaf nodes reject children (Y04, Y05); `unknown` values stated as a limit |
 | 3 | Low | Names read via `entries()` / `URLSearchParams(url.search)` were not pinned | `searchQueryKeys` pins the search schema; every `URLSearchParams` construction is a pinned site (Y06, Y07); wording corrected |
 
+**Round 9: eighth re-review (2026-10-02) of commit `d6585fc`**, read-only, verification-only.
+
+Its main results:
+- **Regressions:** none; two enforced full runs passed, with no false positives from the new rules.
+- **Leaks:** no actual leak in current code. A real MongoDB check showed that a dotted `$set` under a null or string field fails with PathNotViable, but it is stored under an absent field.
+- **Verdict:** one blocker.
+
+Fixed in tests only:
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | Minor (record accuracy) | The primitive-leaf rule did not apply to dotted keys (`nodeAt`) | `nodeAt` rejects a dotted path below a primitive/leaf field (Z01, Z02) |
+| 2 | Low | Alias tracing followed `let` declarations that can be reassigned | Only `const` aliases are traced; anything else is `dynamic:untraced` (Z03) |
+| 3 | Low | `searchQueryKeys` pinned the exported schema, not the one the route parses | Behavioural pin: a recording proxy captures the keys the real `parseSearchQuery` reads (Z04) |
+| 4 | Info | The `URLSearchParams` pin also counts outbound provider/STS bodies | Comment corrected (over-inclusive by design) |
+| — | Stability | In the round-10 probe run, the emission inventory (38.6 s) and an unrelated integration test overran their timeouts under full load. T08 was re-verified in isolation (the reporter flags the skipped ids) | Suite default `testTimeout` 30 s (vitest.config.mts) and 120 s for the emission inventory: with CI enforcement, a load-induced timeout would otherwise fail the run |
+
 ## 8. Mutation evidence
 
-Nine rounds of temporary probes were run on 2026-10-01/02: 126 probes in total. Each probe edited a single file or created one (W01, run by hand, edited two), ran the named tests, then restored the exact bytes; every restore was SHA-256-verified (a created file verified as removed), nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests. The run-time probes (T06–T10) ran the full suite with `REQUIRE_SECURITY_TESTS=1`.
+Ten rounds of temporary probes were run on 2026-10-01/02: 130 probes in total. Each probe edited a single file or created one (W01, run by hand, edited two), ran the named tests, then restored the exact bytes; every restore was SHA-256-verified (a created file verified as removed), nothing was committed, and `git status` on `src/ workers/ scripts/ infra/ next.config.ts package.json` was empty after every round. Each later round re-ran all earlier probes against the strengthened tests. The run-time probes (T06–T10) ran the full suite with `REQUIRE_SECURITY_TESTS=1`.
 
 | Probe | Mutation | Result |
 | --- | --- | --- |
@@ -666,5 +684,9 @@ Nine rounds of temporary probes were run on 2026-10-01/02: 126 probes in total. 
 | Y05 | A typed `$set` writing an object under `email.errorCategory` | Detected by the primitive-leaf rule |
 | Y06 | A new `note` key in `searchQuerySchema` (read via `entries()`) | Detected by `searchQueryKeys` |
 | Y07 | `new URLSearchParams(url.search).get("note")` in the reports route | Detected by the query-parameter pin |
+| Z01 | A caller writing the dotted key `email.errorCategory.rawBody` under a string field | Detected (the primitive rule now also applies to dotted keys) |
+| Z02 | A typed `$set` writing `email.providerMessageId.raw` | Detected (primitive rule, dotted key) |
+| Z03 | A `let` alias reassigned to a different open value before the spread | Detected (`let` is untraced: a new `dynamic:untraced` site) |
+| Z04 | `parseSearchQuery` switched to an inline schema with an extra `note` key | Detected by the behavioural key recorder |
 
-125 of 126 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every exact mutation and bypass reported by the eight reviews is detected. The guarantees that the reviews showed static checks could not hold (test liveness, security headers) are now checked at run time. The remaining limits are stated in §1.
+129 of 130 probes were detected. The one survivor, L09, was an ineffective probe (it could not leak anything); its effective replacement, L09b, was detected. Every exact mutation and bypass reported by the nine reviews is detected. The guarantees that the reviews showed static checks could not hold (test liveness, security headers) are now checked at run time. The remaining limits are stated in §1.

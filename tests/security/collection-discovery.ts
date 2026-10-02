@@ -75,7 +75,7 @@ function addTree(checker: ts.TypeChecker, type: ts.Type, path: string, tree: Doc
 }
 
 /**
- * Follows an open value back through aliases (`x`, `const a = x`, `const { k, ...a } = x`) to a parameter of a named function
+ * Follows an open value back through `const` aliases (`x`, `const a = x`, `const { k, ...a } = x`) to a parameter of a named function
  * (method, function, or arrow/function expression assigned to a variable or property). Undefined when it cannot be traced.
  */
 function traceParameter(checker: ts.TypeChecker, expression: ts.Expression, depth = 0): { functionName: string; index: number } | undefined {
@@ -90,8 +90,13 @@ function traceParameter(checker: ts.TypeChecker, expression: ts.Expression, dept
         && ts.isIdentifier(owner.parent.name) ? owner.parent.name.text : undefined;
     return name === undefined || !ts.isFunctionLike(owner) ? undefined : { functionName: name, index: owner.parameters.indexOf(declaration) };
   }
-  if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name) && declaration.initializer) return traceParameter(checker, declaration.initializer, depth + 1);
-  if (ts.isBindingElement(declaration) && declaration.dotDotDotToken && ts.isVariableDeclaration(declaration.parent.parent) && declaration.parent.parent.initializer) {
+  // Only `const` aliases: a `let` can be reassigned to anything after its initializer.
+  const constant = (variable: ts.VariableDeclaration) => ts.isVariableDeclarationList(variable.parent) && (variable.parent.flags & ts.NodeFlags.Const) !== 0;
+  if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name) && declaration.initializer && constant(declaration)) {
+    return traceParameter(checker, declaration.initializer, depth + 1);
+  }
+  if (ts.isBindingElement(declaration) && declaration.dotDotDotToken && ts.isVariableDeclaration(declaration.parent.parent)
+    && declaration.parent.parent.initializer && constant(declaration.parent.parent)) {
     return traceParameter(checker, declaration.parent.parent.initializer, depth + 1);
   }
   return undefined;
@@ -228,7 +233,8 @@ function nodeAt(tree: DocumentTree, dotted: string): string | undefined {
   for (const raw of dotted.split(".")) {
     const segment = /^(\$(\[\w*\])?|\d+)$/.test(raw) ? "[]" : raw;
     let children = tree.get(node) ?? new Set<string>();
-    if (children.size === 0 && node !== "") return node; // a leaf/opaque value accepts anything below
+    // An opaque value (unknown/Record) accepts anything below; a primitive/leaf field (string, Date, ...) accepts nothing below.
+    if (children.size === 0 && node !== "") return primitiveNodes.get(tree)?.has(node) ? undefined : node;
     if (segment !== "[]" && children.has("[]") && !children.has(segment)) { node = join(node, "[]"); children = tree.get(node) ?? new Set(); }
     if (children.has(segment)) node = join(node, segment);
     else if (segment !== "[]" && children.has("*")) node = join(node, "*");
