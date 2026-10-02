@@ -76,12 +76,34 @@ function addTree(checker: ts.TypeChecker, type: ts.Type, path: string, tree: Doc
 
 /**
  * Follows an open value back through `const` aliases (`x`, `const a = x`, `const { k, ...a } = x`) to a parameter of a named function
- * (method, function, or arrow/function expression assigned to a variable or property). Undefined when it cannot be traced.
+ * (method, function, or arrow/function expression assigned to a variable or property). Undefined when it cannot be traced, including
+ * when the parameter or any alias on the way is reassigned or mutated in place.
  */
+/** Is the symbol reassigned or mutated in place anywhere in `scope` (`x = …`, `x[k] = …`, `x.k = …`, `delete x[k]`, `Object.assign(x, …)`)? */
+function mutated(checker: ts.TypeChecker, symbol: ts.Symbol, scope: ts.Node): boolean {
+  const rootIs = (node: ts.Expression): boolean => {
+    let current: ts.Expression = node;
+    while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current) || ts.isParenthesizedExpression(current) || ts.isNonNullExpression(current)) current = current.expression;
+    return ts.isIdentifier(current) && checker.getSymbolAtLocation(current) === symbol;
+  };
+  const visit = (node: ts.Node): boolean => {
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment && rootIs(node.left)) return true;
+    if (ts.isDeleteExpression(node) && rootIs(node.expression)) return true;
+    if (ts.isCallExpression(node) && node.expression.getText() === "Object.assign" && node.arguments[0] && rootIs(node.arguments[0])) return true;
+    return ts.forEachChild(node, visit) === true;
+  };
+  return visit(scope);
+}
+
 function traceParameter(checker: ts.TypeChecker, expression: ts.Expression, depth = 0): { functionName: string; index: number } | undefined {
   if (depth > 8 || !ts.isIdentifier(expression)) return undefined;
-  const declaration = checker.getSymbolAtLocation(expression)?.valueDeclaration;
-  if (!declaration) return undefined;
+  const symbol = checker.getSymbolAtLocation(expression);
+  const declaration = symbol?.valueDeclaration;
+  if (!symbol || !declaration) return undefined;
+  // A value that is reassigned or mutated in place is no longer what the caller passed: untraced.
+  let scope: ts.Node = declaration;
+  while (!ts.isFunctionLike(scope) && !ts.isSourceFile(scope)) scope = scope.parent;
+  if (mutated(checker, symbol, ts.isParameter(declaration) ? declaration.parent : scope)) return undefined;
   if (ts.isParameter(declaration)) {
     const owner = declaration.parent;
     const name = (ts.isMethodDeclaration(owner) || ts.isFunctionDeclaration(owner)) && owner.name && ts.isIdentifier(owner.name) ? owner.name.text

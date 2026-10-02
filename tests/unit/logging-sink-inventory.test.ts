@@ -90,7 +90,11 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
     // /api/search reads every parameter through searchParams.entries() into parseSearchQuery: record which keys the REAL parser reads
     // (zod reads exactly its shape's keys), so a parser built from another schema or extended inline still changes this pin.
     const read = new Set<string>();
-    const recorder = new Proxy({}, { get: (_target, key) => { if (typeof key === "string") read.add(key); return undefined; } });
+    const recorder = new Proxy({}, {
+      get: (_target, key) => { if (typeof key === "string") read.add(key); return undefined; },
+      // A parser that enumerates the input (`.loose()`, `.catchall()`, passthrough) accepts ANY name: record that as its own entry.
+      ownKeys: () => { read.add("<enumerates-input>"); return []; },
+    });
     try { parseSearchQuery(recorder); } catch { /* the empty input is invalid; only the keys read matter */ }
     expect([...read].filter((key) => !["then", "constructor", "toJSON"].includes(key)).sort()).toEqual([...searchQueryKeys].sort());
   }, 30_000);

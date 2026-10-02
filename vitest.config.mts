@@ -22,6 +22,7 @@ export default defineConfig({
     expect: { requireAssertions: true },
     // Integration and AST/type-checker suites can exceed 5 s under parallel load; with CI enforcement a timeout would fail the run.
     testTimeout: 30_000,
+    hookTimeout: 30_000,
     reporters: ["default", "./tests/security/required-tests-reporter.ts"],
   },
 });
