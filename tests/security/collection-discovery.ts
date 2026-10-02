@@ -206,20 +206,6 @@ function nodeAt(tree: DocumentTree, dotted: string): string | undefined {
   return node;
 }
 
-/** Does a MongoDB dotted path (`email.acceptedAt`, `messages.$.text`, `items.0.x`) exist in the document tree? Arrays are implicit. */
-function pathExists(tree: DocumentTree, dotted: string): boolean {
-  let node = "";
-  for (const raw of dotted.split(".")) {
-    const segment = /^(\$(\[\w*\])?|\d+)$/.test(raw) ? "[]" : raw;
-    let children = tree.get(node) ?? new Set<string>();
-    if (segment !== "[]" && children.has("[]") && !children.has(segment)) { node = join(node, "[]"); children = tree.get(node) ?? new Set(); }
-    if (children.has(segment)) node = join(node, segment);
-    else if (segment !== "[]" && children.has("*")) node = join(node, "*");
-    else return false;
-  }
-  return true;
-}
-
 /** Is the written path (tree-node form, e.g. `items[].name`) inside the document tree? A leaf/opaque/`*` node in the tree accepts anything below. */
 function fits(tree: DocumentTree, path: string): boolean {
   let node = "";
@@ -299,7 +285,21 @@ export function undeclaredWrites(): string[] {
                 if (!FIELD_OPERATORS.has(name)) continue;
                 const value = checker.getTypeOfSymbol(operator);
                 // A Record/unknown/any operator value can carry any field: it must be explained (dynamicUpdateSites).
-                if (open(value)) { found.add(`${where} dynamic:${name}`); continue; }
+                if (open(value)) {
+                  found.add(`${where} dynamic:${name}`);
+                  // `$set: param` with an open parameter: check the callers' literal arguments like the spread form.
+                  const literal = ts.isObjectLiteralExpression(node.arguments[1]) ? node.arguments[1].properties.find((property): property is ts.PropertyAssignment =>
+                    ts.isPropertyAssignment(property) && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) && property.name.text === name) : undefined;
+                  const symbol = literal && ts.isIdentifier(literal.initializer) ? checker.getSymbolAtLocation(literal.initializer) : undefined;
+                  const parameter = symbol?.valueDeclaration && ts.isParameter(symbol.valueDeclaration) ? symbol.valueDeclaration : undefined;
+                  const owner = parameter?.parent;
+                  const ownerName = owner && (ts.isMethodDeclaration(owner) || ts.isFunctionDeclaration(owner)) && owner.name && ts.isIdentifier(owner.name) ? owner.name.text
+                    : owner && (ts.isArrowFunction(owner) || ts.isFunctionExpression(owner)) && owner.parent
+                      && (ts.isVariableDeclaration(owner.parent) || ts.isPropertyDeclaration(owner.parent) || ts.isPropertyAssignment(owner.parent))
+                      && ts.isIdentifier(owner.parent.name) ? owner.parent.name.text : undefined;
+                  if (parameter && owner && ts.isFunctionLike(owner) && ownerName) viaParameter.push({ functionName: ownerName, index: owner.parameters.indexOf(parameter), tree });
+                  continue;
+                }
                 for (const field of checker.getPropertiesOfType(value)) {
                   const path = field.getName();
                   if (path.startsWith("$")) continue;
@@ -338,8 +338,16 @@ export function undeclaredWrites(): string[] {
           if (!argument || !ts.isObjectLiteralExpression(argument)) { found.add(`${where} via:${callee} non-literal`); continue; }
           for (const property of argument.properties) {
             const key = property.name && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) ? property.name.text : undefined;
-            if (key === undefined) found.add(`${where} via:${callee} computed-or-spread`);
-            else if (!pathExists(target.tree, key)) found.add(`${where} via:${callee} ${key}`);
+            if (key === undefined || !ts.isPropertyAssignment(property)) { found.add(`${where} via:${callee} computed-or-spread`); continue; }
+            const at = nodeAt(target.tree, key);
+            if (at === undefined) { found.add(`${where} via:${callee} ${key}`); continue; }
+            // The value written under the key must fit the document type too (e.g. `email: { ...email, providerResponse }`).
+            const written = checker.getTypeAtLocation(property.initializer);
+            if (written.flags & ts.TypeFlags.Any) continue;
+            for (const sub of treeOf(written).keys()) {
+              if (sub === "" || sub.split(/[.[]/).some((part) => part.startsWith("$"))) continue;
+              if (!fits(target.tree, sub.startsWith("[]") ? `${at}${sub}` : `${at}.${sub}`)) found.add(`${where} via:${callee} ${key}:${sub}`);
+            }
           }
         }
       }

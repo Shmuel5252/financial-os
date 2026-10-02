@@ -274,3 +274,48 @@ export const contentSecurityPolicy = [
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
 ] as const;
+
+/**
+ * How request query strings are read (queryParameterSites). Query strings reach platform request logs (F-18-20-01): `query` on
+ * /api/search (via searchParams.entries) carries the user's search text; the others carry pagination cursors/limits, record and
+ * household ids, report periods and formats. A new GET parameter fails CI until it is classified here.
+ */
+export const queryParameters: Readonly<Record<string, number>> = {
+  "src/app/api/ai/conversations/route.ts query:get:limit": 1,
+  "src/app/api/debt-strategies/route.ts query:get:cursor": 2,
+  "src/app/api/debt-strategies/route.ts query:get:limit": 2,
+  "src/app/api/financial-data/[section]/route.ts query:get:cursor": 1,
+  "src/app/api/financial-data/[section]/route.ts query:get:limit": 1,
+  "src/app/api/financial-data/snapshots/route.ts query:get:cursor": 1,
+  "src/app/api/financial-data/snapshots/route.ts query:get:limit": 1,
+  "src/app/api/financial-engine/snapshots/route.ts query:get:cursor": 1,
+  "src/app/api/financial-engine/snapshots/route.ts query:get:limit": 1,
+  "src/app/api/net-worth/snapshots/route.ts query:get:cursor": 2,
+  "src/app/api/net-worth/snapshots/route.ts query:get:limit": 2,
+  "src/app/api/purchase-simulations/route.ts query:get:cursor": 1,
+  "src/app/api/purchase-simulations/route.ts query:get:limit": 1,
+  "src/app/api/report-summaries/[summaryId]/route.ts query:get:reportId": 1,
+  "src/app/api/report-summaries/route.ts query:get:reportId": 1,
+  "src/app/api/reports/export/route.ts query:get:format": 1,
+  "src/app/api/reports/export/route.ts query:get:householdId": 1,
+  "src/app/api/reports/export/route.ts query:get:periodKind": 1,
+  "src/app/api/reports/export/route.ts query:get:periodValue": 1,
+  "src/app/api/reports/export/route.ts query:get:scopeKind": 1,
+  "src/app/api/reports/export/route.ts query:get:snapshotId": 1,
+  "src/app/api/reports/route.ts query:get:householdId": 1,
+  "src/app/api/reports/route.ts query:get:periodKind": 1,
+  "src/app/api/reports/route.ts query:get:periodValue": 1,
+  "src/app/api/reports/route.ts query:get:scopeKind": 1,
+  "src/app/api/search/route.ts query:entries": 1,
+  "src/app/budgets/page.tsx query:use": 3,
+  "src/app/households/page.tsx query:use": 3,
+  "src/app/reports/page.tsx query:use": 3,
+  "src/lib/operations/deletion-ledger-runtime.ts query:get:authMechanism": 1,
+  "src/lib/operations/deletion-ledger-runtime.ts query:use": 1,
+};
+
+/**
+ * SHA-256 (LF-normalized) of next.config.ts. Its evaluated output is pinned too, but an environment-conditional key (e.g. a
+ * production-only rewrite proxying cookies to an external origin) only appears outside tests: any edit needs a reviewed pin update.
+ */
+export const nextConfigDigest = "3af335bd334642ef1bb24f6796929d11722c39313a2502c3b2c4ba1d5adbcbe9";

@@ -28,7 +28,7 @@ import { files } from "./live-test-ids";
 // primitives (eval, Function, dynamic import, global objects) is a code-review/CodeQL concern, not something this test can prove absent.
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$/;
 export const EMISSION_ROOTS = ["src", "workers", "scripts"] as const;
-const ROOT_CONFIG = ["next.config.ts", "next.config.mjs", "next.config.js"];
+const ROOT_CONFIG = ["next.config.ts", "next.config.mts", "next.config.mjs", "next.config.js", "next.config.cjs"];
 const CONFIG_KEYS = new Set(["logger", "debug", "logging"]);
 const INERT_PROCESS = new Set(["env", "argv", "cwd", "execPath", "exit", "exitCode"]);
 const SINK_STRINGS = new Set(["console", "process", "stdout", "stderr"]);
@@ -124,4 +124,32 @@ export function operatorFileDigests(): Record<string, string> {
   return Object.fromEntries(paths.map((path) => [path.split(sep).join("/"),
     createHash("sha256").update(readFileSync(path, "utf8").replace(/\r\n/g, "\n")).digest("hex")] as const)
     .sort(([a], [b]) => (a < b ? -1 : 1)));
+}
+
+/**
+ * How request query strings are read in src/ (they reach platform request logs, F-18-20-01): `<file> query:get:<name>` for
+ * `searchParams.get("name")`, `query:<member>` for any other member use (entries, getAll, ...), `query:use` for any other reference
+ * (page `searchParams` props). Pinned in logging-sink-matrix.ts `queryParameters`, so a new GET parameter needs a classification.
+ */
+export function queryParameterSites(): Map<string, number> {
+  const sites = new Map<string, number>();
+  for (const path of files("src", (p) => /\.(ts|tsx)$/.test(p))) {
+    const file = path.split(sep).join("/");
+    const add = (kind: string) => sites.set(`${file} ${kind}`, (sites.get(`${file} ${kind}`) ?? 0) + 1);
+    const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node): void => {
+      if (ts.isIdentifier(node) && node.text === "searchParams" && !isTypePosition(node)) {
+        const parent = node.parent;
+        const access = ts.isPropertyAccessExpression(parent) && parent.name === node ? parent : undefined;
+        const member = access && ts.isPropertyAccessExpression(access.parent) && access.parent.expression === access ? access.parent : undefined;
+        if (member && member.name.text === "get" && ts.isCallExpression(member.parent) && member.parent.arguments[0] && ts.isStringLiteralLike(member.parent.arguments[0])) {
+          add(`query:get:${member.parent.arguments[0].text}`);
+        } else if (member) add(`query:${member.name.text}`);
+        else add("query:use");
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return sites;
 }

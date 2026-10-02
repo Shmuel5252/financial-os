@@ -23,7 +23,7 @@ export const REQUIRED_SECURITY_TEST_IDS: readonly string[] = [...new Set([
 /** Inventory modules (tests without ids) -> exact number of tests that must run and pass. Update deliberately when adding tests. */
 export const REQUIRED_SECURITY_MODULES: Readonly<Record<string, number>> = {
   "tests/unit/data-classification.test.ts": 13,
-  "tests/unit/logging-sink-inventory.test.ts": 9,
+  "tests/unit/logging-sink-inventory.test.ts": 11,
   "tests/unit/logging-sentinels.test.ts": 11,
   "tests/unit/route-authorization-inventory.test.ts": 6,
   "tests/unit/phase-eighteen-inventory.test.ts": 2,

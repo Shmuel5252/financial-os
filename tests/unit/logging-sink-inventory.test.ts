@@ -1,10 +1,11 @@
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { emissionSites, operatorFileDigests } from "../security/emission-sites";
+import { emissionSites, operatorFileDigests, queryParameterSites } from "../security/emission-sites";
 import { files, liveTestIds } from "../security/live-test-ids";
 import nextConfig from "../../next.config";
-import { contentSecurityPolicy, operatorFiles, operatorPowerShell, reviewedDependencies, securityHeaders, sinkMatrix } from "../security/logging-sink-matrix";
+import { contentSecurityPolicy, nextConfigDigest, operatorFiles, operatorPowerShell, queryParameters, reviewedDependencies, securityHeaders, sinkMatrix } from "../security/logging-sink-matrix";
 
 // Phase 18 rows 18-07/18-20: every emission point (console.*, process stdout/stderr/emitWarning, telemetry .emit(), logger/debug/
 // logging configuration keys) in src/, workers/, scripts/ and next.config is classified exactly once, with a live sentinel test.
@@ -76,6 +77,16 @@ describe("logging and telemetry sink inventory (18-07/18-20)", () => {
       expect(found, `${dir}: classify platform-level headers/rewrites/redirects (egress, CSP) before adding them`).toEqual([]);
     }
   });
+
+  it("pins next.config.ts byte-for-byte (environment-conditional keys only appear outside tests) and allows no other next.config", () => {
+    expect(readdirSync(".").filter((name) => /^next\.config\./.test(name)), "one next.config, in TypeScript").toEqual(["next.config.ts"]);
+    expect(createHash("sha256").update(readFileSync("next.config.ts", "utf8").replace(/\r\n/g, "\n")).digest("hex"),
+      "next.config.ts changed: re-review headers/rewrites/redirects/env-dependent keys, then update nextConfigDigest").toBe(nextConfigDigest);
+  });
+
+  it("classifies every query-string parameter the app reads (query strings reach platform request logs)", () => {
+    expect(Object.fromEntries([...queryParameterSites()].sort())).toEqual(Object.fromEntries(Object.entries(queryParameters).sort()));
+  }, 30_000);
 
   it("[log-auth-config] configures Auth.js with debug: false and the redacting logger", () => {
     const values = new Map<string, string>();
