@@ -208,8 +208,8 @@ export const implicitSinks = [
  */
 export const operatorFiles: Readonly<Record<string, string>> = {
   "scripts/atlas-alerts.mjs": "eb0a9111661c5e8e9037cfd73cca4e4cabb2c8a43bcd2bd76d755c5746df9a51",
-  "scripts/audit-gate.d.mts": "556c8fbc5d3b97ffd9ec8880d7065b2361664bb26c7fef62bb386704e3261909",
-  "scripts/audit-gate.mjs": "7d6b3f515205652b31e410abe5932512217277b2ad67557c16735cf5e8e64526",
+  "scripts/audit-gate.d.mts": "3b549ddaa98070b1f70061e1e0af504a8316a19421eb61e9d93699a81909337f",
+  "scripts/audit-gate.mjs": "18ca28491b4c26abe53ae710d95cb012039e734585c4759fe65385a2e0d38fd9",
   "scripts/build-workers.mjs": "00c7613db51ed08d5525ea986a106fde0bb5634e46d1830b9212a8ab050184e6",
   "scripts/deploy-backup-worker.ps1": "4b43402978c348cecacfd6b10802d4280b65046999f9189e75e04e29b5fb5aca",
   "scripts/index-manifest.mjs": "f75ae14c5889103abe0f930dbf410584635db65665cc8a8324e85a1b7153272f",

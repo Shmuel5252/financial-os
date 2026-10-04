@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 // CI dependency-audit gate: `npm audit` over ALL dependencies (dev included), failing on any high/critical advisory, with ONE
 // temporary Owner-approved exception (2026-10-04, PHASE_18_AUDIT_EXCEPTION.md): GHSA-vfj7-8cjw-p6xm in braces@3.0.3, reachable only
@@ -44,7 +45,11 @@ const SEVERITIES = new Set(["info", "low", "moderate", "high", "critical"]);
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", ".build", ".claude", ".vercel", "coverage", "out"]);
 const ESLINT_CONFIG = /^(eslint\.config\.(js|mjs|cjs|ts|mts|cts)|\.eslintrc(\..+)?)$/;
 const SOURCE = /\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$/;
-const DIRECT_IMPORT = /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'](braces|micromatch|fast-glob)(?:\/[^"']*)?["']/;
+// Any quoted or backticked bare specifier of a chain package (import/require/require.resolve/createRequire/side-effect import).
+const DIRECT_IMPORT = /["'`](braces|micromatch|fast-glob)(?:\/[^"'`]*)?["'`]/;
+// The reviewed ESLint config (LF-normalised) and lint command: any change to what ESLint loads needs a re-review of the exposure.
+const ESLINT_CONFIG_SHA256 = "c7e8475ab15ee0b0ba30edb8a664be865a895840c4687f230af8419cf9377746";
+const LINT_SCRIPT = "eslint . --max-warnings=0";
 
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 /** Canonical JSON (sorted keys) for exact structural comparison. */
@@ -56,9 +61,9 @@ const parse = (text, what, problems) => {
 /**
  * Pure decision: [] means the audit passes (no high/critical advisory except the exact approved one). Every unexpected shape or
  * value adds a problem - the gate never passes on input it does not fully recognise.
- * @param {{ auditText: string, registryText: string, lock: unknown, eslintConfigs: { path: string, text: string }[], directImports: string[], now: Date }} input
+ * @param {{ auditText: string, registryText: string, lock: unknown, eslintConfigs: { path: string, text: string }[], directImports: string[], lintScript: unknown, now: Date }} input
  */
-export function evaluateAuditGate({ auditText, registryText, lock, eslintConfigs, directImports, now }) {
+export function evaluateAuditGate({ auditText, registryText, lock, eslintConfigs, directImports, lintScript, now }) {
   const problems = [];
   if (!(now instanceof Date) || Number.isNaN(now.getTime())) problems.push("clock: invalid current time");
   else if (now.getTime() >= Date.parse(EXCEPTION.expiresAt)) problems.push(`exception ${EXCEPTION.advisory} expired at ${EXCEPTION.expiresAt}: remove it or obtain a new Owner decision on fresh evidence`);
@@ -77,11 +82,11 @@ export function evaluateAuditGate({ auditText, registryText, lock, eslintConfigs
       }
       const severe = entries.filter(([, entry]) => isObject(entry) && ["high", "critical"].includes(entry.severity)).map(([name]) => name).sort();
       if (severe.length === 0 && counts.high === 0 && counts.critical === 0) {
-        problems.push(`npm audit: ${EXCEPTION.advisory} is no longer reported - delete the temporary exception and restore the plain audit gate`);
+        problems.push(`npm audit: ${EXCEPTION.advisory} is no longer reported (or dev dependencies were omitted, e.g. npm_config_omit=dev) - if it is gone, delete the temporary exception and restore the plain audit gate`);
       } else {
-        for (const name of severe) if (!(name in APPROVED_ENTRIES)) problems.push(`npm audit: unapproved ${audit.vulnerabilities[name].severity} advisory in ${name}`);
+        for (const name of severe) if (!Object.hasOwn(APPROVED_ENTRIES, name)) problems.push(`npm audit: unapproved ${audit.vulnerabilities[name].severity} advisory in ${name}`);
         for (const [name, approved] of Object.entries(APPROVED_ENTRIES)) {
-          if (!(name in audit.vulnerabilities)) problems.push(`npm audit: approved entry ${name} missing - the investigated state changed`);
+          if (!Object.hasOwn(audit.vulnerabilities, name)) problems.push(`npm audit: approved entry ${name} missing - the investigated state changed`);
           else if (canonical(audit.vulnerabilities[name]) !== canonical(approved)) problems.push(`npm audit: ${name} differs from the investigated state (advisory, range, path, copies or fix changed)`);
         }
         if (counts.critical !== 0) problems.push(`npm audit: ${counts.critical} critical advisories`);
@@ -107,7 +112,9 @@ export function evaluateAuditGate({ auditText, registryText, lock, eslintConfigs
     const dependents = (name) => Object.entries(packages).filter(([, meta]) => isObject(meta)
       && ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"].some((field) => isObject(meta[field]) && name in meta[field])).map(([path]) => path).sort();
     EXCEPTION.chain.forEach(([name, version], index) => {
-      const copies = Object.keys(packages).filter((path) => path === `node_modules/${name}` || path.endsWith(`/node_modules/${name}`));
+      // Copies by install path AND by real package name (an npm alias installs braces under another directory name).
+      const copies = Object.entries(packages).filter(([path, entry]) => path === `node_modules/${name}` || path.endsWith(`/node_modules/${name}`)
+        || (isObject(entry) && entry.name === name)).map(([path]) => path);
       const meta = packages[`node_modules/${name}`];
       if (copies.length !== 1 || !isObject(meta)) problems.push(`package-lock.json: ${name} has ${copies.length} installed copies (expected exactly node_modules/${name})`);
       else {
@@ -130,9 +137,13 @@ export function evaluateAuditGate({ auditText, registryText, lock, eslintConfigs
     problems.push(`eslint config: expected only eslint.config.mjs, found ${eslintConfigs.map((config) => config.path).join(", ") || "none"}`);
   }
   for (const config of eslintConfigs) {
+    if (config.path === "eslint.config.mjs" && createHash("sha256").update(config.text.replaceAll("\r\n", "\n")).digest("hex") !== ESLINT_CONFIG_SHA256) {
+      problems.push("eslint config eslint.config.mjs changed from the reviewed version (re-review whether it can make the Next plugin glob, then update the pin)");
+    }
     if (/rootDir|\bsettings\b/.test(config.text)) problems.push(`eslint config ${config.path}: \`settings\`/\`rootDir\` would make the Next plugin glob patterns through braces`);
   }
   for (const site of directImports) problems.push(`direct use of a vulnerable-chain package: ${site}`);
+  if (lintScript !== LINT_SCRIPT) problems.push(`package.json scripts.lint is ${JSON.stringify(lintScript)}, not the reviewed ${JSON.stringify(LINT_SCRIPT)} (a different config or ESLint invocation needs re-review)`);
   return problems;
 }
 
@@ -150,7 +161,7 @@ export function collectRepoGuards(root = ".") {
   walk("");
   const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   if ("eslintConfig" in manifest) eslintConfigs.push({ path: "package.json#eslintConfig", text: JSON.stringify(manifest.eslintConfig) });
-  return { eslintConfigs, directImports };
+  return { eslintConfigs, directImports, lintScript: manifest.scripts?.lint };
 }
 
 function npm(args) {
@@ -174,4 +185,9 @@ export function runAuditGate() {
   if (problems.length === 0) console.info(`Audit gate: no unapproved high/critical advisories; temporary exception ${EXCEPTION.advisory} (braces@3.0.3, dev lint tooling only) expires ${EXCEPTION.expiresAt}`);
   return problems.length === 0;
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = runAuditGate() ? 0 : 1;
+// Entry point: compare canonical real paths, so a symlinked/junctioned checkout or a differently-cased path still runs the gate
+// (a plain URL comparison silently skipped it and exited 0).
+const invokedDirectly = (() => {
+  try { return Boolean(process.argv[1]) && realpathSync.native(process.argv[1]) === realpathSync.native(fileURLToPath(import.meta.url)); } catch { return false; }
+})();
+if (invokedDirectly) process.exitCode = runAuditGate() ? 0 : 1;
