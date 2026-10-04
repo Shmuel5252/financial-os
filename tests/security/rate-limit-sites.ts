@@ -53,6 +53,7 @@ export const RESOLVE_SECTION_BODIES: Readonly<Record<string, string>> = {
 
 function checkGuards(file: string, source: ts.SourceFile, handlers: Map<string, ts.Node>, out: string[]): void {
   const imported = new Map<string, string>();
+  let resolveDeclarations = 0;
   const visit = (node: ts.Node): void => {
     if (ts.isImportSpecifier(node) && (GUARD_IMPORTS[node.name.text] || (node.propertyName && GUARD_IMPORTS[node.propertyName.text]))) {
       const from = ((node.parent.parent.parent as ts.ImportDeclaration).moduleSpecifier as ts.StringLiteral).text;
@@ -61,13 +62,19 @@ function checkGuards(file: string, source: ts.SourceFile, handlers: Map<string, 
     }
     const name = (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isClassDeclaration(node)) && node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
     if (name && GUARD_IMPORTS[name]) out.push(`${file}: declares ${name} locally (line ${line(source, node)})`);
-    if (ts.isFunctionDeclaration(node) && node.name?.text === "resolveSection" && normalized(node.body!) !== RESOLVE_SECTION_BODIES[file]) {
-      out.push(`${file}: resolveSection body changed - it must validate [section] exactly as reviewed (line ${line(source, node)})`);
+    if (ts.isFunctionDeclaration(node) && node.name?.text === "resolveSection") {
+      resolveDeclarations += 1;
+      if (normalized(node.body!) !== RESOLVE_SECTION_BODIES[file]) out.push(`${file}: resolveSection body changed - it must validate [section] exactly as reviewed (line ${line(source, node)})`);
     }
+    if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isClassDeclaration(node) || ts.isBindingElement(node)) && node.name && ts.isIdentifier(node.name) && node.name.text === "resolveSection") {
+      out.push(`${file}: resolveSection must be the pinned local function declaration (line ${line(source, node)})`);
+    }
+    if (ts.isImportSpecifier(node) && [node.name.text, node.propertyName?.text].includes("resolveSection")) out.push(`${file}: resolveSection must not be imported (line ${line(source, node)})`);
     ts.forEachChild(node, visit);
   };
   visit(source);
   for (const name of Object.keys(GUARD_IMPORTS)) if (source.text.includes(`${name}(`) && !imported.has(name)) out.push(`${file}: ${name} is not imported from ${GUARD_IMPORTS[name]}`);
+  if (source.text.includes("resolveSection(") && resolveDeclarations !== 1) out.push(`${file}: resolveSection must be exactly one pinned local function declaration (found ${resolveDeclarations})`);
   for (const [method, body] of handlers) {
     const fn = body.parent as ts.FunctionLikeDeclaration;
     for (const parameter of fn.parameters ?? []) if (parameter.initializer) out.push(`${file}: ${method} parameter ${parameter.name.getText()} has a default value (it runs before the body)`);
