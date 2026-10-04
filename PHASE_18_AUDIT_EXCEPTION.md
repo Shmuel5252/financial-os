@@ -51,7 +51,8 @@ Then restore `security:audit` to `npm audit --audit-level=high`, and update the 
 
 - **Round 1** (at `2753cc1`): no Blocker or High. The reviewer confirmed:
   - the fixtures are byte-equal to fresh `npm audit` / `npm view` output;
-  - exit codes propagate through `npm run -s`, and `npm_execpath` matches on setup-node;
+  - exit codes propagate through `npm run -s`;
+  - `npm_execpath` matches under setup-node: the reviewer inferred this from the standard toolcache layout, and the CI runs below confirmed it (the audit step printed the success line rather than failing closed);
   - registry outages, `npm_config_omit=dev` and every malformed-shape case fail;
   - expiry handles UTC offsets;
   - the pinned non-applicable `fixAvailable` value is sound, because any real upstream fix changes an exactly-compared range, the fix value or the braces version list.
@@ -67,3 +68,21 @@ Then restore `security:audit` to `npm audit --audit-level=high`, and update the 
 | Info: there is no scheduled CI run, so expiry and new advisories surface on the next push or PR | Info | Unchanged; same as the previous gate. A scheduled trigger would be a separate CI change for an Owner decision |
 
 Mutation probes AG01–AG08 (each fix reverted, plus the expiry and the `fixAvailable` pin) were all detected by `tests/unit/audit-gate.test.ts`. Every file was restored and SHA-verified.
+
+- **Round 2** (at `911f7ba`): **the exception is clean for Owner acceptance.**
+  - All five round-1 findings fail closed. M1 was re-run through a junction (relative and absolute paths), `--preserve-symlinks-main`, case-changed paths and an 8.3 short path. L1 was checked with `constructor` and `__proto__`. L2 with a shared-settings import, a computed key, a BOM, whitespace and lint-script variants. L3 with every specifier form. L4 with aliases of `braces` and the plugin.
+  - No new Blocker, High, Medium or Low.
+  - Info (documented, no change): an invocation that never sets `argv[1]` to the script, such as `node -e "import('./scripts/audit-gate.mjs')"`, exits 0 without running the gate. Neither `package.json` nor CI invokes it that way, and changing them needs repository write access.
+  - Info (documented, no change): the CLI test leaves an empty temporary parent directory per run. This is test hygiene only.
+
+## CI evidence
+
+| Commit | `verify` | CodeQL | gitleaks |
+|---|---|---|---|
+| `adc8ef6` (before the exception) | failed at "Audit production and development dependencies" (GHSA-vfj7-8cjw-p6xm); all later steps skipped | success | success |
+| `2753cc1` (exception introduced) | **all steps success**, including tests, the security-test reporter, type-check, lint, build and worker bundles | success | success |
+| `911f7ba` (exception hardened) | **all steps success** | success | success |
+
+## Owner acceptance
+
+Accepted by the Owner on 2026-10-04 together with the 18-05 repository portion (`adc8ef6`). See `PHASE_18_RATE_LIMIT_REVIEW.md`, "Owner acceptance (2026-10-04)". The exception remains temporary, with a hard expiry of 2026-11-03 00:00 UTC and no automatic renewal.

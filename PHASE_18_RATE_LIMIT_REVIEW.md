@@ -174,6 +174,25 @@ Severity is the reviewer's estimate for a single-owner G1 deployment. None was e
 | **F-18-05-12** | `calendarMonthSchema` accepts years 1000-9999. A weekly recurring record with a month ≈190+ years out makes recurrence expansion throw `RangeError` after 10,001 iterations. `PUT budgets/periods` saves the period first and then returns **500**; the budgets page renders the error view. Months just inside the cap cost ~10k iterations per record on an unthrottled page | `budget.ts:40-42`; `financial-schedule.ts:80-97`; `budget-service.ts:640-654`. Reproduced: `[rlx-budget-far-month]` (period for 2300-01 persisted, 500, one literal log line) | Medium: a persisted unusable period, 500s and CPU amplification | Bound the month to a sane range (e.g. ±100 years), or validate before persisting |
 | **F-18-05-13** | No index on `authSessions.sessionToken` (or `authAccounts` provider keys) is created by the app or the deploy-time index set. Every `auth()`, including one carrying a random cookie, may scan the session collection. Production index state is **unverified** (it needs a read-only Atlas check, which this row did not do) | `@auth/mongodb-adapter` 3.11.3 `index.js:303-307`; `operations/application-indexes.ts:30-43`; `auth/persistence.ts:3-8` | Medium if absent in Atlas: anonymous, unthrottled, O(sessions) per request | Add the adapter's unique indexes to `ensureApplicationIndexes` after an Owner-approved Atlas check |
 
+## Owner acceptance (2026-10-04)
+
+The Owner accepted the completed repository-only work for row 18-05 at commit `adc8ef6`. The temporary dependency-audit exception, which made the hosted pipeline fully green again, is accepted at commits `2753cc1` (introduced) and `911f7ba` (hardened after independent review). The details are in `PHASE_18_AUDIT_EXCEPTION.md`. The acceptance covers:
+- the rate-limit / abuse-control matrix (113 entries) and its CI enforcement;
+- the local concurrency, atomicity, distributed-instance, failure-mode, 429 and TTL evidence;
+- the provider-cost and far-month reproductions;
+- the 63-probe mutation campaign and its restoration evidence;
+- the independent review, its re-reviews and the final verification;
+- the documented findings and residual limitations.
+
+CI evidence: `911f7ba` passed every `verify` step (audit gate, tests with the security-test reporter, type-check, lint, production build, worker bundles and smoke test), plus CodeQL and gitleaks. Before the exception, `adc8ef6`'s `verify` stopped at the dependency audit (GHSA-vfj7-8cjw-p6xm) and skipped the later steps.
+
+This acceptance does **not** change any of the following:
+- Row 18-05 remains **PARTIAL**.
+- `PHASE_18_RATE_LIMIT_THRESHOLDS_DRAFT.md` is not adopted: **T1–T11 remain DRAFT / NOT ADOPTED**.
+- **F-18-05-01 through F-18-05-13 remain open findings.** This acceptance is not risk acceptance, and not authorization to remediate them.
+- The audit exception is temporary. It hard-expires on 2026-11-03 00:00 UTC, with no automatic renewal.
+- S10 remains untouched.
+
 ## 10. Residual work to close 18-05
 
 1. An Owner decision on each finding F-18-05-01..13 (remediate / accept / defer), and approval of any narrow fix as separate work.
