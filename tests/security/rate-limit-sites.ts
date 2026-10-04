@@ -43,6 +43,36 @@ export const PRE_LIMITER_STATEMENTS: ReadonlySet<string> = new Set([
   "const section = await resolveSection(context);", // zod-validates [section] before a templated scope is built
 ]);
 const normalized = (node: ts.Node) => node.getText().replace(/\s+/g, " ").trim();
+/** The allowlisted names must be the real guards: named, non-aliased imports from their modules (never redefined in the route file),
+ * and the local `resolveSection` helpers keep their exact validating bodies. */
+const GUARD_IMPORTS: Readonly<Record<string, string>> = { requireActor: "@/lib/auth/actor", assertTrustedMutationOrigin: "@/lib/http/request-guards" };
+export const RESOLVE_SECTION_BODIES: Readonly<Record<string, string>> = {
+  "src/app/api/financial-data/[section]/route.ts": "{ return parseManualSection((await context.params).section); }",
+  "src/app/api/onboarding/[section]/route.ts": "{ const { section } = await context.params; return parseOnboardingSection(section); }",
+};
+
+function checkGuards(file: string, source: ts.SourceFile, handlers: Map<string, ts.Node>, out: string[]): void {
+  const imported = new Map<string, string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportSpecifier(node) && (GUARD_IMPORTS[node.name.text] || (node.propertyName && GUARD_IMPORTS[node.propertyName.text]))) {
+      const from = ((node.parent.parent.parent as ts.ImportDeclaration).moduleSpecifier as ts.StringLiteral).text;
+      if (node.propertyName || GUARD_IMPORTS[node.name.text] !== from) out.push(`${file}: ${node.getText()} must be a non-aliased import from its guard module (line ${line(source, node)})`);
+      else imported.set(node.name.text, from);
+    }
+    const name = (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isClassDeclaration(node)) && node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
+    if (name && GUARD_IMPORTS[name]) out.push(`${file}: declares ${name} locally (line ${line(source, node)})`);
+    if (ts.isFunctionDeclaration(node) && node.name?.text === "resolveSection" && normalized(node.body!) !== RESOLVE_SECTION_BODIES[file]) {
+      out.push(`${file}: resolveSection body changed - it must validate [section] exactly as reviewed (line ${line(source, node)})`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  for (const name of Object.keys(GUARD_IMPORTS)) if (source.text.includes(`${name}(`) && !imported.has(name)) out.push(`${file}: ${name} is not imported from ${GUARD_IMPORTS[name]}`);
+  for (const [method, body] of handlers) {
+    const fn = body.parent as ts.FunctionLikeDeclaration;
+    for (const parameter of fn.parameters ?? []) if (parameter.initializer) out.push(`${file}: ${method} parameter ${parameter.name.getText()} has a default value (it runs before the body)`);
+  }
+}
 
 /** The limiter call must be an awaited expression statement directly in the handler body (or its top-level try block), keyed on the
  * `const actor = await requireActor()` binding, preceded only by PRE_LIMITER_STATEMENTS, and a top-level try must hand every error to
@@ -131,6 +161,9 @@ export function routeLimiterUses(): Scanned {
       result.routes.set(`${method} ${route}`, out);
       covered.add(body);
       if (out.limiters.length > 0) checkStructure(source, `${method} ${route}`, body, result.structure);
+    }
+    if ([...handlers.keys()].some((method) => (result.routes.get(`${method} ${posix(relative("src/app", path)).replace(/\/route\.[a-z]+$/, "")}`)?.limiters.length ?? 0) > 0)) {
+      checkGuards(file, source, handlers, result.structure);
     }
     if (file === LIMITER_MODULE) continue;
     // Limiter calls anywhere else in src/: in a non-handler, a helper of a route file, a page, a server action or a library module.

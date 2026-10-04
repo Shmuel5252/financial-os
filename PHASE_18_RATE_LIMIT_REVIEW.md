@@ -12,7 +12,7 @@ Anthropic/Financy/Resend.
 |---|---|
 | `tests/security/rate-limit-matrix.ts` | The decision for every route method, page/layout file and server action: policy, scope, caller identity, worst-case cost, rationale, cited findings |
 | `tests/security/rate-limit-sites.ts` | TypeScript-AST scan of `src/`. For each route handler it records which limiter is called and the order of origin → actor → limiter → body (arguments before the call; every helper call counted). It also reports limiter calls outside a handler body; structural weaknesses (a limiter call that is not awaited directly in the handler, is not keyed on the `await requireActor()` result, or comes after a return/throw path); every reference to the limiter module (aliases, namespace or dynamic imports, shadowing declarations); the module's export list; and every `"use server"` directive found with the AST |
-| `tests/unit/rate-limit-inventory.test.ts` (7 tests, a required module) | Fails CI on a new, stale, missing or wrongly classified entry, or on a structural bypass. Checks: exact limiter and scope per handler; the call is awaited once, directly, on the `const actor = await requireActor()` binding, and preceded **only** by an allowlist (origin check, `requireActor`, `resolveSection`), so no work or early exit runs first; the handler's `catch` is exactly `return errorResponse(error)`; every reference to a limiter-module name is the direct callee of a call (no aliases, parentheses or values); no `import()`/`require()` uses a non-literal path; the limiter is imported only as the two named wrappers and only in limited route files; the module exports are pinned; the server-action universe (AST) matches 18-14; `none` carries a concrete rationale; a heavy or provider-backed `none` cites a finding; identities agree with the 18-14 authentication classes. **Structural only: presence is not proof of effect** (see `[rlx-route-sweep]`) |
+| `tests/unit/rate-limit-inventory.test.ts` (7 tests, a required module) | Fails CI on a new, stale, missing or wrongly classified entry, or on a structural bypass. Checks: exact limiter and scope per handler; the call is awaited once, directly, on the `const actor = await requireActor()` binding, and preceded **only** by an allowlist (origin check, `requireActor`, `resolveSection`), so no work or early exit runs first. The allowlisted names must be the real guards: non-aliased imports from `@/lib/auth/actor` / `@/lib/http/request-guards`, never declared locally; the two local `resolveSection` helpers keep their exact validating bodies; handler parameters have no default values; the handler's `catch` is exactly `return errorResponse(error)`; every reference to a limiter-module name is the direct callee of a call (no aliases, parentheses or values); no `import()`/`require()` uses a non-literal path; the limiter is imported only as the two named wrappers and only in limited route files; the module exports are pinned; the server-action universe (AST) matches 18-14; `none` carries a concrete rationale; a heavy or provider-backed `none` cites a finding; identities agree with the 18-14 authentication classes. **Structural only: presence is not proof of effect** (see `[rlx-route-sweep]`) |
 | `tests/integration/rate-limiter.integration.test.ts` (`[rl-*]`, 9 tests × 2 servers) | The real `MongoRateLimiter` against the standalone server and the single-node replica set |
 | `tests/integration/rate-limit-routes.integration.test.ts` (`[rlx-*]`, 9 tests) | Real route handlers on loopback Mongo: the 429 response, accounting, anonymous callers, store failure, policy values (`[rlx-policies]`), the provider-cost and far-month reproductions, and **`[rlx-route-sweep]`**. The sweep calls every limited matrix entry (59) with a recording limiter that refuses, and asserts: 429, exactly one call, the matrix scope, the actor's own user id, and no write. For templated `[section]` routes it also asserts that an invalid section gets a non-429 response without any limiter call. **Out of reach:** a limiter built without the limiter module (for example a direct `findOneAndUpdate` on `rateLimits`) is not inventoried. Code review is the backstop for that, and for code that deliberately detects the test environment |
 | `tests/integration/phase-nine-open-banking.integration.test.ts` `[rlx-refresh-no-cooldown]` | Paid-refresh reproduction with the fixture provider |
@@ -191,7 +191,7 @@ Severity is the reviewer's estimate for a single-owner G1 deployment. None was e
 
 Each probe edited one file (or created one), ran the named tests against loopback MongoDB, then restored the exact bytes; a SHA-256 check confirmed each restore. Nothing was committed, and the working tree was identical before and after.
 
-**Result: 57/57 DETECTED.** RL01–RL31 were run before the independent review; RL32–RL48 are the round-1 survivors; RL49–RL57 are the round-2 bypasses. The whole campaign was re-run after each round of fixes. In the last run RL54 and RL56 first SURVIVED: the non-call reference check had skipped every identifier whose parent was a declaration, including the declaration's initializer. The check was narrowed to the declared name only, and both were then DETECTED. That change only adds violations, so the other 55 detections are unaffected.
+**Result: 61/61 DETECTED.** RL01–RL31 were run before the independent review; RL32–RL48 are the round-1 survivors, RL49–RL57 the round-2 bypasses and RL58–RL61 the round-3 Lows. After the round-3 fixes the whole campaign, including the two full enforced runs (RL30/RL31), was re-run in one pass on both local servers: 61/61 detected, with every file restored and SHA-verified. In the round-2 run RL54 and RL56 first SURVIVED: the non-call reference check had skipped every identifier whose parent was a declaration, including the declaration's initializer. The check was narrowed to the declared name only before that commit.
 
 | Probe | Mutation | Detected by |
 |---|---|---|
@@ -251,7 +251,11 @@ Each probe edited one file (or created one), ran the named tests against loopbac
 | RL54 | `export const limiterFor = rateLimiterForDatabase` (N7) | Inventory: non-call reference |
 | RL55 | Parenthesised callee `await (consumeMutationRateLimit)(…)` on a `none` route (N8) | Inventory: non-call reference |
 | RL56 | `const c = consumeMutationRateLimit; await c(…)` (N8b) | Inventory: non-call reference |
-| RL57 | `resolveSection` stops validating `[section]` (N9) | `[rlx-route-sweep]` (invalid section reaches the limiter) |
+| RL57 | `resolveSection` stops validating `[section]` (N9) | `[rlx-route-sweep]` (invalid section reaches the limiter); since round 3 also the inventory `resolveSection` pin |
+| RL58 | `resolveSection` does extra work before returning (P1) | Inventory: `resolveSection` body pin |
+| RL59 | Aliased `requireActor` import wrapped by a local `requireActor` that does work (P2) | Inventory: guard imports / local declaration |
+| RL60 | Origin guard replaced by a local no-op `assertTrustedMutationOrigin` (P3) | Inventory: guard imports / local declaration |
+| RL61 | Handler parameter default value runs work before the body (P4) | Inventory: no parameter defaults |
 
 **Full enforced suite:** `REQUIRE_SECURITY_TESTS=1`, with both local MongoDB servers. After the round-1 and round-2 fixes, 161 files passed and 7 skipped; 856 tests passed and 15 skipped. The marker reported `ok: true` with 70 required ids, up from 51. Before the fixes: 854 tests passed, with 69 required ids.
 
@@ -292,6 +296,21 @@ Each probe edited one file (or created one), ran the named tests against loopbac
 | R2-2: a hidden limiter in a file that already imports it (parenthesised callee, `const c = consume`) could over-limit a `none` route | Low | Fixed: every identifier reference to a limiter-module name must be the direct callee of a call. RL55 and RL56 |
 | R2-3: deliberate evasions: a `catch` turning a 429 into success, a non-literal `import()` path, a re-exported `rateLimiterForDatabase` | Low/Info | Fixed: the handler's `catch` must be exactly `return errorResponse(error)`; non-literal `import()`/`require()` is flagged; non-call references are flagged. RL52, RL53, RL54. Code that detects the test environment, and limiters that bypass the module, stay out of reach (stated in §1) |
 | Info: barrier not reset if the burst throws; §5 authentication order | Info | The barrier is reset in `finally`. §5 now says that authentication reads MongoDB before the limiter |
+
+### Round 3 (at `748660c`)
+
+**Verdict: ready for Owner acceptance.** All 12 round-2 reproductions (N1–N9 and variants) are caught by at least one CI layer. The reviewer confirmed:
+- the invalid-section check is deterministic (400 before authentication or any database call);
+- the barrier is reset in `finally`;
+- 40/40 tests on two repeat runs;
+- docs §1/§5/§6/§11/§12 accurate (with the §1 caveat below, now resolved);
+- no runtime change.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| R3-1: allowlisted names can be shadowed or wrapped inside the route file. P1: `resolveSection` does extra work. P2: an aliased `requireActor` is wrapped by a local `requireActor`. P3: a local no-op `assertTrustedMutationOrigin` | Low | Fixed: in every limited route file, `requireActor` / `assertTrustedMutationOrigin` must be non-aliased imports from `@/lib/auth/actor` / `@/lib/http/request-guards` and are never declared locally. Both `resolveSection` bodies are pinned to their reviewed normalised text. RL58–RL60 are detected. P3 also strengthens 18-14's origin check for every limited mutation |
+| R3-2: a handler parameter default value runs work before the body (P4) | Low | Fixed: limited handlers may not have parameter defaults. RL61 is detected |
+| Info: module-level side effects (once per cold start, not per request); `export { PUT as PATCH }` (fails safe through 18-14); `createRequire` or `const r = require` with a built path; code that detects the test environment | Info | No change. These need deliberate intent and stay out of reach, as stated in §1; code review is the backstop |
 
 ## Appendix A. Cost evidence for unthrottled reads (file:line, read-only study)
 
