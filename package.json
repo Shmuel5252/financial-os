@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "security:audit": "npm audit --audit-level=high",
+    "security:audit": "node scripts/audit-gate.mjs",
     "security:check": "node scripts/security-check.mjs",
     "operations:index-check": "node scripts/index-manifest.mjs --check",
     "workers:build": "node scripts/build-workers.mjs"

@@ -147,8 +147,8 @@ export const sinkMatrix: Readonly<Record<string, SinkEntry>> = {
     logSink: false,
     sites: { "scripts/atlas-alerts.mjs api:writeFileSync": 1, "scripts/atlas-alerts.mjs import:node:fs.writeFileSync": 1, "src/lib/operations/object-stores.ts api:writeFile": 1,
       "src/lib/operations/object-stores.ts import:node:fs/promises.writeFile": 1, "scripts/build-workers.mjs import:node:child_process": 1,
-      "scripts/security-check.mjs import:node:child_process": 1 },
-    destination: "not a log: atlas-alerts writes alert JSON definitions to an operator directory; object-stores' directory store writes backup objects to a local directory (tests and the operator's drill copy); build-workers runs esbuild, security-check runs git ls-files",
+      "scripts/security-check.mjs import:node:child_process": 1, "scripts/audit-gate.mjs import:node:child_process": 1 },
+    destination: "not a log: atlas-alerts writes alert JSON definitions to an operator directory; object-stores' directory store writes backup objects to a local directory (tests and the operator's drill copy); build-workers runs esbuild, audit-gate runs `npm audit --json` / `npm view braces` (registry metadata only, no repository data sent beyond the lockfile npm audit always submits), security-check runs git ls-files",
     payload: { content: ["omitted", "alert definitions carry the operator-supplied notification address; directory objects are the same encrypted/signed objects as the bucket"] },
     sentinelTests: [],
   },
@@ -172,10 +172,11 @@ export const sinkMatrix: Readonly<Record<string, SinkEntry>> = {
       "scripts/atlas-alerts.mjs console.log": 3, "scripts/build-workers.mjs console.log": 1, "scripts/index-manifest.mjs console.info": 2, "scripts/index-manifest.mjs console.log": 1,
       "scripts/ledger-bootstrap.mjs console.log": 4, "scripts/ledger-privilege-check.mjs console.log": 3, "scripts/ledger-probe.mjs console.log": 4,
       "scripts/security-check.mjs console.error": 1, "scripts/security-check.mjs console.info": 1, "scripts/snapshot-session-probe.mjs console.log": 4,
+      "scripts/audit-gate.mjs console.error": 1, "scripts/audit-gate.mjs console.info": 1,
     },
-    destination: `${OPERATOR_TERMINAL}; security-check and index-manifest also run in GitHub Actions logs`,
+    destination: `${OPERATOR_TERMINAL}; security-check, index-manifest and audit-gate also run in GitHub Actions logs`,
     payload: {
-      output: ["literal", "fixed status lines, counts, alert/collection names, digests, MongoDB codeName/error name - never a URI, password, document or user id"],
+      output: ["literal", "fixed status lines, counts, alert/collection names, digests, MongoDB codeName/error name, advisory ids and package names/versions (audit-gate) - never a URI, password, document or user id"],
     },
     sentinelTests: ["log-operator-scripts"],
   },
@@ -207,6 +208,8 @@ export const implicitSinks = [
  */
 export const operatorFiles: Readonly<Record<string, string>> = {
   "scripts/atlas-alerts.mjs": "eb0a9111661c5e8e9037cfd73cca4e4cabb2c8a43bcd2bd76d755c5746df9a51",
+  "scripts/audit-gate.d.mts": "556c8fbc5d3b97ffd9ec8880d7065b2361664bb26c7fef62bb386704e3261909",
+  "scripts/audit-gate.mjs": "7d6b3f515205652b31e410abe5932512217277b2ad67557c16735cf5e8e64526",
   "scripts/build-workers.mjs": "00c7613db51ed08d5525ea986a106fde0bb5634e46d1830b9212a8ab050184e6",
   "scripts/deploy-backup-worker.ps1": "4b43402978c348cecacfd6b10802d4280b65046999f9189e75e04e29b5fb5aca",
   "scripts/index-manifest.mjs": "f75ae14c5889103abe0f930dbf410584635db65665cc8a8324e85a1b7153272f",

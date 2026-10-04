@@ -53,7 +53,7 @@ jobs:
         run: npm ci
 
       - name: Audit production and development dependencies
-        run: npm audit --audit-level=high
+        run: npm run -s security:audit # npm audit (all deps) + the single temporary GHSA-vfj7-8cjw-p6xm exception, see PHASE_18_AUDIT_EXCEPTION.md
 
       - name: Reject private artifacts and known secret signatures
         run: npm run security:check
