@@ -232,7 +232,12 @@ export const dataClassification: Readonly<Record<string, CollectionClassificatio
       "events[].oldIdentity.identity.*": ["financial-attribute", "indirect", "hmac", "as active.identity"],
       "events[].oldIdentity.comparison.{institution,name}": ["financial-text", "indirect", "truncated", "institution is the raw provider id label, as above"],
       "events[].oldIdentity.comparison.{type,currency,maskedNumber,bankCode,branchCode}": ["financial-attribute", "indirect", "raw", "maskedNumber is truncated"],
-      "events[].newIdentity.*": ["financial-attribute", "indirect", "raw", "same shape as oldIdentity, or null; rejected candidates are kept as well"],
+      // F-18-13-01 (18-13, 2026-10-05): previously one "events[].newIdentity.*" row with transform raw; newIdentity has the same shape as
+      // oldIdentity (or null; rejected candidates are kept as well) and stores the same AUTH_SECRET-derived aliases and account digest.
+      "events[].newIdentity.{accountAlias,connectionAlias,institutionAlias}": ["pseudonymous-identifier", "pseudonymous", "hmac", "as oldIdentity; null when no candidate"],
+      "events[].newIdentity.identity.*": ["financial-attribute", "indirect", "hmac", "as active.identity"],
+      "events[].newIdentity.comparison.{institution,name}": ["financial-text", "indirect", "truncated", "as oldIdentity.comparison"],
+      "events[].newIdentity.comparison.{type,currency,maskedNumber,bankCode,branchCode}": ["financial-attribute", "indirect", "raw", "maskedNumber is truncated"],
     },
   },
   bankConnections: {
@@ -1848,8 +1853,6 @@ export const unresolvedCollectionSites: Readonly<Record<string, Readonly<{ count
 export const subtreeShapes: Readonly<Record<string, string>> = {
   "accounts auditTrail[].changedFields": "40fc35964dffa26e",
   "bankAccountReconciliations events[].matchingFields": "c7a805601eea0253",
-  "bankAccountReconciliations events[].newIdentity.comparison": "8094990a89abf2c8",
-  "bankAccountReconciliations events[].newIdentity.identity": "010dff00dbc9a439",
   "bankConnections auditTrail[].changedFields": "40fc35964dffa26e",
   "bankProviderBindings auditTrail[].changedFields": "40fc35964dffa26e",
   "bankRecordRevisions account.balances[].amount": "e4f24e7aebb710e6",

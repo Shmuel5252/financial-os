@@ -49,7 +49,7 @@ export const derivationCalls: Readonly<Record<string, DerivationCall>> = {
   "src/lib/auth/config.ts#<module> -> src/lib/auth/config.ts#createAuthConfig()": { count: 1, uses: ["auth-session"], persisted: [], note: "NextAuth(createAuthConfig) at module load" },
   [`${ID}#minimizeAccountIdentity -> ${ID}#bankAlias(ACCOUNT_IDENTITY_VERSION)`]: { count: 1, uses: ["derive"], persisted: [], note: "identity.referenceDigest (stored by the callers below)" },
   [`src/lib/adapters/financy/financy-open-banking-provider.ts#normalizeAccount -> ${ID}#minimizeAccountIdentity(input)`]: { count: 1, uses: ["derive", "persist"],
-    persisted: ["bankRecordRevisions account.identity.referenceDigest", "bankAccountReconciliations active.identity.*", "bankAccountReconciliations events[].oldIdentity.identity.*", "bankAccountReconciliations events[].newIdentity.*"],
+    persisted: ["bankRecordRevisions account.identity.referenceDigest", "bankAccountReconciliations active.identity.*", "bankAccountReconciliations events[].oldIdentity.identity.*", "bankAccountReconciliations events[].newIdentity.identity.*"],
     note: "observation identity; stored in account revisions and copied into reconciliation ledgers" },
   [`${OB}#subjectAlias -> ${OB}#alias("subject")`]: { count: 1, uses: ["derive"], persisted: [], note: "the configured Financy user's subject alias" },
   [`${OB}#claimConfiguredOpenBankingSubject -> ${OB}#subjectAlias()`]: { count: 4, uses: ["persist", "lookup"], persisted: ["bankProviderBindings subjectAlias"],
@@ -74,13 +74,13 @@ export const derivationCalls: Readonly<Record<string, DerivationCall>> = {
   [`${RR}.recordDecision -> ${ID}#bankAlias("account-review-command")`]: { count: 1, uses: ["persist"], persisted: ["bankAccountReconciliations events[].requestFingerprint"], note: "" },
   [`${RS}#reviewState -> ${ID}#bankAlias("subject")`]: { count: 1, uses: ["lookup"], persisted: [], note: "assertBinding before provider reads" },
   [`${RS}#reviewState -> ${ID}#bankAlias("connection")`]: { count: 2, uses: ["lookup", "persist"],
-    persisted: ["bankAccountReconciliations active.connectionAlias", "bankAccountReconciliations events[].oldIdentity.{accountAlias,connectionAlias,institutionAlias}", "bankAccountReconciliations events[].newIdentity.*"],
+    persisted: ["bankAccountReconciliations active.connectionAlias", "bankAccountReconciliations events[].oldIdentity.{accountAlias,connectionAlias,institutionAlias}", "bankAccountReconciliations events[].newIdentity.{accountAlias,connectionAlias,institutionAlias}"],
     note: "live connection aliases compared with stored ones; a confirmed decision stores them in the ledger" },
   [`${RS}#reviewState -> ${ID}#bankAlias("institution")`]: { count: 2, uses: ["lookup", "persist"],
-    persisted: ["bankAccountReconciliations active.institutionAlias", "bankAccountReconciliations events[].oldIdentity.{accountAlias,connectionAlias,institutionAlias}", "bankAccountReconciliations events[].newIdentity.*"],
+    persisted: ["bankAccountReconciliations active.institutionAlias", "bankAccountReconciliations events[].oldIdentity.{accountAlias,connectionAlias,institutionAlias}", "bankAccountReconciliations events[].newIdentity.{accountAlias,connectionAlias,institutionAlias}"],
     note: "legacy accounts are matched to live accounts BY institution alias" },
   [`${RS}#reviewState -> ${ID}#bankAlias("account")`]: { count: 1, uses: ["lookup", "persist", "client-roundtrip"],
-    persisted: ["bankAccountReconciliations aliases[]", "bankAccountReconciliations active.accountAlias", "bankAccountReconciliations events[].newIdentity.*"],
+    persisted: ["bankAccountReconciliations aliases[]", "bankAccountReconciliations active.accountAlias", "bankAccountReconciliations events[].newIdentity.{accountAlias,connectionAlias,institutionAlias}"],
     note: "candidate key sent to the browser = account alias; confirmed decisions attach it to the canonical account" },
   [`${RS}#reviewState -> ${ID}#bankAlias("account-review-row")`]: { count: 1, uses: ["client-roundtrip"], persisted: [], note: "row key (command.legacyKey); hashed into requestFingerprint only" },
   [`${RS}#reviewState -> ${ID}#bankAlias("account-review-view")`]: { count: 1, uses: ["client-roundtrip"], persisted: [], note: "reviewToken: binds the decision to the evidence the owner saw" },
@@ -122,8 +122,8 @@ export const keyedFields: Readonly<Record<string, Readonly<Record<string, FieldK
     "aliases[]": AS("account"), "active.accountAlias": AS("account"), "active.connectionAlias": AS("connection"), "active.institutionAlias": AS("institution"),
     "active.identity.*": AS("financy-account-identity-v1"), "events[].requestKey": AS("account-review-request"), "events[].requestFingerprint": AS("account-review-command"),
     "events[].oldIdentity.{accountAlias,connectionAlias,institutionAlias}": AS("account|connection|institution"), "events[].oldIdentity.identity.*": AS("financy-account-identity-v1"),
-    // F-18-13-01: 18-07 classifies the whole newIdentity subtree as transform "raw", but it holds the same derived aliases and digest as oldIdentity.
-    "events[].newIdentity.*": { source: "AUTH_SECRET:account|connection|institution|financy-account-identity-v1", classified18_07: "raw" },
+    // F-18-13-01 (corrected 2026-10-05): newIdentity was one 18-07 row with transform "raw"; it now mirrors oldIdentity.
+    "events[].newIdentity.{accountAlias,connectionAlias,institutionAlias}": AS("account|connection|institution"), "events[].newIdentity.identity.*": AS("financy-account-identity-v1"),
   },
   bankDevelopmentMigrations: { subjectAlias: AS("subject (copied from the binding)"), activeConnectionAlias: AS("connection (copied)"), "oldConnectionAliases[]": AS("connection (copied)") },
   deletionReceipts: {
@@ -136,7 +136,7 @@ export const keyedFields: Readonly<Record<string, Readonly<Record<string, FieldK
 
 /** Continuity weaknesses / inventory findings found by 18-13 (reported, not remediated). */
 export const keyContinuityFindings: Readonly<Record<string, string>> = {
-  "F-18-13-01": "LOW (documentation): 18-07 classifies bankAccountReconciliations events[].newIdentity.* as transform raw although it stores AUTH_SECRET-derived aliases and the account digest",
+  "F-18-13-01": "LOW (documentation), CORRECTED: 18-07 classified bankAccountReconciliations events[].newIdentity.* as transform raw although it stores AUTH_SECRET-derived aliases and the account digest; now mirrors oldIdentity (hmac)",
   "F-18-13-02": "HIGH (ownership boundary): after an AUTH_SECRET change a different signed-in account can claim the live provider subject and import its bank data into its own account ([kc-takeover-f-18-13-02])",
   "F-18-13-03": "HIGH, exposure LOW/LATENT (erasure / anti-resurrection boundary): after an AUTH_SECRET change an erased provider subject can be claimed again and its bank data re-imported; the guard checks only the current alias ([kc-resurrection-f-18-13-03])",
 };
