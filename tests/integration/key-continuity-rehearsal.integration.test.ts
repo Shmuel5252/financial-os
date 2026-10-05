@@ -85,36 +85,36 @@ async function derivedPaths(db: Db, values: ReadonlySet<string>): Promise<string
 /** Does a concrete stored path fall under an inventory keyed-field pattern whose key source is AUTH_SECRET? */
 function inventoried(found: string): boolean {
   const [collection, path] = found.split(" ") as [string, string];
-  return Object.entries(keyedFields[collection] ?? {}).some(([pattern, key]) => key.source.startsWith("AUTH_SECRET:")
+  return Object.entries(keyedFields[collection] ?? {}).some(([pattern, key]) => /^(sha256 over )?AUTH_SECRET:/.test(key.source)
     && new RegExp(`^${pattern.replace(/[.[\]]/g, (c) => `\\${c}`).replace(/\\\.\*$/, "\\..+").replace(/\{([^}]+)\}/g, (_m, list: string) => `(${list.split(",").join("|")})`)}$`).test(path));
 }
 const syncValues = (secret: string) => new Set([identityAlias(k(secret), "subject", SUBJECT), identityAlias(k(secret), "connection", CONNECTION),
   identityAlias(k(secret), "institution", BANK), identityAlias(k(secret), "account", ACCOUNT), identityAlias(k(secret), "transaction", STABLE)]);
 
 /** A fresh synthetic database with the owner signed up under V1 (not yet claimed). */
-async function scenario(databaseUri: string) {
+async function scenario(databaseUri: string, ownerId?: string) {
   vi.stubEnv("AUTH_SECRET", V1);
   const client = await new MongoClient(databaseUri, { promoteLongs: false }).connect();
   const db = client.db(`keycontinuity_${randomUUID().replaceAll("-", "")}`);
   const repository: OpenBankingRepository = openBankingRepositoryForDatabase(db, () => NOW);
   const profiles: UserProfileRepository = profileRepositoryForDatabase(db);
   await Promise.all([repository.ensureIndexes(), profiles.ensureIndexes()]);
-  const actor = async (): Promise<Actor> => {
-    const created: Actor = { kind: "user", userId: new ObjectId().toHexString() };
+  const actor = async (id: string = new ObjectId().toHexString()): Promise<Actor> => {
+    const created: Actor = { kind: "user", userId: id };
     await saveProfile(created, profileOf, { repository: profiles });
     return created;
   };
   const deps = () => ({ now: () => NOW, profileRepository: profiles, provider: new FixtureProvider(), repository, erasedProviderSubject: async () => false });
-  const owner = await actor();
+  const owner = await actor(ownerId);
   return { db, actor, owner, deps, dispose: async () => { vi.stubEnv("AUTH_SECRET", V1); await db.dropDatabase(); await client.close(); } };
 }
 const env = () => { vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("OPEN_FINANCE_USER_ID", SUBJECT); vi.stubEnv("OPEN_FINANCE_CLIENT_ID", "rehearsal-client"); vi.stubEnv("OPEN_FINANCE_CLIENT_SECRET", "rehearsal-client-secret"); };
 
 /** Legacy account on a terminated connection, a new connection with one candidate, and one confirmed same-account decision under V1. */
-async function reconciliation(db: Db) {
+async function reconciliation(db: Db, fixed?: Readonly<{ actorId: string; idempotencyKey: string }>) {
   const banking = openBankingRepositoryForDatabase(db); const repository = new AccountReconciliationRepository(db);
   await banking.ensureIndexes(); await repository.ensureIndexes();
-  const actor: Actor = { kind: "user", userId: new ObjectId().toHexString() };
+  const actor: Actor = { kind: "user", userId: fixed?.actorId ?? new ObjectId().toHexString() };
   const base = { expiryDate: "2026-12-01", lastFetchedAt: "2026-09-06T08:00:00.000Z", lastFetchedDataDate: "2026-09-06", mode: "PSD2", providerExternalId: BANK, subjectExternalId: SUBJECT };
   const newAccount: OpenBankingAccountObservation = { accountType: "CHECKING", balances: [{ amount: money(1_00n, "ILS"), creditLimitIncluded: false, type: "closingBooked", referenceDate: "2026-09-06" }],
     connectionExternalId: "new-conn", currency: "ILS", displayName: "Synthetic", externalId: "new-acct", isDuplicate: false, providerExternalId: BANK, identity: identityOf() };
@@ -132,7 +132,7 @@ async function reconciliation(db: Db) {
   const deps = { repository, bankingRepository: banking, provider: provider as unknown as OpenBankingProvider };
   const view: AccountReconciliationView = await loadAccountReconciliation(actor, deps);
   const row = view.rows[0]!;
-  const command: AccountReconciliationCommand = { legacyKey: row.key, candidateKey: row.candidates[0]!.key, reviewToken: row.reviewToken, decision: "same_account", confirmation: true, idempotencyKey: randomUUID() };
+  const command: AccountReconciliationCommand = { legacyKey: row.key, candidateKey: row.candidates[0]!.key, reviewToken: row.reviewToken, decision: "same_account", confirmation: true, idempotencyKey: fixed?.idempotencyKey ?? randomUUID() };
   await decideAccountReconciliation(actor, command, deps);
   const kv = k(V1);
   const values = new Set([identityAlias(kv, "subject", SUBJECT), identityAlias(kv, "connection", "old-conn"), identityAlias(kv, "connection", "new-conn"),
@@ -259,11 +259,12 @@ async function reconciliation(db: Db) {
       await synchronizeOpenBanking(s.owner, randomUUID(), s.deps());
       const before = await fingerprint(s.db);
       const same = await keyContinuityPreflight(s.db, { subjectExternalId: SUBJECT, candidates: [{ label: "deployed", material: V1 }] });
-      expect(same).toEqual({ bindings: 1, matchingBindings: { deployed: 1 }, orphanedBindings: 0,
-        documentsAtRisk: { bankConnections: 0, bankRecordRevisions: 0, bankAccountReconciliations: 0, accounts: 0, transactions: 0 } });
+      expect(same).toEqual({ bindings: 1, matchingBindings: { deployed: 1 }, orphanedBindings: 0, documentsAtRisk: { bankConnections: 0, bankRecordRevisions: 0, bankAccountReconciliations: 0, bankDevelopmentMigrations: 0, accounts: 0, transactions: 0 },
+        aliasBearingWithoutBinding: { bankConnections: 0, bankRecordRevisions: 0, bankAccountReconciliations: 0, bankDevelopmentMigrations: 0, accounts: 0, transactions: 0 }, deletionReceiptsWithProviderSubjects: 0 });
       const changed = await keyContinuityPreflight(s.db, { subjectExternalId: SUBJECT, candidates: [{ label: "deployed", material: V2 }] });
       expect(changed).toEqual({ bindings: 1, matchingBindings: { deployed: 0 }, orphanedBindings: 1,
-        documentsAtRisk: { bankConnections: 1, bankRecordRevisions: 3, bankAccountReconciliations: 0, accounts: 1, transactions: 1 } });
+        documentsAtRisk: { bankConnections: 1, bankRecordRevisions: 3, bankAccountReconciliations: 0, bankDevelopmentMigrations: 0, accounts: 1, transactions: 1 },
+        aliasBearingWithoutBinding: { bankConnections: 0, bankRecordRevisions: 0, bankAccountReconciliations: 0, bankDevelopmentMigrations: 0, accounts: 0, transactions: 0 }, deletionReceiptsWithProviderSubjects: 0 });
       const both = await keyContinuityPreflight(s.db, { subjectExternalId: SUBJECT, candidates: [{ label: "old", material: V1 }, { label: "new", material: V2 }] });
       expect(both).toMatchObject({ matchingBindings: { old: 1, new: 0 }, orphanedBindings: 0 });
       expect(await fingerprint(s.db), "read-only").toBe(before);
@@ -272,6 +273,55 @@ async function reconciliation(db: Db) {
       expect(text).not.toMatch(/[0-9a-f]{24,}/);
     } finally { await s.dispose(); }
   }, 60_000);
+
+  it("[kc-secret-differential] the same flows under V1, V1 again and V2 change exactly the inventoried stored leaves (aliases AND second-order digests)", async () => {
+    // Leaf multisets per `<collection> <path>`; values that differ between the two V1 runs (random ids, clock) are noise and excluded.
+    const leaves = async (db: Db) => {
+      const out = new Map<string, string[]>();
+      for (const { name } of await db.listCollections().toArray()) for (const document of await db.collection(name).find({}).toArray()) {
+        const walk = (value: unknown, path: string): void => {
+          if (Array.isArray(value)) value.forEach((item) => walk(item, `${path}[]`));
+          else if (value !== null && typeof value === "object" && !(value instanceof ObjectId) && !(value instanceof Date) && !(value instanceof BSON.Long)) {
+            for (const [key, child] of Object.entries(value)) walk(child, path ? `${path}.${key}` : key);
+          } else { const key = `${name} ${path}`; out.set(key, [...(out.get(key) ?? []), BSON.EJSON.stringify({ v: value })].sort()); }
+        };
+        walk(document, "");
+      }
+      return out;
+    };
+    const ownerId = new ObjectId().toHexString(); const keys = { sync: randomUUID(), refresh: randomUUID(), disconnect: randomUUID() };
+    const bank = async (secret: string) => {
+      const s = await scenario(uri!, ownerId);
+      try {
+        vi.stubEnv("AUTH_SECRET", secret);
+        await claimConfiguredOpenBankingSubject(s.owner, s.deps());
+        expect((await synchronizeOpenBanking(s.owner, keys.sync, s.deps())).status).toBe("completed");
+        await requestOpenBankingRefresh(s.owner, keys.refresh, s.deps());
+        const connection = (await s.db.collection("bankConnections").findOne({}))!;
+        await disconnectOpenBankingConnection(s.owner, connection._id.toHexString(), connection.version as number, keys.disconnect, s.deps());
+        return await leaves(s.db);
+      } finally { await s.dispose(); }
+    };
+    const reconcile = async (secret: string) => {
+      const client = await new MongoClient(uri!, { promoteLongs: false }).connect();
+      const db = client.db(`keycontinuity_diff_${randomUUID().replaceAll("-", "")}`);
+      try { vi.stubEnv("AUTH_SECRET", secret); await reconciliation(db, { actorId: ownerId, idempotencyKey: keys.sync }); return await leaves(db); }
+      finally { vi.stubEnv("AUTH_SECRET", V1); await db.dropDatabase(); await client.close(); }
+    };
+    const dependent = (a: Map<string, string[]>, control: Map<string, string[]>, b: Map<string, string[]>) => [...new Set([...a.keys(), ...b.keys()])]
+      .filter((key) => JSON.stringify(a.get(key)) === JSON.stringify(control.get(key)) && JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key))).sort();
+    const bankPaths = dependent(await bank(V1), await bank(V1), await bank(V2));
+    expect(bankPaths).toEqual([
+      "accounts source.connectionAlias", "accounts source.observationFingerprint", "accounts source.recordAlias",
+      "bankConnections connectionAlias", "bankConnections fingerprint", "bankConnections providerAlias", "bankProviderBindings subjectAlias",
+      "bankRecordRevisions account.identity.referenceDigest", "bankRecordRevisions accountAlias", "bankRecordRevisions connection.providerAlias",
+      "bankRecordRevisions connectionAlias", "bankRecordRevisions fingerprint", "bankRecordRevisions recordAlias",
+      "transactions source.connectionAlias", "transactions source.observationFingerprint", "transactions source.recordAlias",
+    ]);
+    const reconciliationPaths = dependent(await reconcile(V1), await reconcile(V1), await reconcile(V2));
+    for (const path of [...bankPaths, ...reconciliationPaths]) expect(inventoried(path), `${path}: secret-dependent stored leaf not in the inventory`).toBe(true);
+    expect(reconciliationPaths.filter((path) => path.startsWith("bankAccountReconciliations")).length).toBeGreaterThan(0);
+  }, 120_000);
 
   it("[kc-reconciliation] a v1 reconciliation decision replays idempotently; under v2 the review is refused before any provider read and writes nothing", async () => {
     const client = await new MongoClient(uri!, { promoteLongs: false }).connect();
@@ -329,6 +379,10 @@ async function reconciliation(db: Db) {
       expect(await counts(db)).toEqual(NONE);
       const v1Subject = identityAlias(k(V1), "subject", SUBJECT);
       expect(await store.isProviderSubjectErased(v1Subject)).toBe(true);
+      // The read-only preflight is CLEAN here (no binding, nothing orphaned) - "0 orphaned" does not clear F-18-13-03; it only reports
+      // that a receipt carries provider-subject markers it cannot evaluate.
+      expect(await keyContinuityPreflight(db, { subjectExternalId: SUBJECT, candidates: [{ label: "deployed", material: V2 }] })).toEqual({ bindings: 0,
+        matchingBindings: { deployed: 0 }, orphanedBindings: 0, documentsAtRisk: { bankConnections: 0, bankRecordRevisions: 0, bankAccountReconciliations: 0, bankDevelopmentMigrations: 0, accounts: 0, transactions: 0 }, aliasBearingWithoutBinding: { bankConnections: 0, bankRecordRevisions: 0, bankAccountReconciliations: 0, bankDevelopmentMigrations: 0, accounts: 0, transactions: 0 }, deletionReceiptsWithProviderSubjects: 1 });
       // 3. v1: a newcomer is refused by the anti-resurrection guard, with no write.
       const newcomerV1 = await person();
       const beforeV1 = await fingerprint(db);

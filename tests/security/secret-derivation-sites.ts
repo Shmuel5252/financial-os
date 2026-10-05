@@ -8,8 +8,14 @@ import { files } from "./live-test-ids";
 // the legacy NEXTAUTH_SECRET) is read in src/ and workers/, and every value derived from it TRANSITIVELY. A function is a "deriver"
 // when it reads the secret, or when one of its return values contains a call to a deriver (resolved through imports and aliases by
 // the type checker), so wrappers such as subjectAlias() and minimizeAccountIdentity() are found without being named here. Every call
-// of a deriver is reported with its first argument (the alias kind). Every createHmac call is reported with its key expression, so a
-// new keyed derivation cannot appear unclassified. scripts/ (plain .mjs, not in the program) is checked textually for the names.
+// of a deriver is reported with its first argument (the alias kind). Every key-using crypto call (createHmac, createCipheriv/
+// createDecipheriv, hkdf, pbkdf2, scrypt, WebCrypto importKey - resolved through the checker, so a renamed import is still found) is
+// reported with its key expression, and every non-literal or bulk access to an environment object (computed key, Object.keys/
+// values/entries, JSON.stringify, spread) is reported, so a new keyed derivation or an indirect secret read cannot appear
+// unclassified. scripts/ (plain .mjs, not in the program) is checked textually for the names.
+// LIMIT (stated, not hidden): value flow is followed into return values only; a derived value passed as an ARGUMENT (e.g. hashed by
+// fingerprint(), or handed to a repository) is not followed. Stored second-order values are therefore covered by the inventory's
+// keyedFields mapping and by the rehearsal's V1/V1/V2 differential scan ([kc-secret-differential]), not by this scanner.
 const SECRET = /^(AUTH_SECRET(_\d+)?|NEXTAUTH_SECRET)$/;
 const posix = (path: string) => path.split(sep).join("/");
 const rel = (file: string) => posix(relative(process.cwd(), file));
@@ -21,8 +27,10 @@ export type SecretDerivationSites = Readonly<{
   derivers: Set<string>;
   /** `<file>#<caller> -> <file>#<deriver>(<first argument text>)` -> count */
   calls: Map<string, number>;
-  /** `<file>#<function> createHmac(<key expression text>)` -> count, for every keyed HMAC in src/ and workers/ */
+  /** `<file>#<function> <api>(<key expression text>)` -> count, for every key-using crypto call in src/ and workers/ */
   hmacKeys: Map<string, number>;
+  /** `<file>#<function> <kind>` -> count, for every non-literal or bulk access to an environment object */
+  dynamicEnv: Map<string, number>;
   /** scripts/ files mentioning a secret name -> count */
   scripts: Map<string, number>;
 }>;
@@ -102,7 +110,8 @@ export function secretDerivationSites(): SecretDerivationSites {
   // conditional/template/await/spread/property expressions, through local variables (initialisers, assignments, `.push/.unshift/
   // .add/.set` into a local collection, property writes), or through callbacks of array methods (`xs.map(x => derived)`). A derived
   // value used only as an argument of another call (e.g. a lookup key) or compared (=== / !== / < ...) does not make the result
-  // derived; such uses are still reported in `calls`. Over-approximation is deliberate: a false deriver is classified, never missed.
+  // derived; such uses are still reported in `calls`. Within return-value flow this over-approximates (a false deriver is classified);
+  // flows through call arguments are NOT followed (see the LIMIT note at the top).
   const derivers = new Set(readers);
   const tainted = new Set<ts.Symbol>();
   const COMPARISON = new Set([ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken,
@@ -170,15 +179,37 @@ export function secretDerivationSites(): SecretDerivationSites {
     }
   }
 
-  const calls = new Map<string, number>(); const hmacKeys = new Map<string, number>();
+  const calls = new Map<string, number>(); const hmacKeys = new Map<string, number>(); const dynamicEnv = new Map<string, number>();
+  /** Key-using crypto APIs (node:crypto / WebCrypto) -> index of the key argument. */
+  const KEY_APIS: Readonly<Record<string, number>> = { createHmac: 1, createCipheriv: 1, createDecipheriv: 1, hkdf: 1, hkdfSync: 1, pbkdf2: 0, pbkdf2Sync: 0, scrypt: 0, scryptSync: 0, importKey: 1 };
+  const platformApi = (call: ts.CallExpression): string | undefined => {
+    const target = ts.isPropertyAccessExpression(call.expression) ? call.expression.name : call.expression;
+    let symbol = checker.getSymbolAtLocation(target);
+    if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
+    const declaration = symbol?.declarations?.[0];
+    if (!symbol || !declaration || !Object.hasOwn(KEY_APIS, symbol.getName())) return undefined;
+    return /[\\/](@types[\\/]node|typescript[\\/]lib)[\\/]/.test(declaration.getSourceFile().fileName) ? symbol.getName() : undefined;
+  };
+  /** An environment object: process.env (ProcessEnv), any object type declaring AUTH_SECRET (e.g. getServerEnv()), or an env-named
+   * string-indexed record of string | undefined (helpers that take `env = process.env`). */
+  const envLike = (node: ts.Node): boolean => {
+    const type = checker.getTypeAtLocation(node);
+    if (checker.typeToString(type) === "ProcessEnv" || type.getProperty("AUTH_SECRET") !== undefined) return true;
+    const index = checker.getIndexInfoOfType(type, ts.IndexKind.String);
+    return index !== undefined && /env/i.test(node.getText()) && checker.typeToString(index.type).replace(/\s/g, "") === "string|undefined";
+  };
   for (const source of sources) {
     const visit = (node: ts.Node): void => {
       if (ts.isCallExpression(node)) {
         const id = calleeId(checker, node);
         if (id && derivers.has(id)) bump(calls, `${site(node)} -> ${id}(${node.arguments[0]?.getText().replace(/\s+/g, " ") ?? ""})`);
-        const callee = ts.isPropertyAccessExpression(node.expression) ? node.expression.name.text : ts.isIdentifier(node.expression) ? node.expression.text : "";
-        if (callee === "createHmac") bump(hmacKeys, `${site(node)} createHmac(${node.arguments[1]?.getText().replace(/\s+/g, " ") ?? ""})`);
+        const api = platformApi(node);
+        if (api) bump(hmacKeys, `${site(node)} ${api}(${node.arguments[KEY_APIS[api]!]?.getText().replace(/\s+/g, " ") ?? ""})`);
+        const callee = node.expression.getText();
+        if (/^(Object\.(keys|values|entries)|JSON\.stringify|structuredClone)$/.test(callee) && node.arguments[0] && envLike(node.arguments[0])) bump(dynamicEnv, `${site(node)} ${callee}`);
       }
+      if (ts.isElementAccessExpression(node) && !ts.isStringLiteralLike(node.argumentExpression) && envLike(node.expression)) bump(dynamicEnv, `${site(node)} computed-key`);
+      if ((ts.isSpreadAssignment(node) || ts.isSpreadElement(node)) && envLike(node.expression)) bump(dynamicEnv, `${site(node)} spread`);
       ts.forEachChild(node, visit);
     };
     visit(source);
@@ -189,5 +220,5 @@ export function secretDerivationSites(): SecretDerivationSites {
     const count = (readFileSync(path, "utf8").match(/\b(AUTH_SECRET(_\d+)?|NEXTAUTH_SECRET)\b/g) ?? []).length;
     if (count > 0) scripts.set(posix(path), count);
   }
-  return { mentions, derivers, calls, hmacKeys, scripts };
+  return { mentions, derivers, calls, hmacKeys, dynamicEnv, scripts };
 }

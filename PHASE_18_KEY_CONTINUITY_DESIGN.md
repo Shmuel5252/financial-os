@@ -60,13 +60,20 @@ When wiring is approved (planned): real-Mongo sync/reconnect/reconciliation/reti
 
 | Artifact | Role |
 |---|---|
-| `tests/security/secret-derivation-sites.ts` | A transitive scanner built on the TypeScript checker, resolving imports and aliases. It covers every mention of `AUTH_SECRET`, `AUTH_SECRET_<n>` and `NEXTAUTH_SECRET` (read, destructure, key, literal). It treats as derived every function a derived value flows into the return value of, through returns, locals, `push`/`set`, array-method callbacks and object shorthand; comparisons and plain call arguments stop the flow. It also records every call of a derived function with its kind argument, and every keyed `createHmac` with its key. `scripts/` is checked by text |
+| `tests/security/secret-derivation-sites.ts` | Transitive scanner on the TypeScript checker (imports and aliases resolved). It reports: every mention of `AUTH_SECRET` / `AUTH_SECRET_<n>` / `NEXTAUTH_SECRET`; derived functions (value flow into **return values** through returns, locals, `push`/`set`, array-method callbacks, object shorthand); every call of a derived function with its kind; every **key-using crypto call** (`createHmac`, `createCipheriv`/`createDecipheriv`, `hkdf`, `pbkdf2`, `scrypt`, WebCrypto `importKey`), resolved through the checker so a renamed import is still found; and every **non-literal or bulk environment access** (computed key, `Object.keys`/`values`/`entries`, `JSON.stringify`, spread). `scripts/` is checked by text. **Limit:** flows through call *arguments* (e.g. hashing in `fingerprint()`, values handed to repositories) are not followed; stored second-order values are covered by the inventory mapping and by `[kc-secret-differential]` |
 | `tests/security/secret-derivation-inventory.ts` | The classified inventory: mentions, derivers, the 28 derivation call sites with uses and stored fields, the key source of every keyed HMAC, the key source of every stored keyed field, and the findings register |
-| `tests/unit/secret-derivation-inventory.test.ts` (6 tests, required module) | Fails CI when any of these is new or changed and unclassified: a read, a deriver, a call site, a keyed HMAC, or an 18-07 `hmac` field. It also fails when a stored use has no field, or when a derived stored field has no producing call |
-| `tests/integration/key-continuity-rehearsal.integration.test.ts` (`[kc-*]`, 7 tests, required ids) | Deterministic local rehearsal: unchanged secret, changed secret, both open findings, the preflight, reconciliation, and an **empirical scan of every stored document** for derived values, which must all fall inside the inventory |
+| `tests/unit/secret-derivation-inventory.test.ts` (7 tests, required module) | Fails CI when any of these is new or changed and unclassified: a mention, a dynamic environment access, a deriver, a call site, a key-using crypto call, an 18-07 `hmac` field, or an 18-07 `sha256` field described as hashing aliases or provider observations. It also fails when a stored use has no field, or a derived stored field has no producing call |
+| `tests/integration/key-continuity-rehearsal.integration.test.ts` (`[kc-*]`, 8 tests, required ids) | Deterministic local rehearsal: unchanged and changed secret, both open findings, the preflight, reconciliation, an exact-value scan for derived aliases, and **`[kc-secret-differential]`**. The differential runs the same flows (claim, sync, a successful refresh, disconnect; a reconciliation decision) under V1, V1 again and V2 with fixed identities. Every stored leaf that changes with the secret, and not between the two V1 runs, must be inventoried: aliases, embedded copies and second-order digests alike |
 | `tests/security/key-continuity-preflight.ts` | Test-only, read-only restore-preflight prototype. Not wired into runtime, scripts or restore tooling |
 
 ## 2. Derivation graph
+
+**Coverage boundary (stated):** the rehearsal exercises claim, sync, a successful refresh, disconnect and a `same_account` reconciliation decision. Write paths it does not exercise are covered by the inventory mapping and the 18-07 type-driven classification only:
+- `not_same` / `cannot_determine` decisions;
+- the development-baseline migration (`bankDevelopmentMigrations`);
+- `events[].oldIdentity.identity.*` (the legacy fixture has no identity);
+- bank-control recovery;
+- the manual sections whose provider fields are permitted by the type but not written.
 
 Use categories:
 - **auth-session:** Auth.js use only; nothing persisted derives from it.
@@ -97,10 +104,11 @@ Indirect: deletion ledger providerSubjects[] = HMAC(ledger key, subject alias) .
 ```
 
 The scanner pins:
-- 5 mentions;
+- 5 mention sites (6 occurrences);
 - 8 derivers (2 roots, 2 wrappers, the provider adapter, the auth config, and the two reconciliation functions that return derived keys and tokens);
-- 28 call sites;
-- 7 keyed HMACs. Only `bankAlias` and `alias` use `AUTH_SECRET`. The deletion ledger, restore state, recovery manifest and ledger mirror use their own keys, and the identity-keyring prototype is not wired.
+- 28 distinct call-site keys (41 calls);
+- 8 dynamic environment-access sites (none reads `AUTH_SECRET`: readiness, kill switches, ledger configuration, worker helpers);
+- 9 key-using crypto calls (7 HMACs and the recovery-envelope cipher pair). Only `bankAlias` and `alias` use `AUTH_SECRET`. The deletion ledger, restore state, recovery manifest and ledger mirror use their own keys, and the identity-keyring prototype is not wired.
 
 ## 3. Persisted continuity map: every stored field that needs the same `AUTH_SECRET`
 
@@ -115,13 +123,27 @@ The scanner pins:
 | 8 other manual sections | `source.connectionAlias` / `source.recordAlias`: permitted by the type, not written today |
 | `deletionReceipts` | `current/accepted.providerSubjects[]`: ledger-key HMAC **of** the subject alias (indirect) |
 
+**Second-order values:** unkeyed sha256 digests whose input includes derived aliases. They change when the secret changes (review M1; proven by `[kc-secret-differential]`):
+
+| Collection | Field | Input |
+|---|---|---|
+| `bankConnections` | `fingerprint` | connection and institution aliases |
+| `bankRecordRevisions` | `fingerprint` | the normalised observation, including its aliases and the identity digest |
+| `accounts`, `transactions` | `source.observationFingerprint` | the observation, including its aliases |
+| 8 other manual sections | `source.observationFingerprint` | permitted by the type, not written today |
+| `bankDevelopmentMigrations` | `_id` | sha256 of policy, owner and the active connection alias |
+
+These need no key to stay stable while the secret is unchanged, so a re-sync adds no revision. A future re-keying (rank 3, Step 2) must recompute or tolerate them. Otherwise the first sync after re-keying appends a revision for every record and rewrites every canonical `observationFingerprint`.
+
 **Fields that do not depend on `AUTH_SECRET` (safe to change for authentication alone):**
 - Auth.js sessions: random `sessionToken`. In-flight sign-ins fail once.
 - Deletion-ledger subject identities and receipt signatures (ledger key).
 - Recovery manifests (recovery key) and ledger mirror seals (mirror key).
-- Every unkeyed `sha256` digest in the app (idempotency hashes, report aliases, search keys, invitation tokens).
+- Unkeyed `sha256` digests whose inputs contain **no** derived alias: idempotency hashes, report source aliases, search keys, invitation tokens, and household share provenance in `financialReports.authorizationFingerprint`. The second-order digests above are the exception.
 
-**Empirical confirmation:** the rehearsal scans every document of every collection for the known derived values.
+**Empirical confirmation:**
+- The exact-value scan checks every document of every collection for the known derived values.
+- The differential finds exactly 16 secret-dependent stored leaves in the bank flows: the 12 alias paths plus the 4 second-order fingerprints. Refresh and disconnect add none.
 - Sync stores derived values at exactly 12 paths.
 - Reconciliation stores them at exactly 23 paths, including 4 under `events[].newIdentity`.
 - Every path found is inside the inventory.
@@ -143,7 +165,7 @@ The scanner pins:
 | ID | Severity | Boundary | Finding |
 |---|---|---|---|
 | F-18-13-01 | Low (documentation) | Classification | 18-07 classified `bankAccountReconciliations.events[].newIdentity.*` as transform `raw` although it stores derived aliases and the account digest. Corrected in the classification in a separately identifiable commit; no runtime effect |
-| **F-18-13-02** | **High** | Ownership of a **live** provider subject | After an `AUTH_SECRET` change, another signed-in account can claim the subject and import its bank data into its own account. The owner is locked out (cannot re-claim). Preconditions: a secret change (rotation, or a restore/redeploy with a different value) and a second signed-in account. Sign-in is open (F-18-05-06), and the first claimant wins (F-18-14-02) |
+| **F-18-13-02** | **High** | Ownership of a **live** provider subject | After an `AUTH_SECRET` change, another signed-in account can claim the subject and import its bank data into its own account. The owner is locked out (cannot re-claim). Preconditions: a secret change (rotation, or a restore/redeploy with a different value) and a second signed-in account. Sign-in is open (F-18-05-06), and the first claimant wins (F-18-14-02). **No rotation is needed** if two deployments with different `AUTH_SECRET` values share one database, for example a preview or local development pointed at the staging database. The runbook forbids ledgered previews, and deployed configuration was **not** checked here: **Owner confirmation requested**. After a takeover, restoring the original secret does not remove the second account's imported copy |
 | **F-18-13-03** | **High**, exposure **Low/Latent** | Erasure / anti-resurrection guarantee | After an `AUTH_SECRET` change, an **erased** subject can be claimed again and its bank data re-imported. The guard checks only the marker of the *current* alias. Today no runtime path in `src/`, `workers/` or `scripts/` invokes full-account erasure or creates receipts, so present exposure is latent |
 
 **Scope of the coupling:** only the Financy/open-banking aliases, plus the deletion-ledger provider-subject markers derived from them. No other persisted, recovery or erasure identity boundary depends on `AUTH_SECRET`, per the transitive inventory and the empirical scan.
@@ -160,19 +182,19 @@ The scanner pins:
 - **Where it comes from:** all of this comes from secret management, never from a package. This row does not change backup contents, restore tooling or secret storage.
 - **Preflight prototype:**
   - It can verify the subject alias, the only alias recomputable offline: it counts matching and orphaned bindings per candidate secret, plus the at-risk documents of orphaned owners. Raw provider identifiers are deliberately not stored, so connection, account and transaction aliases cannot be re-verified offline.
-  - It does not evaluate ledger markers (that needs the ledger key). It is a design input for a future restore gate, and is **not** wired into `inspectBankControlRecovery` or the drill.
+  - It does not evaluate ledger markers (that needs the ledger key). **`orphanedBindings: 0` does not clear F-18-13-03.** In exactly the F-18-13-03 state (erased subject, no binding) the preflight looks clean. It now also reports `aliasBearingWithoutBinding` and `deletionReceiptsWithProviderSubjects`; `[kc-resurrection-f-18-13-03]` pins this. It is a design input for a future restore gate, and is **not** wired into `inspectBankControlRecovery` or the drill.
 
 ## 7. Remediation alternatives (DESIGN INPUT ONLY, none adopted, ranked)
 
 | Rank | Kind | Alternative | Notes |
 |---|---|---|---|
-| 1 | **Immediate containment / fail-closed** | Operational rule, recorded for decision: never change `AUTH_SECRET` (and never restore under a different one) while any binding or deletion receipt exists. Run the preflight before any restore release. Keep full-account erasure disabled until F-18-13-03 is resolved | No code. Contains both findings only as long as the rule holds. A readiness/startup check refusing claims while a stored binding fails to resolve would be a runtime change |
+| 1 | **Immediate containment / fail-closed** | Operational rule, recorded for decision: never change `AUTH_SECRET` (and never restore under a different one) while any binding or deletion receipt exists. Run the preflight before any restore release (a clean result does not clear F-18-13-03; see §6). Keep full-account erasure disabled until F-18-13-03 is resolved | No code. Contains both findings only as long as the rule holds. A readiness/startup check refusing claims while a stored binding fails to resolve would be a runtime change |
 | 2 | **Narrow fix** | (a) Refuse a claim when the provider already has any binding that does not resolve under the current alias. (b) Make the erased-subject guard refuse when the ledger holds provider-subject markers that cannot be checked under the current alias (temporary marker fallback) | **Depends on an assumption:** at most one legitimate provider subject per deployment (one `OPEN_FINANCE_USER_ID`). This is **not** an accepted invariant. If several legitimate subjects or providers were supported later, (a) would block every legitimate new subject after the first, and (b) would block claims whenever any erased subject exists. Both would then need the subject-identity check from rank 3 |
 | 3 | **Durable architecture** | The versioned identity keyring (Step 1: decouple aliases from `AUTH_SECRET` with v1 = the same bytes; Step 2: dual-read), with the binding check and erased-subject check run against **all readable key versions**, plus alias-version fields | Keeps identity stable across authentication-secret rotation and makes both guards version-aware. Works with several subjects. Needs Owner approval, a runtime/schema change (additive alias-version field), backup-adapter and index review, and a secret-store action. Post-S10 only |
 
 ## 8. Mutation evidence (temporary probes, all restored and SHA-verified)
 
-**Result:** 18 of 18 effective probes DETECTED, plus 1 equivalent mutant (KC13).
+**Result:** 24 of 24 effective probes DETECTED. KC13 is undetected by sequential tests because it is a race; it is documented, not counted.
 
 | Probe | Mutation | Detected by |
 |---|---|---|
@@ -188,13 +210,19 @@ The scanner pins:
 | KC10 | 18-07 relabels an AUTH_SECRET-derived field `raw` | Inventory: key sources |
 | KC11 | Inventory drops a keyed field | Inventory: calls, key sources |
 | KC12 | Alias derivation prefix changed | `[kc-unchanged-secret]` |
-| KC13 | Pre-claim erased-subject check removed | **Equivalent mutant:** the post-claim re-check still refuses and releases the binding with no residual write (defence in depth) |
+| KC13 | Pre-claim erased-subject check removed | **Undetected by sequential tests (a race), not equivalent:** without the pre-check, an erased subject's binding is inserted and only released after the post-claim check, and a concurrent sync inside that window could import data. The pre-check is a real protection that sequential tests cannot observe (review L2) |
 | KC13b | Erased-subject guard disabled entirely | `[kc-resurrection-f-18-13-03]` |
 | KC14 | A claim restriction (stand-in for a future fix) | `[kc-changed-secret]` and the takeover pin: any remediation must update the pinned evidence deliberately |
 | KC15 | Preflight leaks an alias | `[kc-preflight]` |
 | KC16 | Preflight writes | `[kc-preflight]` (read-only fingerprint) |
 | KC17 | A new stored field holding a derived alias | `[kc-unchanged-secret]` / `[kc-derived-paths]` |
 | KC18 | `it.skip` on `[kc-takeover-f-18-13-02]`, full enforced run | Required-tests reporter |
+| KC19 | Review probe D: a new stored sha256 of the subject alias on the binding | `[kc-secret-differential]` |
+| KC20 | Review probe E: subject alias copied into the refresh audit trail | `[kc-secret-differential]` (refresh is exercised) |
+| KC21 | Review probe A: computed env key `["AUTH","SECRET"].join("_")` | Inventory: dynamic env access |
+| KC22 | Review probe B: `JSON.stringify(getServerEnv())` | Inventory: dynamic env access |
+| KC23 | Review probe C: renamed `createHmac` import with a dynamic key | Inventory: key-using crypto calls (resolved through the checker) |
+| KC24 | Review probe F: WebCrypto `importKey` with ``process.env[`AUTH_${"SECRET"}`]`` | Inventory: dynamic env access and key-using crypto calls |
 
 ## 9. Exact residual work to close 18-13
 
@@ -206,3 +234,27 @@ The scanner pins:
 3. A restore gate using the preflight (counts only), wired into the recovery tooling after approval.
 4. A deployed confirmation that the staging bindings resolve under the current secret: read-only, counts only, Owner-approved.
 5. Owner acceptance of this repository portion.
+
+## 10. Independent adversarial review
+
+### Round 1 (at `07e1bd1`)
+
+**Verdict:** no Blocker or High, and no new security invariant violation. No evidence that deployed exposure is greater than established, though one precondition for F-18-13-02 needs Owner confirmation (see §5). The reviewer confirmed:
+- the Auth.js analysis against `@auth/core` and `next-auth`;
+- the counts;
+- the erasure evidence (real ledger and erasure, v1 still marked);
+- rehearsal determinism;
+- the preflight is read-only and counts-only;
+- the F-18-13-01 correction is classification-only;
+- the constraints (tests and docs only).
+
+| Finding | Severity | Resolution (tests/docs only) |
+|---|---|---|
+| M1: second-order sha256 digests over derived aliases (4 stored fields plus `bankDevelopmentMigrations._id`) were missing from the inventory, and §3 claimed unkeyed digests never depend on the secret | Medium | Inventoried as `sha256 over AUTH_SECRET:<kinds>`. Every 18-07 `sha256` field described as hashing aliases or provider observations now must declare a key source. §3 corrected. `[kc-secret-differential]` added. KC19 is detected |
+| M2: write paths covered only by the manual mapping | Medium/Low | Coverage boundary stated in §1. Refresh and disconnect added to the differential. KC20 is detected |
+| L1: scanner evasions (computed env key, `JSON.stringify(env)`, renamed `createHmac`, WebCrypto) | Low | Dynamic and bulk environment access is pinned; key-using crypto calls are resolved through the checker (HMAC, cipher, KDF, `importKey`). KC21–KC24 are detected |
+| L2: KC13 is a race, not an equivalent mutant | Low | §8 reworded |
+| L3: preflight blind spots (clean result in the F-18-13-03 state; `bankDevelopmentMigrations` missing) | Low | `aliasBearingWithoutBinding`, `deletionReceiptsWithProviderSubjects` and `bankDevelopmentMigrations` added. The caveat is in §6 and §7, and is pinned in `[kc-resurrection-f-18-13-03]` |
+| Info: shared-database precondition for F-18-13-02; takeover copy persists after restoring the secret; counting wording | Info | §5 and §2 |
+| Info: an Auth.js email/magic-link provider would persist `verificationTokens.token = sha256(token + secret)` inside `node_modules`, invisible to the scanner | Info | Prevented today only by the providers-length pin in `tests/unit/mongodb-auth-lifecycle.test.ts`. Adding such a provider must re-open this inventory |
+| Info: `events[].*Identity.comparison.maskedNumber` (raw) is inconsistent with `active.comparison.maskedNumber` (truncated) in 18-07 | Info | Pre-existing; not changed here |

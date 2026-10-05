@@ -29,7 +29,7 @@ export const REQUIRED_SECURITY_MODULES: Readonly<Record<string, number>> = {
   "tests/unit/phase-eighteen-inventory.test.ts": 2,
   "tests/unit/rate-limit-inventory.test.ts": 7,
   "tests/unit/audit-gate.test.ts": 10,
-  "tests/unit/secret-derivation-inventory.test.ts": 6,
+  "tests/unit/secret-derivation-inventory.test.ts": 7,
 };
 
 export default class RequiredSecurityTestsReporter implements Reporter {

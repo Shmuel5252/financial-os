@@ -26,6 +26,18 @@ export const secretMentions: Readonly<Record<string, { count: number; role: stri
 };
 export const secretScripts: Readonly<Record<string, number>> = {};
 
+/** Every non-literal or bulk access to an environment object (a way to read AUTH_SECRET without naming it). None reads AUTH_SECRET today. */
+export const dynamicEnvAccess: Readonly<Record<string, { count: number; role: string }>> = {
+  "src/lib/config/server-env.ts#missingKeys computed-key": { count: 1, role: "readiness: presence check of required variable names" },
+  "src/lib/operations/controls.ts#capabilityEnabled computed-key": { count: 1, role: "OPERATIONS_DISABLE_* kill switches (fixed names)" },
+  "src/lib/operations/deletion-ledger-runtime.ts#present computed-key": { count: 2, role: "deletion-ledger configuration presence (ledger variable names)" },
+  "src/lib/operations/deletion-ledger-runtime.ts#deletionLedgerConfig Object.keys": { count: 1, role: "ledger keyring variables by LEDGER key prefix" },
+  "src/lib/operations/deletion-ledger-runtime.ts#deletionLedgerConfig computed-key": { count: 4, role: "ledger URI, database, role ARN, region" },
+  "workers/backup/index.ts#env computed-key": { count: 1, role: "worker required-variable helper (backup configuration names)" },
+  "workers/ledger-rebuild/cli.ts#required computed-key": { count: 1, role: "worker required-variable helper (ledger names)" },
+  "workers/restore-drill/cli.ts#required computed-key": { count: 1, role: "worker required-variable helper (drill names)" },
+};
+
 /** Functions whose result is derived from the secret (transitively; found by the scanner, explained here). */
 export const derivers: Readonly<Record<string, string>> = {
   "src/lib/auth/config.ts#createAuthConfig": "auth-session: the Auth.js configuration carrying the secret; no persisted derivation",
@@ -49,20 +61,21 @@ export const derivationCalls: Readonly<Record<string, DerivationCall>> = {
   "src/lib/auth/config.ts#<module> -> src/lib/auth/config.ts#createAuthConfig()": { count: 1, uses: ["auth-session"], persisted: [], note: "NextAuth(createAuthConfig) at module load" },
   [`${ID}#minimizeAccountIdentity -> ${ID}#bankAlias(ACCOUNT_IDENTITY_VERSION)`]: { count: 1, uses: ["derive"], persisted: [], note: "identity.referenceDigest (stored by the callers below)" },
   [`src/lib/adapters/financy/financy-open-banking-provider.ts#normalizeAccount -> ${ID}#minimizeAccountIdentity(input)`]: { count: 1, uses: ["derive", "persist"],
-    persisted: ["bankRecordRevisions account.identity.referenceDigest", "bankAccountReconciliations active.identity.*", "bankAccountReconciliations events[].oldIdentity.identity.*", "bankAccountReconciliations events[].newIdentity.identity.*"],
+    persisted: ["bankRecordRevisions account.identity.referenceDigest", "bankRecordRevisions fingerprint", "accounts source.observationFingerprint", "bankAccountReconciliations active.identity.*", "bankAccountReconciliations events[].oldIdentity.identity.*", "bankAccountReconciliations events[].newIdentity.identity.*"],
     note: "observation identity; stored in account revisions and copied into reconciliation ledgers" },
   [`${OB}#subjectAlias -> ${OB}#alias("subject")`]: { count: 1, uses: ["derive"], persisted: [], note: "the configured Financy user's subject alias" },
   [`${OB}#claimConfiguredOpenBankingSubject -> ${OB}#subjectAlias()`]: { count: 4, uses: ["persist", "lookup"], persisted: ["bankProviderBindings subjectAlias"],
     note: "erased-subject guard before and after the claim (deletion-ledger providerSubjects markers are computed from THIS value), claimBinding, compensating releaseBinding" },
   [`${OB}#synchronizeOpenBanking -> ${OB}#subjectAlias()`]: { count: 1, uses: ["lookup"], persisted: [], note: "assertBinding before any provider call" },
   [`${OB}#synchronizeOpenBanking -> ${OB}#alias("connection")`]: { count: 7, uses: ["persist", "lookup"],
-    persisted: ["bankConnections connectionAlias", "bankRecordRevisions connectionAlias", "bankRecordRevisions recordAlias", ...SOURCE("connectionAlias")],
+    persisted: ["bankConnections connectionAlias", "bankRecordRevisions connectionAlias", "bankRecordRevisions recordAlias", ...SOURCE("connectionAlias"),
+      "bankConnections fingerprint", "bankRecordRevisions fingerprint", ...SOURCE("observationFingerprint")],
     note: "retired-alias filters (lookup), connection-continuity guard (lookup), observeConnection/observeAccount/observeTransaction (persist)" },
-  [`${OB}#synchronizeOpenBanking -> ${OB}#alias("institution")`]: { count: 2, uses: ["persist", "lookup"], persisted: ["bankConnections providerAlias", "bankRecordRevisions connection.providerAlias"],
+  [`${OB}#synchronizeOpenBanking -> ${OB}#alias("institution")`]: { count: 2, uses: ["persist", "lookup"], persisted: ["bankConnections providerAlias", "bankRecordRevisions connection.providerAlias", "bankConnections fingerprint", "bankRecordRevisions fingerprint"],
     note: "continuity guard matches previous connections BY institution alias (lookup); observeConnection (persist)" },
-  [`${OB}#synchronizeOpenBanking -> ${OB}#alias("account")`]: { count: 2, uses: ["persist"], persisted: ["bankRecordRevisions recordAlias", "bankRecordRevisions accountAlias", "accounts source.recordAlias"],
+  [`${OB}#synchronizeOpenBanking -> ${OB}#alias("account")`]: { count: 2, uses: ["persist"], persisted: ["bankRecordRevisions recordAlias", "bankRecordRevisions accountAlias", "accounts source.recordAlias", "bankRecordRevisions fingerprint", ...SOURCE("observationFingerprint")],
     note: "account observation and canonical account; transactions reference their account alias" },
-  [`${OB}#synchronizeOpenBanking -> ${OB}#alias("transaction")`]: { count: 1, uses: ["persist"], persisted: ["bankRecordRevisions recordAlias", "transactions source.recordAlias"],
+  [`${OB}#synchronizeOpenBanking -> ${OB}#alias("transaction")`]: { count: 1, uses: ["persist"], persisted: ["bankRecordRevisions recordAlias", "transactions source.recordAlias", "bankRecordRevisions fingerprint", "transactions source.observationFingerprint"],
     note: "HMAC of the provider stableExternalKey" },
   [`${OB}#loadOpenBankingCenter -> ${OB}#subjectAlias()`]: { count: 1, uses: ["lookup"], persisted: [], note: "bindingClaimed = binding with this alias exists" },
   [`${OB}#requestOpenBankingRefresh -> ${OB}#subjectAlias()`]: { count: 1, uses: ["lookup"], persisted: [], note: "assertBinding" },
@@ -90,13 +103,15 @@ export const derivationCalls: Readonly<Record<string, DerivationCall>> = {
   [`src/app/api/open-banking/reconciliation/route.ts#GET -> ${RS}#loadAccountReconciliation(actor)`]: { count: 1, uses: ["client-roundtrip"], persisted: [], note: "JSON response" },
 };
 
-/** Every keyed HMAC in src/ and workers/ and its key. Only the two Financy alias roots use AUTH_SECRET. */
+/** Every key-using crypto call in src/ and workers/ (HMAC, cipher, KDF, WebCrypto importKey) and its key. Only the two Financy alias roots use AUTH_SECRET. */
 export const hmacKeySources: Readonly<Record<string, string>> = {
   "src/lib/open-banking/account-identity.ts#bankAlias createHmac(secret)": "AUTH_SECRET",
   "src/lib/open-banking/open-banking-service.ts#alias createHmac(key)": "AUTH_SECRET",
   "src/lib/open-banking/identity-keyring.ts#identityAlias createHmac(key.material)": "identity keyring prototype (not wired; v1 material = AUTH_SECRET bytes by design)",
   "src/lib/operations/deletion-ledger.ts#mac createHmac(key.material)": "deletion-ledger key (LEDGER keyring, separate from AUTH_SECRET)",
   "src/lib/operations/backup-package.ts#signature createHmac(key.material)": "recovery manifest key (separate)",
+  "src/lib/operations/recovery-envelope.ts#encryptRecoveryBson createCipheriv(key.material)": "recovery envelope key (separate)",
+  "src/lib/operations/recovery-envelope.ts#decryptRecoveryBson createDecipheriv(key.material)": "recovery envelope key (separate)",
   "src/lib/operations/ledger-mirror.ts#seal createHmac(key.material)": "ledger mirror key (separate)",
   "src/lib/operations/restore-orchestration.ts#stateMac createHmac(key.material)": "deletion-ledger key (restore release state)",
 };
@@ -107,17 +122,21 @@ export const hmacKeySources: Readonly<Record<string, string>> = {
  */
 export type FieldKey = Readonly<{ source: string; classified18_07?: string }>;
 const AS = (kinds: string): FieldKey => ({ source: `AUTH_SECRET:${kinds}` });
+/** Second-order: an UNKEYED sha256 whose input includes AUTH_SECRET-derived aliases - changes when the secret changes (18-07 transform sha256). */
+const SHA = (kinds: string): FieldKey => ({ source: `sha256 over AUTH_SECRET:${kinds}` });
 const LEDGER: FieldKey = { source: "ledger-key" };
 const NOT_WRITTEN = "(permitted by the type; only manual rows are written to this section today)";
-const MANUAL = { "source.connectionAlias": AS(`connection ${NOT_WRITTEN}`), "source.recordAlias": AS(`account|transaction ${NOT_WRITTEN}`) };
+const MANUAL = { "source.connectionAlias": AS(`connection ${NOT_WRITTEN}`), "source.recordAlias": AS(`account|transaction ${NOT_WRITTEN}`),
+  "source.observationFingerprint": SHA(`connection|account|transaction ${NOT_WRITTEN}`) };
 export const keyedFields: Readonly<Record<string, Readonly<Record<string, FieldKey>>>> = {
-  accounts: { "source.connectionAlias": AS("connection"), "source.recordAlias": AS("account") },
-  transactions: { "source.connectionAlias": AS("connection"), "source.recordAlias": AS("transaction") },
+  accounts: { "source.connectionAlias": AS("connection"), "source.recordAlias": AS("account"), "source.observationFingerprint": SHA("connection|account|financy-account-identity-v1") },
+  transactions: { "source.connectionAlias": AS("connection"), "source.recordAlias": AS("transaction"), "source.observationFingerprint": SHA("connection|account|transaction") },
   creditCards: MANUAL, goals: MANUAL, incomeSources: MANUAL, loans: MANUAL, recurringExpenses: MANUAL, recurringTransactions: MANUAL, safetyMargins: MANUAL, savings: MANUAL,
   bankProviderBindings: { subjectAlias: AS("subject") },
-  bankConnections: { connectionAlias: AS("connection"), providerAlias: AS("institution") },
+  bankConnections: { connectionAlias: AS("connection"), providerAlias: AS("institution"), fingerprint: SHA("connection|institution") },
   bankRecordRevisions: { recordAlias: AS("account|connection|transaction"), accountAlias: AS("account"), connectionAlias: AS("connection"),
-    "connection.providerAlias": AS("institution"), "account.identity.referenceDigest": AS("financy-account-identity-v1") },
+    "connection.providerAlias": AS("institution"), "account.identity.referenceDigest": AS("financy-account-identity-v1"),
+    fingerprint: SHA("account|connection|institution|transaction|financy-account-identity-v1") },
   bankAccountReconciliations: {
     "aliases[]": AS("account"), "active.accountAlias": AS("account"), "active.connectionAlias": AS("connection"), "active.institutionAlias": AS("institution"),
     "active.identity.*": AS("financy-account-identity-v1"), "events[].requestKey": AS("account-review-request"), "events[].requestFingerprint": AS("account-review-command"),
@@ -125,7 +144,10 @@ export const keyedFields: Readonly<Record<string, Readonly<Record<string, FieldK
     // F-18-13-01 (corrected 2026-10-05): newIdentity was one 18-07 row with transform "raw"; it now mirrors oldIdentity.
     "events[].newIdentity.{accountAlias,connectionAlias,institutionAlias}": AS("account|connection|institution"), "events[].newIdentity.identity.*": AS("financy-account-identity-v1"),
   },
-  bankDevelopmentMigrations: { subjectAlias: AS("subject (copied from the binding)"), activeConnectionAlias: AS("connection (copied)"), "oldConnectionAliases[]": AS("connection (copied)") },
+  bankDevelopmentMigrations: { subjectAlias: AS("subject (copied from the binding)"), activeConnectionAlias: AS("connection (copied)"), "oldConnectionAliases[]": AS("connection (copied)"),
+    _id: SHA("connection (copied: sha256 of policy, owner and the active connection alias)") },
+  // Not AUTH_SECRET: hashes household share provenance aliases, which are themselves unkeyed sha256 of share ids.
+  financialReports: { authorizationFingerprint: { source: "sha256 over household share provenance aliases (not AUTH_SECRET)" } },
   deletionReceipts: {
     _id: LEDGER, accepted: LEDGER, current: LEDGER, "current.subject": LEDGER, "accepted.subject": LEDGER, "current.signature": LEDGER, "accepted.signature": LEDGER,
     // Indirect: HMAC(ledger key, AUTH_SECRET-derived subject alias). Matching requires BOTH keys to be unchanged.
