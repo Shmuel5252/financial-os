@@ -56,6 +56,19 @@ When wiring is approved (planned): real-Mongo sync/reconnect/reconciliation/reti
 - The versioned-key design above and every remediation alternative below remain **DESIGN / NOT ADOPTED**.
 - F-18-13-02 and F-18-13-03 are open; they are not risk-accepted and not remediated.
 
+## Owner acceptance (2026-10-05)
+
+The Owner accepted the 18-13 repository-only portion ending at commit `73fdb47` as complete, including the final CI and independent-review evidence.
+
+- Row 18-13 remains **PARTIAL**: F-18-13-02 and F-18-13-03 are open High findings, and future remediation and restore work is not authorized.
+- **F-18-13-01** is corrected and **closed**.
+- **F-18-13-02** remains **HIGH / OPEN / UNREMEDIATED**.
+- **F-18-13-03** remains **HIGH / OPEN**, with latent current exposure.
+- No remediation is authorized. The versioned identity keyring and every remediation alternative remain **design input only**.
+- The repository-only changes did not alter runtime, schema, indexes, adapters, recovery tooling, dependencies, infrastructure or staging. No real secret was read, rotated or compared.
+- **Shared-database precondition:** "two deployments with different `AUTH_SECRET` values sharing one database" is an **unverified operational precondition**, not evidence of additional current exposure. The existing runbook prohibition remains the governing constraint. Deployed configuration is not inspected unless separately authorized.
+- **Next Owner decision point** for remediation: after the S10 closing check on 2026-10-07. F-18-13-02, F-18-13-03 and F-18-05-01 are preserved for post-S10 prioritization.
+
 ## 1. Sources of truth and CI enforcement
 
 | Artifact | Role |
