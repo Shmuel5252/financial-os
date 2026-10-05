@@ -81,7 +81,7 @@ When wiring is approved (planned): real-Mongo sync/reconnect/reconciliation/reti
 - computed destructuring;
 - `Object.assign` / `Object.getOwnPropertyDescriptor` of the env.
 
-Untyped module loading (`require`, `createRequire`, non-literal `import()`) **is** pinned, because a crypto API obtained that way escapes the typed key-API check. One reviewed site exists: the backup worker's AWS SDK loader. The second-order sha256 rule depends on 18-07 notes describing the input. A differently worded note is caught only by the differential, on exercised paths.
+Aliased loaders (`module.require(...)`, `const r = require; r(...)`) are not reported either. Untyped module loading by its own name (`require`, `createRequire`, non-literal `import()`) **is** pinned, because a crypto API obtained that way escapes the typed key-API check. One reviewed site exists: the backup worker's AWS SDK loader. The second-order sha256 rule depends on 18-07 notes describing the input. A differently worded note is caught only by the differential, on exercised paths.
 
 Use categories:
 - **auth-session:** Auth.js use only; nothing persisted derives from it.

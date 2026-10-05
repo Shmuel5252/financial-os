@@ -15,7 +15,8 @@ import { files } from "./live-test-ids";
 // unclassified. scripts/ (plain .mjs, not in the program) is checked textually for the names.
 // LIMIT (stated, not hidden): environment access through aliases the type heuristic cannot see (e.g. `const cfg: Record<string,
 // string | undefined> = process.env; cfg[name]`, Reflect.get, computed destructuring, Object.assign/getOwnPropertyDescriptor of the env)
-// is NOT reported; such code needs deliberate obfuscation and is left to code review (review round 2, L-B).
+// is NOT reported, nor is an aliased loader (`module.require(...)`, `const r = require; r(...)`); such code needs deliberate obfuscation
+// and is left to code review (review round 2, L-B; final confirmation).
 // LIMIT (stated, not hidden): value flow is followed into return values only; a derived value passed as an ARGUMENT (e.g. hashed by
 // fingerprint(), or handed to a repository) is not followed. Stored second-order values are therefore covered by the inventory's
 // keyedFields mapping and by the rehearsal's V1/V1/V2 differential scan ([kc-secret-differential]), not by this scanner.
