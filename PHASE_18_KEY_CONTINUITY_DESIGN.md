@@ -170,7 +170,33 @@ The scanner pins:
 | 2 | **Narrow fix** | (a) Refuse a claim when the provider already has any binding that does not resolve under the current alias. (b) Make the erased-subject guard refuse when the ledger holds provider-subject markers that cannot be checked under the current alias (temporary marker fallback) | **Depends on an assumption:** at most one legitimate provider subject per deployment (one `OPEN_FINANCE_USER_ID`). This is **not** an accepted invariant. If several legitimate subjects or providers were supported later, (a) would block every legitimate new subject after the first, and (b) would block claims whenever any erased subject exists. Both would then need the subject-identity check from rank 3 |
 | 3 | **Durable architecture** | The versioned identity keyring (Step 1: decouple aliases from `AUTH_SECRET` with v1 = the same bytes; Step 2: dual-read), with the binding check and erased-subject check run against **all readable key versions**, plus alias-version fields | Keeps identity stable across authentication-secret rotation and makes both guards version-aware. Works with several subjects. Needs Owner approval, a runtime/schema change (additive alias-version field), backup-adapter and index review, and a secret-store action. Post-S10 only |
 
-## 8. Exact residual work to close 18-13
+## 8. Mutation evidence (temporary probes, all restored and SHA-verified)
+
+**Result:** 18 of 18 effective probes DETECTED, plus 1 equivalent mutant (KC13).
+
+| Probe | Mutation | Detected by |
+|---|---|---|
+| KC01 | New direct `process.env.AUTH_SECRET` read in another module | Inventory: mentions, derivers |
+| KC02 | New exported wrapper returning `alias(...)` | Inventory: derivers, calls |
+| KC03 | New derivation call in `loadOpenBankingCenter` | Inventory: calls |
+| KC04 | New `createHmac` keyed by `getServerEnv().AUTH_SECRET` in another module | Inventory: mentions, derivers, HMAC keys |
+| KC05 | Destructured `const { AUTH_SECRET } = getServerEnv()` | Inventory: mentions, derivers |
+| KC06 | Aliased import of `bankAlias` wrapped in another module | Inventory: derivers, calls |
+| KC07 | Derived value returned through a local array `push` | Inventory: derivers, calls |
+| KC08 | Legacy `NEXTAUTH_SECRET` read | Inventory: mentions |
+| KC09 | A script mentions `AUTH_SECRET` | Inventory: scripts |
+| KC10 | 18-07 relabels an AUTH_SECRET-derived field `raw` | Inventory: key sources |
+| KC11 | Inventory drops a keyed field | Inventory: calls, key sources |
+| KC12 | Alias derivation prefix changed | `[kc-unchanged-secret]` |
+| KC13 | Pre-claim erased-subject check removed | **Equivalent mutant:** the post-claim re-check still refuses and releases the binding with no residual write (defence in depth) |
+| KC13b | Erased-subject guard disabled entirely | `[kc-resurrection-f-18-13-03]` |
+| KC14 | A claim restriction (stand-in for a future fix) | `[kc-changed-secret]` and the takeover pin: any remediation must update the pinned evidence deliberately |
+| KC15 | Preflight leaks an alias | `[kc-preflight]` |
+| KC16 | Preflight writes | `[kc-preflight]` (read-only fingerprint) |
+| KC17 | A new stored field holding a derived alias | `[kc-unchanged-secret]` / `[kc-derived-paths]` |
+| KC18 | `it.skip` on `[kc-takeover-f-18-13-02]`, full enforced run | Required-tests reporter |
+
+## 9. Exact residual work to close 18-13
 
 1. Owner decisions on F-18-13-02 and F-18-13-03: containment rule, narrow fix and/or keyring, with priority alongside F-18-05-01 right after S10 closes.
 2. If the keyring is adopted:
