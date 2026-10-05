@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dataClassification } from "../security/data-classification";
-import { derivationCalls, derivers, dynamicEnvAccess, hmacKeySources, keyContinuityFindings, keyedFields, secretMentions, secretScripts } from "../security/secret-derivation-inventory";
+import { derivationCalls, derivers, dynamicEnvAccess, hmacKeySources, keyContinuityFindings, keyedFields, secretMentions, secretScripts, untypedLoads } from "../security/secret-derivation-inventory";
 import { secretDerivationSites } from "../security/secret-derivation-sites";
 
 // Phase 18 row 18-13 (repository portion): every use of AUTH_SECRET and every value derived from it - transitively - is classified,
@@ -16,6 +16,8 @@ describe("AUTH_SECRET derivation inventory (18-13)", () => {
 
   it("pins every non-literal or bulk access to an environment object (a way to read the secret without naming it)", () => {
     expect(Object.fromEntries(scan.dynamicEnv)).toEqual(Object.fromEntries(Object.entries(dynamicEnvAccess).map(([key, entry]) => [key, entry.count])));
+    expect(Object.fromEntries(scan.untypedLoads), "untyped module loads (require/createRequire/non-literal import) escape the typed key-API check")
+      .toEqual(Object.fromEntries(Object.entries(untypedLoads).map(([key, entry]) => [key, entry.count])));
   }, 120_000);
 
   it("pins the transitive set of derivers (functions whose result is derived from the secret)", () => {

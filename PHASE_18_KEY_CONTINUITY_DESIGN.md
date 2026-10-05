@@ -75,6 +75,14 @@ When wiring is approved (planned): real-Mongo sync/reconnect/reconciliation/reti
 - bank-control recovery;
 - the manual sections whose provider fields are permitted by the type but not written.
 
+**Scanner limits (stated, review round 2 L-B):** environment access through aliases the type heuristic cannot see is not reported. Each form needs deliberate obfuscation and is left to code review:
+- a `Record<string, string | undefined>` variable assigned from `process.env`;
+- `Reflect.get`;
+- computed destructuring;
+- `Object.assign` / `Object.getOwnPropertyDescriptor` of the env.
+
+Untyped module loading (`require`, `createRequire`, non-literal `import()`) **is** pinned, because a crypto API obtained that way escapes the typed key-API check. One reviewed site exists: the backup worker's AWS SDK loader. The second-order sha256 rule depends on 18-07 notes describing the input. A differently worded note is caught only by the differential, on exercised paths.
+
 Use categories:
 - **auth-session:** Auth.js use only; nothing persisted derives from it.
 - **persist:** the derived value is stored; continuity is required.
@@ -133,7 +141,7 @@ The scanner pins:
 | 8 other manual sections | `source.observationFingerprint` | permitted by the type, not written today |
 | `bankDevelopmentMigrations` | `_id` | sha256 of policy, owner and the active connection alias |
 
-These need no key to stay stable while the secret is unchanged, so a re-sync adds no revision. A future re-keying (rank 3, Step 2) must recompute or tolerate them. Otherwise the first sync after re-keying appends a revision for every record and rewrites every canonical `observationFingerprint`.
+`[kc-secret-differential]` proves the four bank fingerprints. `bankDevelopmentMigrations._id` and the manual sections are covered by the mapping only. These need no key to stay stable while the secret is unchanged, so a re-sync adds no revision. A future re-keying (rank 3, Step 2) must recompute or tolerate them. Otherwise the first sync after re-keying appends a revision for every record and rewrites every canonical `observationFingerprint`.
 
 **Fields that do not depend on `AUTH_SECRET` (safe to change for authentication alone):**
 - Auth.js sessions: random `sessionToken`. In-flight sign-ins fail once.
@@ -156,8 +164,9 @@ These need no key to stay stable while the secret is unchanged, so a re-sync add
 | `[kc-changed-secret]` | Under a different secret the owner's binding no longer resolves (`bindingClaimed:false`). Sync, refresh and disconnect fail with `UnauthorizedError`. The owner cannot re-claim (`ConflictError`: one binding per owner). Nothing is written (whole-database fingerprint unchanged). The center still lists only the owner's **own** stored records. Restoring the original secret restores resolution: the data was orphaned, not lost |
 | `[kc-reconciliation]` | A v1 decision replays idempotently with no write. Under v2 the review is refused before any provider read, with no write |
 | `[kc-takeover-f-18-13-02]` | Under v1 a second account is refused. Under v2, before its claim, the second account sees nothing and writes nothing. Its claim then **succeeds**: the provider subject is bound to the second account under the v2 alias. Its sync imports the subject's bank data into its own account (1 connection, 3 revisions, 1 account, 1 transaction). The owner's v1 copy remains, orphaned |
-| `[kc-resurrection-f-18-13-03]` | Local replica set; the real `DeletionReceiptStore` and the real `runLedgerFirstErasure`. Steps: v1 claim and sync, then erasure (receipt `locally-erased`, every bank count 0). A v1 newcomer is **refused** with "erased account" and nothing is written. Under v2 another newcomer **claims** and its sync **re-imports** the erased subject's data. The ledger still marks the v1-derived subject and not the v2 one. The ledger's own subject identity (ledger key) is unaffected |
-| `[kc-preflight]` | Read-only (fingerprint unchanged), counts only (no identifier, alias, secret or 24+ hex string). The deployed secret = v1 gives 0 orphaned bindings. The deployed secret = v2 gives 1 orphaned binding with at-risk documents: 1 connection, 3 revisions, 1 account, 1 transaction |
+| `[kc-resurrection-f-18-13-03]` | Local replica set; the real `DeletionReceiptStore` and the real `runLedgerFirstErasure`. Steps: v1 claim and sync, then erasure (receipt `locally-erased`, every bank count 0). A v1 newcomer is **refused** with "erased account" and nothing is written. Under v2 another newcomer **claims** and its sync **re-imports** the erased subject's data. The ledger still marks the v1-derived subject and not the v2 one. The ledger's own subject identity (ledger key) is unaffected. The read-only preflight is **clean** after the erasure (0 bindings, 0 orphaned) and reports only 1 receipt with provider-subject markers, which pins that a clean preflight does not clear this finding |
+| `[kc-secret-differential]` | The same flows run under V1, V1 again and V2 with fixed identities: claim, sync, a successful refresh and disconnect, plus a reconciliation decision. Exactly 16 bank and 22 reconciliation stored paths depend on the secret, all inventoried. The noise sets (paths varying between the two V1 runs) are **pinned**. `events[].requestFingerprint` is a known mixed field (secret-dependent **and** random, through the canonical account id), covered by the inventory mapping |
+| `[kc-preflight]` | Read-only (fingerprint unchanged), counts only (no identifier, alias, secret or 24+ hex string). The deployed secret = v1 gives 0 orphaned bindings. The deployed secret = v2 gives 1 orphaned binding with at-risk documents: 1 connection, 3 revisions, 1 account, 1 transaction. The report also includes `bankDevelopmentMigrations`, `aliasBearingWithoutBinding` and `deletionReceiptsWithProviderSubjects` |
 | `[kc-derived-paths]` | The pinned stored-path sets, all inside the inventory |
 
 ## 5. Findings
@@ -194,7 +203,7 @@ These need no key to stay stable while the secret is unchanged, so a re-sync add
 
 ## 8. Mutation evidence (temporary probes, all restored and SHA-verified)
 
-**Result:** 24 of 24 effective probes DETECTED. KC13 is undetected by sequential tests because it is a race; it is documented, not counted.
+**Result:** 26 of 26 effective probes DETECTED. KC13 is undetected by sequential tests because it is a race; it is documented, not counted.
 
 | Probe | Mutation | Detected by |
 |---|---|---|
@@ -223,6 +232,8 @@ These need no key to stay stable while the secret is unchanged, so a re-sync add
 | KC22 | Review probe B: `JSON.stringify(getServerEnv())` | Inventory: dynamic env access |
 | KC23 | Review probe C: renamed `createHmac` import with a dynamic key | Inventory: key-using crypto calls (resolved through the checker) |
 | KC24 | Review probe F: WebCrypto `importKey` with ``process.env[`AUTH_${"SECRET"}`]`` | Inventory: dynamic env access and key-using crypto calls |
+| KC25 | Review round 2 L-A: a stored digest of the subject alias salted with a random id (secret-dependent **and** noisy) | `[kc-secret-differential]`: the pinned noise set |
+| KC26 | Review round 2 L-B (M): `require("node:crypto").createHmac` | Inventory: untyped module loads |
 
 ## 9. Exact residual work to close 18-13
 
@@ -258,3 +269,13 @@ These need no key to stay stable while the secret is unchanged, so a re-sync add
 | Info: shared-database precondition for F-18-13-02; takeover copy persists after restoring the secret; counting wording | Info | §5 and §2 |
 | Info: an Auth.js email/magic-link provider would persist `verificationTokens.token = sha256(token + secret)` inside `node_modules`, invisible to the scanner | Info | Prevented today only by the providers-length pin in `tests/unit/mongodb-auth-lifecycle.test.ts`. Adding such a provider must re-open this inventory |
 | Info: `events[].*Identity.comparison.maskedNumber` (raw) is inconsistent with `active.comparison.maskedNumber` (truncated) in 18-07 | Info | Pre-existing; not changed here |
+
+### Round 2 (at `70cf897`)
+
+**Verdict: ready for Owner acceptance.** Every round-1 probe was re-run and detected (M1/D, E, A, B, C, F), plus four new probes: an ObjectId built from an alias, `globalThis.crypto.subtle`, `crypto.webcrypto` with a namespace import, and `for…in process.env`. The rehearsal was stable over 6 runs, and the counts and docs were confirmed.
+
+| Finding | Severity | Resolution (tests/docs only) |
+|---|---|---|
+| L-A: the differential's noise exclusion could hide a secret-dependent leaf that also carries random data | Low | Bank and reconciliation noise sets pinned, and the reconciliation path set pinned. `events[].requestFingerprint` documented as a known mixed field covered by the mapping. KC25 is detected |
+| L-B: heuristic env-access evasions (an aliased record, `Reflect.get`, computed destructuring, `Object.assign`, `getOwnPropertyDescriptor`) and an untyped `require("node:crypto")` | Low | Untyped module loads are pinned (KC26 detected). The remaining forms need deliberate obfuscation and are stated as a scanner limit in §1 |
+| Doc: §4 rows, the §3 "proven by" qualifier, KC19 wording | Low | Updated |

@@ -13,6 +13,9 @@ import { files } from "./live-test-ids";
 // reported with its key expression, and every non-literal or bulk access to an environment object (computed key, Object.keys/
 // values/entries, JSON.stringify, spread) is reported, so a new keyed derivation or an indirect secret read cannot appear
 // unclassified. scripts/ (plain .mjs, not in the program) is checked textually for the names.
+// LIMIT (stated, not hidden): environment access through aliases the type heuristic cannot see (e.g. `const cfg: Record<string,
+// string | undefined> = process.env; cfg[name]`, Reflect.get, computed destructuring, Object.assign/getOwnPropertyDescriptor of the env)
+// is NOT reported; such code needs deliberate obfuscation and is left to code review (review round 2, L-B).
 // LIMIT (stated, not hidden): value flow is followed into return values only; a derived value passed as an ARGUMENT (e.g. hashed by
 // fingerprint(), or handed to a repository) is not followed. Stored second-order values are therefore covered by the inventory's
 // keyedFields mapping and by the rehearsal's V1/V1/V2 differential scan ([kc-secret-differential]), not by this scanner.
@@ -31,6 +34,8 @@ export type SecretDerivationSites = Readonly<{
   hmacKeys: Map<string, number>;
   /** `<file>#<function> <kind>` -> count, for every non-literal or bulk access to an environment object */
   dynamicEnv: Map<string, number>;
+  /** `<file>#<function> <require|createRequire|import>(<argument>)` -> count: untyped module loading (a crypto API obtained this way is untyped) */
+  untypedLoads: Map<string, number>;
   /** scripts/ files mentioning a secret name -> count */
   scripts: Map<string, number>;
 }>;
@@ -179,7 +184,7 @@ export function secretDerivationSites(): SecretDerivationSites {
     }
   }
 
-  const calls = new Map<string, number>(); const hmacKeys = new Map<string, number>(); const dynamicEnv = new Map<string, number>();
+  const calls = new Map<string, number>(); const hmacKeys = new Map<string, number>(); const dynamicEnv = new Map<string, number>(); const untypedLoads = new Map<string, number>();
   /** Key-using crypto APIs (node:crypto / WebCrypto) -> index of the key argument. */
   const KEY_APIS: Readonly<Record<string, number>> = { createHmac: 1, createCipheriv: 1, createDecipheriv: 1, hkdf: 1, hkdfSync: 1, pbkdf2: 0, pbkdf2Sync: 0, scrypt: 0, scryptSync: 0, importKey: 1 };
   const platformApi = (call: ts.CallExpression): string | undefined => {
@@ -207,6 +212,8 @@ export function secretDerivationSites(): SecretDerivationSites {
         if (api) bump(hmacKeys, `${site(node)} ${api}(${node.arguments[KEY_APIS[api]!]?.getText().replace(/\s+/g, " ") ?? ""})`);
         const callee = node.expression.getText();
         if (/^(Object\.(keys|values|entries)|JSON\.stringify|structuredClone)$/.test(callee) && node.arguments[0] && envLike(node.arguments[0])) bump(dynamicEnv, `${site(node)} ${callee}`);
+        const loader = node.expression.kind === ts.SyntaxKind.ImportKeyword ? "import" : ts.isIdentifier(node.expression) && ["require", "createRequire"].includes(node.expression.text) ? node.expression.text : undefined;
+        if (loader && (loader !== "import" || !(node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])))) bump(untypedLoads, `${site(node)} ${loader}(${node.arguments[0]?.getText() ?? ""})`);
       }
       if (ts.isElementAccessExpression(node) && !ts.isStringLiteralLike(node.argumentExpression) && envLike(node.expression)) bump(dynamicEnv, `${site(node)} computed-key`);
       if ((ts.isSpreadAssignment(node) || ts.isSpreadElement(node)) && envLike(node.expression)) bump(dynamicEnv, `${site(node)} spread`);
@@ -220,5 +227,5 @@ export function secretDerivationSites(): SecretDerivationSites {
     const count = (readFileSync(path, "utf8").match(/\b(AUTH_SECRET(_\d+)?|NEXTAUTH_SECRET)\b/g) ?? []).length;
     if (count > 0) scripts.set(posix(path), count);
   }
-  return { mentions, derivers, calls, hmacKeys, dynamicEnv, scripts };
+  return { mentions, derivers, calls, hmacKeys, dynamicEnv, untypedLoads, scripts };
 }

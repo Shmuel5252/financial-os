@@ -310,7 +310,16 @@ async function reconciliation(db: Db, fixed?: Readonly<{ actorId: string; idempo
     };
     const dependent = (a: Map<string, string[]>, control: Map<string, string[]>, b: Map<string, string[]>) => [...new Set([...a.keys(), ...b.keys()])]
       .filter((key) => JSON.stringify(a.get(key)) === JSON.stringify(control.get(key)) && JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key))).sort();
-    const bankPaths = dependent(await bank(V1), await bank(V1), await bank(V2));
+    const [bankA, bankControl, bankB] = [await bank(V1), await bank(V1), await bank(V2)];
+    const noise = (a: Map<string, string[]>, control: Map<string, string[]>) => [...new Set([...a.keys(), ...control.keys()])]
+      .filter((key) => JSON.stringify(a.get(key)) !== JSON.stringify(control.get(key))).sort();
+    // The noise set is pinned too: a NEW path that varies between two V1 runs (and could therefore hide a secret-dependent leaf mixed
+    // with random data) fails until it is reviewed here.
+    expect(noise(bankA, bankControl), "bank noise (random ids and clock only)").toEqual([
+      "accounts _id", "bankConnections _id", "bankLifecycleCommands _id", "bankProviderBindings _id", "bankRecordRevisions _id", "bankSyncRuns _id",
+      "profiles _id", "profiles auditTrail[].at", "profiles createdAt", "profiles updatedAt", "transactions _id", "transactions fields.accountId",
+    ]);
+    const bankPaths = dependent(bankA, bankControl, bankB);
     expect(bankPaths).toEqual([
       "accounts source.connectionAlias", "accounts source.observationFingerprint", "accounts source.recordAlias",
       "bankConnections connectionAlias", "bankConnections fingerprint", "bankConnections providerAlias", "bankProviderBindings subjectAlias",
@@ -318,9 +327,30 @@ async function reconciliation(db: Db, fixed?: Readonly<{ actorId: string; idempo
       "bankRecordRevisions connectionAlias", "bankRecordRevisions fingerprint", "bankRecordRevisions recordAlias",
       "transactions source.connectionAlias", "transactions source.observationFingerprint", "transactions source.recordAlias",
     ]);
-    const reconciliationPaths = dependent(await reconcile(V1), await reconcile(V1), await reconcile(V2));
+    const [recA, recControl, recB] = [await reconcile(V1), await reconcile(V1), await reconcile(V2)];
+    const reconciliationPaths = dependent(recA, recControl, recB);
+    expect(noise(recA, recControl), "reconciliation noise").toEqual([
+      "accounts _id", "accounts auditTrail[].at", "accounts createdAt", "accounts source.observedAt", "accounts updatedAt",
+      "bankAccountReconciliations _id", "bankAccountReconciliations canonicalAccountId", "bankAccountReconciliations events[].at",
+      // MIXED (known): secret-dependent AND random - HMAC over the command, whose row key embeds the random canonical account id. It is
+      // inventoried (AUTH_SECRET:account-review-command); the differential cannot confirm it, the inventory mapping does.
+      "bankAccountReconciliations events[].requestFingerprint",
+      "bankConnections _id", "bankConnections auditTrail[].at", "bankConnections createdAt", "bankConnections updatedAt",
+      "bankProviderBindings _id", "bankProviderBindings auditTrail[].at", "bankProviderBindings claimedAt", "bankProviderBindings updatedAt",
+      "bankRecordRevisions _id", "bankRecordRevisions observedAt",
+    ]);
+    expect(inventoried("bankAccountReconciliations events[].requestFingerprint")).toBe(true);
+    expect(reconciliationPaths).toEqual([
+      "accounts source.connectionAlias", "accounts source.recordAlias", "bankAccountReconciliations active.accountAlias", "bankAccountReconciliations active.connectionAlias",
+      "bankAccountReconciliations active.identity.referenceDigest", "bankAccountReconciliations active.institutionAlias", "bankAccountReconciliations aliases[]",
+      "bankAccountReconciliations events[].newIdentity.accountAlias", "bankAccountReconciliations events[].newIdentity.connectionAlias",
+      "bankAccountReconciliations events[].newIdentity.identity.referenceDigest", "bankAccountReconciliations events[].newIdentity.institutionAlias",
+      "bankAccountReconciliations events[].oldIdentity.accountAlias", "bankAccountReconciliations events[].oldIdentity.connectionAlias",
+      "bankAccountReconciliations events[].oldIdentity.institutionAlias", "bankAccountReconciliations events[].requestKey",
+      "bankConnections connectionAlias", "bankConnections providerAlias", "bankProviderBindings subjectAlias",
+      "bankRecordRevisions accountAlias", "bankRecordRevisions connection.providerAlias", "bankRecordRevisions connectionAlias", "bankRecordRevisions recordAlias",
+    ]);
     for (const path of [...bankPaths, ...reconciliationPaths]) expect(inventoried(path), `${path}: secret-dependent stored leaf not in the inventory`).toBe(true);
-    expect(reconciliationPaths.filter((path) => path.startsWith("bankAccountReconciliations")).length).toBeGreaterThan(0);
   }, 120_000);
 
   it("[kc-reconciliation] a v1 reconciliation decision replays idempotently; under v2 the review is refused before any provider read and writes nothing", async () => {

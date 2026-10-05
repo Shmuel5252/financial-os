@@ -26,6 +26,11 @@ export const secretMentions: Readonly<Record<string, { count: number; role: stri
 };
 export const secretScripts: Readonly<Record<string, number>> = {};
 
+/** Every untyped module load (require/createRequire/non-literal import()): an API obtained this way escapes the typed key-API check. */
+export const untypedLoads: Readonly<Record<string, { count: number; role: string }>> = {
+  "workers/backup/index.ts#load import(name)": { count: 1, role: "backup worker lazy-loads its AWS SDK clients by fixed package names; no crypto key use" },
+};
+
 /** Every non-literal or bulk access to an environment object (a way to read AUTH_SECRET without naming it). None reads AUTH_SECRET today. */
 export const dynamicEnvAccess: Readonly<Record<string, { count: number; role: string }>> = {
   "src/lib/config/server-env.ts#missingKeys computed-key": { count: 1, role: "readiness: presence check of required variable names" },
