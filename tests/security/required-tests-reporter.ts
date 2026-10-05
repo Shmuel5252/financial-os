@@ -15,9 +15,9 @@ import { pageMatrix, routeMatrix, serverActionMatrix } from "./route-authorizati
 export const REQUIRED_SECURITY_TEST_IDS: readonly string[] = [...new Set([
   ...Object.values(sinkMatrix).flatMap((entry) => entry.sentinelTests),
   ...[...routeMatrix, ...pageMatrix, ...serverActionMatrix].flatMap((entry) => entry.negativeTests),
-  // Every `[iso-…]` / `[log-…]` / `[rl-…]` / `[rlx-…]` id written in any test title (live or not): a security test cited in the evidence cannot drop out.
+  // Every `[iso-…]` / `[log-…]` / `[rl-…]` / `[rlx-…]` / `[kc-…]` id written in any test title (live or not): a security test cited in the evidence cannot drop out.
   ...files("tests", (path) => /\.test\.(ts|tsx)$/.test(path))
-    .flatMap((path) => [...readFileSync(path, "utf8").matchAll(/["'`]\[((?:iso|log|rlx?)-[a-z0-9-]+)\]/g)].map((match) => match[1]!)),
+    .flatMap((path) => [...readFileSync(path, "utf8").matchAll(/["'`]\[((?:iso|log|rlx?|kc)-[a-z0-9-]+)\]/g)].map((match) => match[1]!)),
 ])].sort();
 
 /** Inventory modules (tests without ids) -> exact number of tests that must run and pass. Update deliberately when adding tests. */
@@ -29,6 +29,7 @@ export const REQUIRED_SECURITY_MODULES: Readonly<Record<string, number>> = {
   "tests/unit/phase-eighteen-inventory.test.ts": 2,
   "tests/unit/rate-limit-inventory.test.ts": 7,
   "tests/unit/audit-gate.test.ts": 10,
+  "tests/unit/secret-derivation-inventory.test.ts": 6,
 };
 
 export default class RequiredSecurityTestsReporter implements Reporter {

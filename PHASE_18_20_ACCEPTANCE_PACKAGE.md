@@ -94,7 +94,7 @@ Wording per `PHASE_18_ENTRY_REVIEW.md` / `PHASE_18_HARDENING_PACKAGE.md`. "R" re
 | 18-10 | pending E/P | backup storage/vendor, consistent capture, schedule, alerts, retention (owner decision; may need paid tier) |
 | 18-11 | R strengthened (47/47 adapters, no-replay/anti-reimport rehearsals) — still pending E/P | real isolated restore with measured RPO/RTO; ledger fence; §4 barriers |
 | 18-12 | P gate (ADR-074 direction approved) | complete erase workflow + independent ledger; mixed-subject/archive retention decisions |
-| 18-13 | partially | versioned identity-key migration design + isolated rehearsal; no rotation now |
+| 18-13 | partially | repository portion complete, pending Owner acceptance (inventory/CI, local rehearsal incl. F-18-13-02/03 High open); versioned-key design NOT ADOPTED; no rotation now |
 | 18-14 | partially — repository portion done 2026-10-01 (threat model, CI-enforced authorization matrix, route-level negative tests, mutation evidence; W1 fixed) | authorized staging negative tests; DB/IAM role review; penetration review; owner decisions F-18-14-01..05 |
 | 18-15 | partially | on-call contacts, approved live failure/rollback drills |
 | 18-16 | partially — dedicated SAST and secret scanning in hosted CI (2026-10-01: CodeQL 0 results, gitleaks 0 findings after triage, actions SHA-pinned) | owner settings: required checks, push protection; external penetration review |
